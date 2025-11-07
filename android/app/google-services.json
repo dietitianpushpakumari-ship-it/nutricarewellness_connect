@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "119840373203",
+    "firebase_url": "https://nwgoaltracker-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "nwgoaltracker",
+    "storage_bucket": "nwgoaltracker.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:119840373203:android:15fd2d7703a0c862985726",
+        "android_client_info": {
+          "package_name": "com.example.nutricare_client_management"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCELEvqFdN6v-z4lD2UyY7dGJDa3X49tZo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:119840373203:android:1955459d549f7c00985726",
+        "android_client_info": {
+          "package_name": "com.example.nutricare_goal_tracker_admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCELEvqFdN6v-z4lD2UyY7dGJDa3X49tZo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:119840373203:android:2428ceee929e3609985726",
+        "android_client_info": {
+          "package_name": "com.nutricarewellness.nutricare_connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCELEvqFdN6v-z4lD2UyY7dGJDa3X49tZo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
