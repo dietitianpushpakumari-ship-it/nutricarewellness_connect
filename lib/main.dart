@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:nutricare_connect/core/app_theme.dart';
 
 // 🎯 ADJUST IMPORTS TO YOUR PROJECT STRUCTURE
 
@@ -94,11 +95,7 @@ class NutriCareClientApp extends ConsumerWidget {
     // Default to Auth Screen if not authenticated
     return MaterialApp(
       title: 'NutriCare Client',
-      theme: ThemeData(
-        primarySwatch: Colors.teal,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme,
       home: const ClientAuthScreen(),
       debugShowCheckedModeBanner: false,
     );

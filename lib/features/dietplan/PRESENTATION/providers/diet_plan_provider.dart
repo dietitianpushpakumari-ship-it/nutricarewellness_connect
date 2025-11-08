@@ -3,12 +3,24 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_dashboard_main_screen.dart';
 
 // 🎯 FIX: Corrected Repository Import Path (assumes dATA casing for local structure)
 import 'package:nutricare_connect/features/dietplan/dATA/repositories/diet_repositories.dart';
+import 'package:nutricare_connect/features/dietplan/dATA/services/admin_profile_service.dart';
+import 'package:nutricare_connect/features/dietplan/dATA/services/guideline_service.dart';
+import 'package:nutricare_connect/features/dietplan/dATA/services/meeting_service.dart';
+import 'package:nutricare_connect/features/dietplan/dATA/services/package_service.dart';
+import 'package:nutricare_connect/features/dietplan/dATA/services/vitals_service.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/auth_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/guidelines.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/schedule_meeting_utils.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
 import 'package:nutricare_connect/services/client_service.dart';
 // 🎯 Required to access ClientService methods
 
@@ -19,13 +31,15 @@ class DietPlanState extends Equatable {
   final bool isLoading;
   final String? error;
   final DateTime selectedDate;
+  final int version;
+
 
   DietPlanState({
-    this.activePlan, this.dailyLogs = const [], this.isLoading = true, this.error, required this.selectedDate,
+    this.activePlan, this.dailyLogs = const [], this.isLoading = true, this.error, required this.selectedDate, this.version = 0,
   });
 
   DietPlanState copyWith({
-    ClientDietPlanModel? activePlan, List<ClientLogModel>? dailyLogs, bool? isLoading, Object? error = const Object(), DateTime? selectedDate,
+    ClientDietPlanModel? activePlan, List<ClientLogModel>? dailyLogs, bool? isLoading, Object? error = const Object(), DateTime? selectedDate,int? version,
   }) {
     return DietPlanState(
       activePlan: activePlan ?? this.activePlan,
@@ -33,6 +47,7 @@ class DietPlanState extends Equatable {
       isLoading: isLoading ?? this.isLoading,
       error: error is String ? error : (error == null ? null : this.error),
       selectedDate: selectedDate ?? this.selectedDate,
+      version: version ?? this.version,
     );
   }
 
@@ -45,6 +60,7 @@ class DietPlanState extends Equatable {
     selectedDate.day,
     selectedDate.month,
     selectedDate.year,
+    version,
   ];
 }
 
@@ -73,35 +89,10 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
         dailyLogs: logs,
         isLoading: false,
         selectedDate: date,
+        version: state.version + 1,
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
-    }
-  }
-
-  Future<void> logMeal(String mealName, String food) async {
-    if (state.activePlan == null) return;
-
-    state = state.copyWith(isLoading: true);
-
-    try {
-      final newLog = ClientLogModel(
-        clientId: _currentClientId,
-        dietPlanId: state.activePlan!.id,
-        date: state.selectedDate,
-        mealName: mealName,
-        actualFoodEaten: food,
-      );
-      final createdLog = await _repository.createLog(newLog);
-
-      state = state.copyWith(
-        dailyLogs: [...state.dailyLogs, createdLog],
-        isLoading: false,
-        error: null,
-      );
-    } catch (e) {
-      state = state.copyWith(
-          isLoading: false, error: 'Failed to log meal: ${e.toString()}');
     }
   }
 
@@ -180,4 +171,67 @@ final activeDietPlanProvider = Provider<DietPlanState>((ref) {
   }
 
   return ref.watch(dietPlanNotifierProvider(clientId));
+});
+
+
+final latestVitalsFutureProvider = FutureProvider.family<VitalsModel?, String>((ref, clientId) async {
+  final service = VitalsService();
+  final vitalsList = await service.getClientVitals(clientId); // Assuming getClientVitals returns a sorted list
+  return vitalsList.firstWhereOrNull((v) => true); // Get the latest (first) record
+});
+final upcomingMeetingsProvider = FutureProvider.family<List<MeetingModel>, String>((ref, clientId) async {
+  final service = MeetingService();
+  // Fetch meetings based on the clientId
+  return service.getClientMeetings(clientId);
+});
+
+final enrolledPackageProvider = FutureProvider.family<List<MeetingModel>, String>((ref, clientId) async {
+  final service = MeetingService();
+  // Fetch meetings based on the clientId
+  return service.getClientMeetings(clientId);
+});
+
+final dietitianProfileProvider = FutureProvider<AdminProfileModel?>((ref) async {
+  final service = AdminProfileService();
+  // Call the service to fetch the single Admin Profile
+  final adminProfile = await service.fetchAdminProfile();
+
+  // Return the fetched profile (which is AdminProfileModel?)
+  return adminProfile;
+});
+
+final guidelineProvider = FutureProvider.family<List<Guideline>, List<String>>((ref, guidelineIds) async {
+  final service = GuidelineService();
+  return await service.fetchGuidelinesByIds(guidelineIds);
+});
+
+final assignedPackageProvider = FutureProvider.family<List<PackageAssignmentModel>,String>((ref, clientId) async {
+  final service = PackageService();
+  return await service.getPackageAssignments(clientId);
+
+});
+
+final weeklyLogHistoryProvider = FutureProvider.family<Map<DateTime, List<ClientLogModel>>, String>((ref, clientId) async {
+  final repository = ref.watch(dietRepositoryProvider);
+  final endDate = DateTime.now();
+  final startDate = endDate.subtract(const Duration(days: 7));
+
+  // NOTE: Assuming repository has a fetchLogsBetweenDates method or we use the existing fetchAll and filter locally
+  final allLogs = await repository.fetchAllClientLogs(clientId);
+
+  // 1. Filter logs to the last 7 days
+  final recentLogs = allLogs.where((log) =>
+      log.date.isAfter(startDate.subtract(const Duration(hours: 1))) // Account for time zone differences
+  ).toList();
+
+  // 2. Group the logs by date (removing time component)
+  final Map<DateTime, List<ClientLogModel>> groupedLogs = {};
+
+  for (final log in recentLogs) {
+    final day = DateTime(log.date.year, log.date.month, log.date.day);
+    groupedLogs.putIfAbsent(day, () => []).add(log);
+  }
+
+  // Return grouped data
+  return groupedLogs;
 });

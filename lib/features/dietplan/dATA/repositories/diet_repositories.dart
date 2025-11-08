@@ -1,6 +1,7 @@
 // lib/features/diet_plan/data/repositories/diet_repositories.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart';
 import '../../domain/entities/client_log_model.dart'; // Assumed to be fixed
 
 class DietRepository {
