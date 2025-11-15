@@ -13,6 +13,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'; // Added for Provider
 import 'package:image_picker/image_picker.dart';
 import 'package:logger/logger.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/reminder_config_model.dart';
 
 
 // --- CONCEPTUAL MODELS (Assumed to be defined elsewhere) ---
@@ -35,6 +37,7 @@ class AppUserModel {
 class ClientModel {
   final String id;
   final String mobile;
+  final String gender;
   final String loginId;
   final String patientId;
   final bool hasPasswordSet;
@@ -44,10 +47,13 @@ class ClientModel {
   final String? name;
   final int? age; //
   final String? whatsappNumber;
+  final ClientReminderConfig? reminderConfig;
   ClientModel({
     required this.id, required this.mobile, required this.loginId,
     required this.patientId, this.hasPasswordSet = false,
-    this.status = 'Inactive', this.isSoftDeleted = false, this.isArchived = false,required this.name,this.age,this.whatsappNumber
+    this.status = 'Inactive', this.isSoftDeleted = false, this.isArchived = false,
+    required this.name,this.age,this.whatsappNumber,   required this.gender, required this.
+    reminderConfig
   });
 
   // Factory constructor for Cloud Function result (Map)
@@ -63,7 +69,9 @@ class ClientModel {
       isArchived: data['isArchived'] ?? false,
       name: data['name'] ?? '',
       age: data['age'] ?? 0,
-      whatsappNumber: data['whatsappNumber'] ?? ''
+      whatsappNumber: data['whatsappNumber'] ?? '',
+      gender: data['gender'] ?? '',
+      reminderConfig: data['reminder'],
     );
   }
 
@@ -81,11 +89,102 @@ class ClientModel {
       isArchived: data['isArchived'] ?? false,
       name: data['name'] ?? '',
       age: data['age'] ?? 0,
-      whatsappNumber: data['whatsappNumber'] ?? ''
+      whatsappNumber: data['whatsappNumber'] ?? '',
+      gender: data['gender'] ?? '',
+      reminderConfig: ClientReminderConfig.fromMap(data['reminderConfig'] as Map<String, dynamic>?),
 
     );
   }
+
+  ClientModel copyWith({
+    String? id,
+    String? name,
+    String? mobile,
+    String? email,
+    String? gender,
+    String? loginId,
+    DateTime? dob,
+    int? age,
+    String? address,
+    String? altMobile,
+    bool? hasPasswordSet,
+    String? agreementUrl,
+    String? photoUrl,
+    String? patientId,
+    bool? isArchived,
+    String? whatsappNumber,
+    String? status,
+    bool? isSoftDeleted,
+    String? tag,
+    Map<String, PackageAssignmentModel>? packageAssignments,
+    Timestamp? createdAt,
+    Timestamp? updatedAt,
+    String? createdBy,
+    String? lastModifiedBy,
+
+    // 🎯 7. ADD THE NEW FIELD TO THE METHOD SIGNATURE
+    ClientReminderConfig? reminderConfig,
+  }) {
+    return ClientModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      mobile: mobile ?? this.mobile,
+   //   email: email ?? this.email,
+      gender: gender ?? this.gender,
+      loginId: loginId ?? this.loginId,
+     // dob: dob ?? this.dob,
+      age: age ?? this.age,
+     // address: address ?? this.address,
+     // altMobile: altMobile ?? this.altMobile,
+      hasPasswordSet: hasPasswordSet ?? this.hasPasswordSet,
+     // agreementUrl: agreementUrl ?? this.agreementUrl,
+     // photoUrl: photoUrl ?? this.photoUrl,
+      patientId: patientId ?? this.patientId,
+      isArchived: isArchived ?? this.isArchived,
+      whatsappNumber: whatsappNumber ?? this.whatsappNumber,
+      status: status ?? this.status,
+      isSoftDeleted: isSoftDeleted ?? this.isSoftDeleted,
+    //  tag: tag ?? this.tag,
+    //  packageAssignments: packageAssignments ?? this.packageAssignments,
+   //   createdAt: createdAt ?? this.createdAt,
+   //   updatedAt: updatedAt ?? this.updatedAt,
+    //  createdBy: createdBy ?? this.createdBy,
+   //   lastModifiedBy: lastModifiedBy ?? this.lastModifiedBy,
+
+      // 🎯 8. ASSIGN IN COPYWITH
+      reminderConfig: reminderConfig ?? this.reminderConfig,
+    );
+  }
+
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'mobile': mobile,
+     // 'email': email,
+      'gender': gender,
+      'loginId': loginId,
+    //  'dob': Timestamp.fromDate(dob),
+      'age': age,
+
+      'status': status,
+      'isSoftDeleted': isSoftDeleted,
+      'hasPasswordSet': hasPasswordSet,
+
+
+      'updatedAt': FieldValue.serverTimestamp(),
+      'patientId': patientId,
+      'isArchived': isArchived,
+      'whatsappNumber' : whatsappNumber,
+
+      // 🎯 6. ADD TO TO-MAP
+      'reminderConfig': reminderConfig?.toMap(),
+    };
+  }
+
 }
+
+
 // -----------------------------------------------------------
 
 final Logger _logger = Logger(printer: PrettyPrinter(methodCount: 0));
@@ -185,6 +284,16 @@ class ClientService {
     return user;
   }
 
+  Future<void> updateClient(ClientModel client) async {
+    _logger.i('Updating client record for: ${client.id}');
+    try {
+      // Assumes client.toMap() exists and is correct
+      await _clientCollection.doc(client.id).update(client.toMap());
+    } catch (e) {
+      _logger.e('Error updating client: ${e.toString()}');
+      throw Exception('Failed to update client record.');
+    }
+  }
   // --- EXISTING CLIENT/ADMIN METHODS ---
 
   // 🎯 FIX: Replaced direct Firestore read with a Cloud Function call to resolve PERMISSION_DENIED on login/forgot password.
@@ -257,6 +366,8 @@ class ClientService {
           isArchived: clientData['isArchived'] ?? false,
           isSoftDeleted: clientData['isSoftDeleted'] ?? false,
           name: clientData['name'],
+          gender: clientData['gender'] ?? '',
+          reminderConfig: clientData['reminderConfig: reminderConfig ?? this.reminderConfig,']
         );
       }
 

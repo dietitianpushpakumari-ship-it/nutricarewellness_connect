@@ -1,0 +1,19 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.github.flutter_native_timezone"
+    compileSdkVersion 34
+    defaultConfig {
+        minSdkVersion 21
+    }
+}
+
+dependencies {
+}

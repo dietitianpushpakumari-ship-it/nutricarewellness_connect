@@ -1,0 +1,14 @@
+name: flutter_native_timezone
+description: Minimal fixed plugin for timezone
+version: 2.0.0-fixed
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.github.flutter_native_timezone
+        pluginClass: FlutterNativeTimezonePlugin
+environment:
+  sdk: ">=2.17.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter

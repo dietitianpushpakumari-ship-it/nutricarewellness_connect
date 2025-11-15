@@ -22,6 +22,7 @@ import 'package:nutricare_connect/features/dietplan/domain/entities/package_assi
 import 'package:nutricare_connect/features/dietplan/domain/entities/schedule_meeting_utils.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
 import 'package:nutricare_connect/services/client_service.dart';
+import 'package:nutricare_connect/services/local_reminder_service.dart';
 // 🎯 Required to access ClientService methods
 
 // --- 1. State Definition (FIXED PROPS) ---
@@ -152,9 +153,10 @@ final dietRepositoryProvider = Provider((ref) => DietRepository());
 final dietPlanNotifierProvider = StateNotifierProvider.family<DietPlanNotifier, DietPlanState, String>((ref, clientId) {
   // Uses the stored ref to inject both Repository and ClientService
   return DietPlanNotifier(
+    //
       ref.watch(dietRepositoryProvider),
       clientId,
-      ref.watch(clientServiceProvider) // Inject ClientService dependency
+      ref.watch(clientServiceProvider) // Inject ClientService dependency,
   );
 });
 
@@ -233,5 +235,89 @@ final weeklyLogHistoryProvider = FutureProvider.family<Map<DateTime, List<Client
   }
 
   // Return grouped data
+  return groupedLogs;
+});
+
+// 🎯 Provider to control the step sensor toggle
+final stepSensorEnabledProvider = StateProvider<bool>((ref) => true);
+
+
+// --- Add these to diet_plan_provider.dart ---
+
+// 🎯 NEW: Provider for Weekly Activity Score
+final weeklyActivityScoreProvider = Provider.family<int, String>((ref, clientId) {
+  final historyAsync = ref.watch(weeklyLogHistoryProvider(clientId));
+
+  return historyAsync.when(
+    data: (groupedLogs) {
+      int score = 0;
+      groupedLogs.forEach((date, logs) {
+        final wellnessLog = logs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
+        score += wellnessLog?.activityScore ?? 0; // Sum up the daily scores
+      });
+      return score;
+    },
+    loading: () => 0,
+    error: (e, s) => 0,
+  );
+});
+
+// 🎯 NEW: Provider for Daily Movement Streak
+final dailyActivityStreakProvider = Provider.family<int, String>((ref, clientId) {
+  final historyAsync = ref.watch(weeklyLogHistoryProvider(clientId));
+
+  return historyAsync.when(
+    data: (groupedLogs) {
+      int streak = 0;
+      final sortedDates = groupedLogs.keys.toList()..sort((a, b) => b.compareTo(a)); // Newest first
+      DateTime dayToCheck = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
+      final todayLog = groupedLogs[dayToCheck]?.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
+      if (todayLog?.activityScore != null && todayLog!.activityScore! > 0) {
+        streak++;
+      } else {
+        dayToCheck = dayToCheck.subtract(const Duration(days: 1));
+      }
+
+      for (final date in sortedDates) {
+        if (!date.isAtSameMomentAs(dayToCheck)) continue;
+        final wellnessLog = groupedLogs[date]?.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
+        if (wellnessLog?.activityScore != null && wellnessLog!.activityScore! > 0) {
+          streak++;
+          dayToCheck = dayToCheck.subtract(const Duration(days: 1));
+        } else {
+          break; // Streak is broken
+        }
+      }
+      return streak;
+    },
+    loading: () => 0,
+    error: (e, s) => 0,
+  );
+});
+
+
+final historicalLogProvider = FutureProvider.family<Map<DateTime, List<ClientLogModel>>, ({String clientId, int days})>((ref, params) async {
+
+  // In a real app, you would optimize this query.
+  // For now, we fetch all and filter.
+  final repository = ref.watch(dietRepositoryProvider);
+  final allLogs = await repository.fetchAllClientLogs(params.clientId);
+
+  final endDate = DateTime.now();
+  final startDate = endDate.subtract(Duration(days: params.days));
+
+  // 1. Filter logs to the selected range
+  final recentLogs = allLogs.where((log) =>
+  !log.date.isBefore(startDate) && log.date.isBefore(endDate.add(const Duration(days: 1)))
+  ).toList();
+
+  // 2. Group the logs by date
+  final Map<DateTime, List<ClientLogModel>> groupedLogs = {};
+  for (final log in recentLogs) {
+    final day = DateTime(log.date.year, log.date.month, log.date.day);
+    groupedLogs.putIfAbsent(day, () => []).add(log);
+  }
+
   return groupedLogs;
 });

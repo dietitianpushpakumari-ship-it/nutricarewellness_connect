@@ -27,6 +27,7 @@ class DietPlanDashboardScreen extends ConsumerWidget {
         ? ref.read(dietPlanNotifierProvider(clientId).notifier)
         : null;
 
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Daily Plan'),

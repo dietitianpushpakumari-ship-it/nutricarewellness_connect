@@ -30,6 +30,10 @@ class ClientDietPlanModel {
   final bool isFreezed;
   final bool isReadyToDeliver;
 
+  // 🎯 NEW: ADMIN-SET MOVEMENT GOALS
+  final int dailyStepGoal;
+  final List<String> mandatoryDailyTasks;
+
   const ClientDietPlanModel({
     this.id = '',
     this.clientId = '',
@@ -54,6 +58,8 @@ class ClientDietPlanModel {
     this.isProvisional = false,
     this.isFreezed = false,
     this.isReadyToDeliver = false,
+    this.dailyStepGoal = 8000, // Default goal
+    this.mandatoryDailyTasks = const [],
   });
 
   // For creating an editable copy during assignment
@@ -83,6 +89,8 @@ class ClientDietPlanModel {
       isProvisional: false,
       isFreezed: false,
       isReadyToDeliver: false,
+      dailyStepGoal: 0,
+      mandatoryDailyTasks: const[],
     );
   }
 
@@ -111,6 +119,8 @@ class ClientDietPlanModel {
     bool? isProvisionals,
     bool? isFreezed,
     bool? isReadyToDeliver,
+    int? dailyStepGoal,
+    List<String>? mandatoryDailyTasks,
   }) {
     return ClientDietPlanModel(
       id: id ?? this.id,
@@ -136,6 +146,8 @@ class ClientDietPlanModel {
       isProvisional: isProvisionals ?? this.isProvisional,
       isFreezed: isFreezed ?? this.isFreezed,
       isReadyToDeliver: isReadyToDeliver ?? this.isReadyToDeliver,
+      dailyStepGoal: dailyStepGoal ?? this.dailyStepGoal,
+      mandatoryDailyTasks: mandatoryDailyTasks ?? this.mandatoryDailyTasks,
 
     );
   }
@@ -166,7 +178,9 @@ class ClientDietPlanModel {
       'suplimentIds': suplimentIds,
       'isProvisional': isProvisional,
       'isFreezed': isFreezed,
-      'isReadyToDeliver' : isReadyToDeliver
+      'isReadyToDeliver' : isReadyToDeliver,
+      'dailyStepGoal': dailyStepGoal ,
+      'mandatoryDailyTasks': mandatoryDailyTasks,
     };
   }
 
@@ -183,6 +197,8 @@ class ClientDietPlanModel {
     final investigationIds = data['investigationIds'] as List<dynamic>?;
 
     final suplimentIds = data['suplimentIds'] as List<dynamic>?;
+
+    final mandatoryDailyTasks = data['mandatoryDailyTasks'] as List<dynamic>?;
 
     // 🎯 FIX: Correctly call MasterDayPlanModel.fromMap on the embedded 'dayPlan' map
     final MasterDayPlanModel? dayPlan = dayData != null
@@ -214,6 +230,8 @@ class ClientDietPlanModel {
       isProvisional: data['isProvisional'] ?? false,
         isFreezed:data['isFreezed'] ?? false,
       isReadyToDeliver: data['isReadyToDeliver'] ?? false,
+      dailyStepGoal: data['dailyStepGoal'] ?? 8000,
+      mandatoryDailyTasks:  List<String>.from(mandatoryDailyTasks ?? []),
 
     );
   }
@@ -233,6 +251,8 @@ class ClientDietPlanModel {
       ),
       diagnosisIds: this.diagnosisIds,
       guidelineIds: this.guidelineIds,
+      dailyStepGoal: dailyStepGoal ?? this.dailyStepGoal,
+      mandatoryDailyTasks: mandatoryDailyTasks ?? this.mandatoryDailyTasks,
 
       // linkedVitalsId: this.linkedVitalsId,
       //    followUpDays : this.followUpDays,
