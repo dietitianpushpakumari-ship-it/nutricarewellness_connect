@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/lab_report_list_Screen.dart';
+import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/log_vitals_screen.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/package_service.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
@@ -43,20 +44,55 @@ class TrackerScreen extends ConsumerWidget {
         const Divider(),
 
         // 🎯 1. Water Intake Input (Tap to add standard sizes)
-        _buildWaterInputSection(context, ref, activityData),
-        const SizedBox(height: 20),
+     //   _buildWaterInputSection(context, ref, activityData),
+       // const SizedBox(height: 20),
 
         // 🎯 2. Steps Input (Simplified for quick logging)
-        _buildStepInputSection(context, ref, activityData),
-        const SizedBox(height: 20),
+       // _buildStepInputSection(context, ref, activityData),
+       // const SizedBox(height: 20),
         // --- 1. CORE TRACKING TOOLS (Water/Steps/Calories) ---
-        _buildCoreTrackingSection(context, ref, activityData),
-        const SizedBox(height: 20),
+      //  _buildCoreTrackingSection(context, ref, activityData),
+        //const SizedBox(height: 20),
 
-        _buildWeeklyLogHistory(context, weeklyLogsAsync, client.id),
-        const SizedBox(height: 20),
+      //  _buildWeeklyLogHistory(context, weeklyLogsAsync, client.id),
+        //const SizedBox(height: 20),
 
         // --- 2. CLIENT MEDICAL PROFILE OVERVIEW ---
+
+
+        latestVitalsAsync.when(
+          loading: () => const Center(child: Padding(padding: EdgeInsets.only(top: 20), child: CircularProgressIndicator())),
+          error: (e, s) => Center(child: Text('Error loading medical data: $e')),
+          data: (vitals) => _buildClientProfileOverview(context, vitals),
+        ),
+
+        // 🎯 "Log Lab Vitals" Button (NOW LAUNCHES NEW SCREEN)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.bloodtype),
+            label: const Text('Log New Vitals'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              // 1. Get the most recent vitals to use as a base
+              final latestVitals = ref.read(latestVitalsFutureProvider(client.id)).value;
+
+              // 2. Launch the new full screen
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => LogVitalsScreen(
+                    clientId: client.id,
+                    baseVitals: latestVitals,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
         latestVitalsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, s) =>

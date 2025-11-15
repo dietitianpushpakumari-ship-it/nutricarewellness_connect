@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -122,19 +123,6 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize content pages based on client data
-    /* _widgetOptions = <Widget>[
-      HomeScreen(client: widget.client), // Index 0: Home
-      PlanScreen(client: widget.client),
-      ActivityTrackerScreen(client: widget.client),
-      TrackerScreen(client: widget.client),
-      _WellnessHubScreen(client: widget.client),
-
-      //_AddOnsScreen(client: widget.client), // Index 2: Add-ons
-
-      _FeedScreen(), // Index 3: Content
-      _CoachScreen(client: widget.client), // Index 4: Coach
-    ];*/
   }
 
   void _onItemTapped(int index) {
@@ -861,4 +849,291 @@ class _CoachScreen extends ConsumerWidget {
   }
 }
 
-// NOTE: This code replaces the entire _TrackerScreen class definition.
+
+// ... (inside client_dashboard_main_screen.dart)
+
+// 🎯 REBUILT: Progress Report Card (with Vitals)
+// 🎯 REBUILT: Progress Report Card (with Vitals)
+class _ProgressReportCard extends ConsumerStatefulWidget {
+  final String clientId;
+  const _ProgressReportCard({required this.clientId});
+
+  @override
+  ConsumerState<_ProgressReportCard> createState() => _ProgressReportCardState();
+}
+
+class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
+  int _selectedDays = 7;
+  final List<int> _dayOptions = [7, 15, 30, 90];
+
+  @override
+  Widget build(BuildContext context) {
+    // 🎯 Watch BOTH providers
+    final dailyLogHistoryAsync = ref.watch(historicalLogProvider((clientId: widget.clientId, days: _selectedDays)));
+    final vitalsHistoryAsync = ref.watch(vitalsHistoryProvider(widget.clientId)); // 🎯 NEW
+
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      elevation: 4,
+      child: ExpansionTile(
+        leading: Icon(Icons.show_chart, color: colorScheme.secondary),
+        title: const Text('Your Progress Report', style: TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text('Showing trends from the last $_selectedDays days.'),
+        children: [
+          // --- 1. Date Range Filter Buttons ---
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: SegmentedButton<int>(
+              segments: _dayOptions.map((days) => ButtonSegment<int>(
+                value: days,
+                label: Text('$days D'),
+              )).toList(),
+              selected: {_selectedDays},
+              onSelectionChanged: (Set<int> newSelection) {
+                setState(() { _selectedDays = newSelection.first; });
+              },
+              style: SegmentedButton.styleFrom(
+                selectedBackgroundColor: colorScheme.primary.withOpacity(0.2),
+                selectedForegroundColor: colorScheme.primary,
+              ),
+            ),
+          ),
+
+          // --- 2. Daily Logs Graph (Steps, Cals, etc.) ---
+          dailyLogHistoryAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(32.0),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, s) => Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text('Error loading chart: $e', style: const TextStyle(color: Colors.red)),
+            ),
+            data: (groupedLogs) {
+              // --- Data Processing ---
+              final Map<String, double> stepData = {};
+              final Map<String, double> calorieData = {};
+              final Map<String, double> sleepData = {};
+              final Map<String, double> hydrationData = {};
+
+              final sortedDates = groupedLogs.keys.toList()..sort();
+
+              for (var date in sortedDates) {
+                final dayLabel = DateFormat('d/M').format(date);
+                final log = groupedLogs[date]?.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
+
+                stepData[dayLabel] = (log?.stepCount ?? 0).toDouble();
+                calorieData[dayLabel] = (log?.caloriesBurned ?? 0).toDouble();
+                sleepData[dayLabel] = (log?.totalSleepDurationHours ?? 0).toDouble();
+                hydrationData[dayLabel] = (log?.hydrationLiters ?? 0).toDouble();
+              }
+              // --- End Data Processing ---
+
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    _buildChartContainer(context, 'Steps & Calories Burned', _buildLineChart(context, stepData, calorieData)),
+                    const SizedBox(height: 20),
+                    _buildChartContainer(context, 'Sleep Duration & Hydration', _buildLineChart(context, sleepData, hydrationData, isSleep: true)),
+                  ],
+                ),
+              );
+            },
+          ),
+
+          // --- 🎯 3. NEW: Vitals Graph (Blood Sugar & Weight) ---
+          vitalsHistoryAsync.when(
+              loading: () => const SizedBox.shrink(), // Don't show a second loader
+              error: (e, s) => Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text('Error loading vitals chart: $e', style: const TextStyle(color: Colors.red)),
+              ),
+              data: (vitalsList) {
+                // Process data for the charts
+                final Map<String, double> fbsData = {};
+                final Map<String, double> ppbsData = {};
+                final Map<String, double> weightData = {};
+                final Map<String, double> bpSystolicData = {};
+                final Map<String, double> bpDiastolicData = {};
+
+                // Filter vitals to the selected date range
+                final startDate = DateTime.now().subtract(Duration(days: _selectedDays));
+
+                // Sort by date ascending to plot correctly
+                final filteredVitals = vitalsList
+                    .where((v) => !v.date.isBefore(startDate))
+                    .toList()
+                  ..sort((a, b) => a.date.compareTo(b.date));
+
+                for (final vitals in filteredVitals) {
+                  final dayLabel = DateFormat('d/M').format(vitals.date);
+
+                  // Lab Results
+                  if (double.tryParse(vitals.labResults['fbs'] ?? '') != null) {
+                    fbsData[dayLabel] = double.parse(vitals.labResults['fbs']!);
+                  }
+                  if (double.tryParse(vitals.labResults['ppbs'] ?? '') != null) {
+                    ppbsData[dayLabel] = double.parse(vitals.labResults['ppbs']!);
+                  }
+
+                  // At-Home Vitals
+                  if (vitals.weightKg > 0) {
+                    weightData[dayLabel] = vitals.weightKg;
+                  }
+                  if (vitals.bloodPressureSystolic != null) {
+                    bpSystolicData[dayLabel] = vitals.bloodPressureSystolic!.toDouble();
+                  }
+                  if (vitals.bloodPressureDiastolic != null) {
+                    bpDiastolicData[dayLabel] = vitals.bloodPressureDiastolic!.toDouble();
+                  }
+                }
+
+                if (weightData.isEmpty && bpSystolicData.isEmpty && fbsData.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text('No Vitals data (Weight, BP, Sugar) logged for this period.', style: TextStyle(fontStyle: FontStyle.italic)),
+                  );
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      if (weightData.isNotEmpty) ...[
+                        _buildChartContainer(context, 'Weight Progress (kg)', _buildLineChart(context, weightData, {})),
+                        const SizedBox(height: 20),
+                      ],
+                      if (bpSystolicData.isNotEmpty) ...[
+                        _buildChartContainer(context, 'Blood Pressure (mmHg)', _buildLineChart(context, bpSystolicData, bpDiastolicData, isBloodPressure: true)),
+                        const SizedBox(height: 20),
+                      ],
+                      if (fbsData.isNotEmpty || ppbsData.isNotEmpty) ...[
+                        _buildChartContainer(context, 'Blood Sugar (mg/dL)', _buildLineChart(context, fbsData, ppbsData, isSugar: true)),
+                      ],
+                    ],
+                  ),
+                );
+              }
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Graph Builder Helpers ---
+
+  Widget _buildChartContainer(BuildContext context, String title, Widget chart) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        SizedBox(height: 200, child: chart),
+      ],
+    );
+  }
+
+  // 🎯 UPDATED: _buildLineChart
+
+// ... inside _ProgressReportCardState class ...
+
+  Widget _buildLineChart(BuildContext context, Map<String, double> data1, Map<String, double> data2, {bool isSleep = false, bool isSugar = false, bool isBloodPressure = false}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final List<FlSpot> spots1 = [];
+    final List<FlSpot> spots2 = [];
+
+    // Combine all keys and sort them to create a stable X-axis
+    final allKeys = (data1.keys.toSet()..addAll(data2.keys)).toList();
+    try {
+      // Try to sort by date (d/M format)
+      allKeys.sort((a, b) {
+        final aDate = DateFormat('d/M').parse(a);
+        final bDate = DateFormat('d/M').parse(b);
+        return aDate.compareTo(bDate);
+      });
+    } catch (e) {
+      // Fallback to simple string sort if parsing fails
+      allKeys.sort();
+    }
+
+    // Create spots based on the sorted key index
+    for (int i = 0; i < allKeys.length; i++) {
+      final key = allKeys[i];
+      if (data1.containsKey(key)) {
+        spots1.add(FlSpot(i.toDouble(), data1[key]!));
+      }
+      if (data2.containsKey(key)) {
+        spots2.add(FlSpot(i.toDouble(), data2[key]!));
+      }
+    }
+
+    // ... (omitted color logic, it remains the same) ...
+    Color color1 = colorScheme.primary; // Default: Steps
+    Color color2 = Colors.red; // Default: Calories
+    if (isSleep) color2 = colorScheme.secondary; // Hydration
+    if (isSugar) {
+      color1 = Colors.red.shade700; // FBS
+      color2 = Colors.orange.shade700; // PPBS
+    }
+    if (isBloodPressure) {
+      color1 = Colors.blue.shade700; // Systolic
+      color2 = Colors.blue.shade300; // Diastolic
+    }
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(show: false),
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              interval: 1,
+              getTitlesWidget: (value, meta) {
+                final index = value.toInt();
+
+                // Check bounds against the master key list
+                if (index < 0 || index >= allKeys.length) return const SizedBox();
+
+                // Logic to skip labels on dense charts
+                if (_selectedDays > 10 && index % 3 != 0) return const SizedBox();
+
+                // 🎯 CRITICAL FIX:
+                // Removed 'axisSide: meta.axisSide'.
+                // The 'meta' object is all that is required.
+                return SideTitleWidget(
+                  meta: meta, // ⬅️ THIS IS THE FIX
+                  space: 8,
+                  child: Text(allKeys[index], style: const TextStyle(fontSize: 10)),
+                );
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(show: true, border: Border.all(color: Colors.grey.shade300)),
+        lineBarsData: [
+          // Line 1
+          if(spots1.isNotEmpty)
+            LineChartBarData(
+              spots: spots1, isCurved: true, color: color1, barWidth: 4,
+              isStrokeCapRound: true, dotData: FlDotData(show: true),
+              belowBarData: BarAreaData(show: true, color: color1.withOpacity(0.2)),
+            ),
+          // Line 2
+          if(spots2.isNotEmpty)
+            LineChartBarData(
+              spots: spots2, isCurved: true, color: color2, barWidth: 4,
+              isStrokeCapRound: true, dotData: FlDotData(show: true),
+              belowBarData: BarAreaData(show: true, color: color2.withOpacity(0.2)),
+            ),
+        ],
+      ),
+    );
+  }
+
+}

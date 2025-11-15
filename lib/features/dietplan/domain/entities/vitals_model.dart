@@ -29,6 +29,11 @@ class VitalsModel {
 
   final bool isFirstConsultation;
 
+
+
+  final int? bloodPressureSystolic;
+  final int? bloodPressureDiastolic;
+  final int? heartRate;
   const VitalsModel({
     required this.id,
     required this.clientId,
@@ -52,7 +57,11 @@ class VitalsModel {
     this.restrictedDiet,
   //  this.medicalHistoryIds = const [],
     this.medicalHistoryDurations,
-    required this.isFirstConsultation
+    required this.isFirstConsultation,
+
+    this.bloodPressureSystolic,
+    this.bloodPressureDiastolic,
+    this.heartRate,
   });
 
   factory VitalsModel.fromFirestore(DocumentSnapshot doc) {
@@ -79,7 +88,11 @@ class VitalsModel {
       restrictedDiet: data['restrictedDiet'] ,
     //  medicalHistoryIds: List<String>.from(data['medicalHistoryIds'] ?? []),
       medicalHistoryDurations: data['medicalHistoryDurations'],
-      isFirstConsultation: data['isFirstConsultation'] ?? false
+      isFirstConsultation: data['isFirstConsultation'] ?? false,
+
+      bloodPressureSystolic: (data['bloodPressureSystolic'] as num?)?.toInt(),
+      bloodPressureDiastolic: (data['bloodPressureDiastolic'] as num?)?.toInt(),
+      heartRate: (data['heartRate'] as num?)?.toInt(),
     );
   }
 
@@ -106,7 +119,10 @@ class VitalsModel {
       'restrictedDiet': restrictedDiet,
      // 'medicalHistoryIds': medicalHistoryIds,
       'medicalHistoryDurations': medicalHistoryDurations,
-      'isFirstConsultation' : isFirstConsultation
+      'isFirstConsultation' : isFirstConsultation,
+      'bloodPressureSystolic': bloodPressureSystolic,
+      'bloodPressureDiastolic': bloodPressureDiastolic,
+      'heartRate': heartRate,
     };
   }
 
@@ -137,7 +153,11 @@ class VitalsModel {
       restrictedDiet: map['restrictedDiet'] as String?,
      // medicalHistoryIds: List<String>.from(map['medicalHistoryIds'] ?? []),
       medicalHistoryDurations: map['medicalHistoryDurations'] as String,
-      isFirstConsultation: map['isFirstConsultation'] ?? false
+      isFirstConsultation: map['isFirstConsultation'] ?? false,
+
+      bloodPressureSystolic: (map['bloodPressureSystolic'] as num?)?.toInt(),
+      bloodPressureDiastolic: (map['bloodPressureDiastolic'] as num?)?.toInt(),
+      heartRate: (map['heartRate'] as num?)?.toInt(),
     );
   }
 

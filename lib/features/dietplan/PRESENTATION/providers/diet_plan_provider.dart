@@ -148,6 +148,7 @@ final clientServiceProvider = Provider((ref) => ClientService()); // Assuming th
 
 // 🎯 FIX: Repository now returns the instance directly (no dependencies needed)
 final dietRepositoryProvider = Provider((ref) => DietRepository());
+final vitalsServiceProvider = Provider((ref) => VitalsService());
 
 // 🎯 CRITICAL FIX: Pass the ClientService instance to the Notifier
 final dietPlanNotifierProvider = StateNotifierProvider.family<DietPlanNotifier, DietPlanState, String>((ref, clientId) {
@@ -320,4 +321,11 @@ final historicalLogProvider = FutureProvider.family<Map<DateTime, List<ClientLog
   }
 
   return groupedLogs;
+});
+
+
+// 🎯 NEW: PROVIDER FOR VITALS HISTORY (for the graph)
+final vitalsHistoryProvider = FutureProvider.family<List<VitalsModel>, String>((ref, clientId) async {
+  final service = ref.watch(vitalsServiceProvider);
+  return service.getClientVitals(clientId);
 });

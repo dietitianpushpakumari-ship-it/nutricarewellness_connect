@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/lab_vitals_data.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/vitals_service.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
-import 'package:nutricare_connect/core/lab_vitals_data.dart'; // 🎯 Using your lab data file
 
+// 🎯 Using your lab data file
 class LogVitalsScreen extends ConsumerStatefulWidget {
   final String clientId;
   final VitalsModel? baseVitals; // The most recent vitals record
@@ -35,7 +36,7 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
   late Map<String, TextEditingController> _labControllers;
 
   // State to track which "question" groups are expanded
-  late Map<String, bool> _groupExpandedState;
+  late Map<String, bool> _groupSwitchState;
 
   @override
   void initState() {
@@ -48,7 +49,7 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
     };
 
     // Initialize all lab groups to be collapsed
-    _groupExpandedState = {
+    _groupSwitchState = {
       for (var groupName in LabVitalsData.labTestGroups.keys)
         groupName: false,
     };
@@ -248,50 +249,48 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
   }
 
   Widget _buildLabGroupCard(String groupName, List<String> testKeys, IconData icon) {
-    final bool isExpanded = _groupExpandedState[groupName] ?? false;
+    final bool isExpanded = _groupSwitchState[groupName] ?? false;
 
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 12),
-      child: ExpansionTile(
-        key: PageStorageKey(groupName), // Maintain expanded state on scroll
-        leading: Icon(icon, color: Theme.of(context).colorScheme.secondary),
-        title: SwitchListTile(
-          value: isExpanded,
-          onChanged: (bool newValue) {
-            setState(() {
-              _groupExpandedState[groupName] = newValue;
-            });
-          },
-          title: Text(
-            'Do you have a new $groupName report?',
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-          activeColor: Theme.of(context).colorScheme.secondary,
-          contentPadding: EdgeInsets.zero,
-        ),
-        initiallyExpanded: isExpanded,
-        onExpansionChanged: (bool expanding) {
-          setState(() {
-            _groupExpandedState[groupName] = expanding;
-          });
-        },
+      child: Column(
         children: [
+          // This is the "question"
+          SwitchListTile(
+            value: isExpanded,
+            onChanged: (bool newValue) {
+              setState(() {
+                _groupSwitchState[groupName] = newValue;
+              });
+            },
+            title: Text(
+              'Do you have a new $groupName report?',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+            secondary: Icon(icon, color: Theme.of(context).colorScheme.secondary),
+            activeColor: Theme.of(context).colorScheme.secondary,
+          ),
+
+          // This is the content that appears
           if (isExpanded)
             Padding(
               padding: const EdgeInsets.all(16.0).copyWith(top: 0),
               child: Column(
-                children: testKeys.map((key) {
-                  final testInfo = LabVitalsData.getTest(key);
-                  if (testInfo == null) return const SizedBox.shrink();
+                children: [
+                  const Divider(),
+                  ...testKeys.map((key) {
+                    final testInfo = LabVitalsData.getTest(key);
+                    if (testInfo == null) return const SizedBox.shrink();
 
-                  return _buildVitalsField(
-                    _labControllers[key]!,
-                    testInfo.displayName,
-                    unit: testInfo.unit,
-                    hint: 'Ref: ${testInfo.referenceRange}',
-                  );
-                }).toList(),
+                    return _buildVitalsField(
+                      _labControllers[key]!,
+                      testInfo.displayName,
+                      unit: testInfo.unit,
+                      hint: 'Ref: ${testInfo.referenceRange}',
+                    );
+                  }).toList(),
+                ],
               ),
             ),
         ],
@@ -312,9 +311,12 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
           labelText: label,
           suffixText: unit,
           hintText: hint,
+          hintStyle: const TextStyle(fontSize: 12),
           border: const OutlineInputBorder(),
         ),
       ),
     );
   }
 }
+
+
