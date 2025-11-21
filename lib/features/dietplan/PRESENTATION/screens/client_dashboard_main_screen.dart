@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/wave_clipper.dart';
+import 'package:nutricare_connect/features/chat/presentation/client_chat_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/activity_tracker_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/breathing_excercise_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_log_history_screen.dart';
@@ -625,7 +626,7 @@ class _CoachScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-                _buildContactActions(context, client, dietitianProfile),
+                _buildSupportSection(context, client),
                 // Pass the simple info object
               ],
             );
@@ -685,6 +686,45 @@ class _CoachScreen extends ConsumerWidget {
       ],
     );
   }
+
+  // ... inside _CoachScreen class in client_dashboard_main_screen.dart
+
+// REPLACE the _buildContactActions method call or the contact buttons with:
+
+  Widget _buildSupportSection(BuildContext context, ClientModel client) {
+    return Card(
+      elevation: 4,
+      color: Colors.indigo.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            const Text("Need Help or Have Questions?", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.chat_bubble),
+                label: const Text("Open Chat & Requests"),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                onPressed: () {
+                  // 🎯 Navigate to the new Chat Screen
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => ClientChatScreen(clientName: client.name ?? 'Client')),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text("Upload reports, ask about meals, or book appointments directly.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+      ),
+    );
+  }
+
+// Call this method inside your _CoachScreen build() method list.
 
   Widget _buildContactActions(
     BuildContext context,
@@ -1137,3 +1177,4 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
   }
 
 }
+
