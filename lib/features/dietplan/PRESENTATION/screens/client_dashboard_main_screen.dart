@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/custom_gradient_app_bar.dart';
+import 'package:nutricare_connect/core/utils/coach_tab.dart';
+import 'package:nutricare_connect/core/utils/modern_bottom_bar.dart';
+import 'package:nutricare_connect/core/utils/wellness_hub_screen.dart';
 import 'package:nutricare_connect/core/wave_clipper.dart';
 import 'package:nutricare_connect/features/chat/presentation/client_chat_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/activity_tracker_screen.dart';
@@ -133,120 +137,78 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   }
 
   @override
+  // Inside _ClientDashboardScreenState...
+
+  @override
   Widget build(BuildContext context) {
     final clientAsync = ref.watch(clientProfileFutureProvider);
 
     return clientAsync.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, stack) => Scaffold(
-        body: Center(child: Text('Error loading client profile: $err')),
-      ),
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, stack) => Scaffold(body: Center(child: Text('Error: $err'))),
       data: (client) {
-        if (client == null) {
-          // This should not happen if the user is authenticated, but good to check
-          return const Scaffold(body: Center(child: Text('Client not found.')));
-        }
+        if (client == null) return const Scaffold(body: Center(child: Text('Client not found.')));
 
-        // 🎯 The widget list is now built here, with the FRESH client data
+        // 🎯 CLEANED UP WIDGET LIST (Matches the 5 Tabs)
         final List<Widget> widgetOptions = <Widget>[
-          HomeScreen(client: client), // Index 0: Home
-          PlanScreen(client: client), // Index 1: Plan/Log
-          ActivityTrackerScreen(client: client), // Index 2: Activity Hub
-          TrackerScreen(client: widget.client),
-          _WellnessHubScreen(client: widget.client),
-
-          //_AddOnsScreen(client: widget.client), // Index 2: Add-ons
-          _FeedScreen(), // Index 3: Content
-          _CoachScreen(client: widget.client), // Index 4: Coach
+          HomeScreen(client: client),              // 0: Home
+          PlanScreen(client: client),              // 1: Plan
+          ActivityTrackerScreen(client: client),   // 2: Move (The new Bento Screen)
+          WellnessHubScreen(client: client),      // 3: Wellness
+          CoachTab(client: client),            // 4: Coach
         ];
 
-        // -----------------------------------------------------------------
-        // 🎯 Reminder Logic Trigger (This remains the same)
-        // -----------------------------------------------------------------
-        ref.listen<DietPlanState>(activeDietPlanProvider, (
-          previousState,
-          newState,
-        ) {
-          if (!newState.isLoading && newState.activePlan != null) {
+        // --- Reminder Logic Listener (Kept same) ---
+        ref.listen<DietPlanState>(activeDietPlanProvider, (prev, next) {
+          if (!next.isLoading && next.activePlan != null) {
             localReminderService.reScheduleAllReminders(
-              client: client, // Pass the fresh client model
-              activePlan: newState.activePlan,
-              dailyLogs: newState.dailyLogs,
+                client: client,
+                activePlan: next.activePlan,
+                dailyLogs: next.dailyLogs
             );
           }
         });
-        // -----------------------------------------------------------------
+
+        // 🎯 Logic: Only show AppBar if NOT on Home (Index 0)
+        final bool showAppBar = _selectedIndex != 0;
 
         return Scaffold(
-          appBar: AppBar(
-            title: Text("Hi, ${widget.client.name?.split(' ').first}"),
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            elevation: 0,
+          // 🎯 Use extendBody so content flows behind the floating bar
+          extendBody: true,
+
+          appBar: showAppBar
+              ? CustomGradientAppBar(
+            title: Text(_getPageTitle(_selectedIndex)),
             actions: [
               IconButton(
                 icon: const Icon(Icons.history),
-                tooltip: 'View Log History',
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => ClientLogHistoryScreen()),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.notifications),
-                tooltip: 'Notifications',
-                onPressed: () {},
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientLogHistoryScreen())),
               ),
             ],
-          ),
+          )
+              : null,
 
-          body: IndexedStack(index: _selectedIndex, children: widgetOptions),
+          body: SafeArea(child: widgetOptions[_selectedIndex]),
 
-          // --- BOTTOM NAVIGATION BAR ---
-          bottomNavigationBar: BottomNavigationBar(
-            items: const <BottomNavigationBarItem>[
-              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.restaurant),
-                label: 'Plan',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.fitness_center),
-                label: 'Tracker',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.fitness_center),
-                label: 'Tracker2',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.fitness_center),
-                label: 'Tracker2',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.fitness_center),
-                label: 'Addon',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.lightbulb),
-                label: 'Feed',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.support_agent),
-                label: 'Coach',
-              ),
-            ],
+          // 🎯 THE NEW FLOATING BAR
+          bottomNavigationBar: SafeArea(child: ModernBottomBar(
             currentIndex: _selectedIndex,
-            selectedItemColor: Colors.indigo.shade700,
-            unselectedItemColor: Colors.grey.shade600,
-            type: BottomNavigationBarType.fixed,
-            // Use fixed for 5 items
             onTap: _onItemTapped,
-          ),
+          )),
         );
       },
     );
+  }
+
+  // Helper for Titles
+  String _getPageTitle(int index) {
+    switch (index) {
+      case 1: return "My Meal Plan";
+      case 2: return "Activity Hub";
+      case 3: return "Wellness Center";
+      case 4: return "My Coach";
+      default: return "";
+    }
   }
 
   void initialize() async {
@@ -448,448 +410,6 @@ class _FeedScreen extends ConsumerWidget {
     }
   }
 }
-
-class _WellnessHubScreen extends ConsumerWidget {
-  final ClientModel client;
-
-  const _WellnessHubScreen({required this.client});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ListView(
-      padding: const EdgeInsets.all(16.0),
-      children: [
-        Text(
-          'Wellness Center',
-          style: Theme.of(
-            context,
-          ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        Text(
-          'Guided exercises to help refuel your body and mind.',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(color: Colors.grey.shade600),
-        ),
-        const Divider(height: 30),
-
-        // --- 1. Breathing Exercise (Existing) ---
-        _buildModuleCard(
-          context: context,
-          title: 'Mindful Breathing',
-          subtitle: 'Start a guided "Sun Glow" session to calm your mind.',
-          icon: Icons.brightness_high_rounded,
-          color: Theme.of(context).colorScheme.secondary,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => BreathingExerciseScreen(client: client),
-              ),
-            );
-          },
-        ),
-
-        // --- 2. Activity / Step Input (Existing) ---
-        // --- 2. Posture Tracker (New - Placeholder) ---
-        _buildModuleCard(
-          context: context,
-          title: 'Posture & Form Tracker',
-          subtitle: 'COMING SOON: Get real-time feedback on your exercises.',
-          icon: Icons.camera_alt,
-          color: Colors.orange.shade700,
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('This feature is coming soon!')),
-            );
-          },
-        ),
-
-        // --- 3. Voice Journal (New - Placeholder) ---
-        _buildModuleCard(
-          context: context,
-          title: 'Voice & Mood Journal',
-          subtitle: 'COMING SOON: Log your mood and stress just by talking.',
-          icon: Icons.mic,
-          color: Colors.purple.shade400,
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('This feature is coming soon!')),
-            );
-          },
-        ),
-
-        // --- 4. Food Scanner (New - Placeholder) ---
-        _buildModuleCard(
-          context: context,
-          title: 'AI Food Scanner',
-          subtitle: 'COMING SOON: Log your deviated meals with your camera.',
-          icon: Icons.document_scanner,
-          // or Icons.camera
-          color: Colors.green.shade600,
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('This feature is coming soon!')),
-            );
-          },
-        ),
-
-        // --- 5. Advanced Sleep (New - Placeholder) ---
-        _buildModuleCard(
-          context: context,
-          title: 'Auto Sleep Analysis',
-          subtitle:
-              'COMING SOON: Track sleep quality with your phone\'s sensors.',
-          icon: Icons.bedtime,
-          color: Colors.grey,
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('This feature is coming soon!')),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildModuleCard({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      elevation: 4,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Icon(icon, size: 44, color: color),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: onTap,
-      ),
-    );
-  }
-}
-// =================================================================
-// --- TAB 4: COACH SCREEN (Support & Appointments) ---
-// =================================================================
-
-class _CoachScreen extends ConsumerWidget {
-  final ClientModel client;
-
-  const _CoachScreen({required this.client});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bool isSensorEnabled = ref.watch(stepSensorEnabledProvider);
-    final dietitianInfoAsync = ref.watch(dietitianProfileProvider);
-    final upcomingMeetingsAsync = ref.watch(
-      upcomingMeetingsProvider(client.id),
-    );
-
-    return ListView(
-      padding: const EdgeInsets.all(16.0),
-      children: [
-        // Know Your Dietitian Section (using AsyncValue.when)
-        dietitianInfoAsync.when(
-          loading: () => const Center(child: Text('Loading dietitian info...')),
-          error: (e, s) => Center(child: Text('Error: $e')),
-          data: (dietitianProfile) {
-            if (dietitianProfile == null) return const SizedBox.shrink();
-            // Create a simple Info object for display convenience
-            //final dietitianInfo = Diet.fromAdminProfile(dietitianProfile);
-
-            return Column(
-              children: [
-                Card(
-                  elevation: 4,
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.person_pin,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 36,
-                    ),
-                    title: Text(
-                      'Your Dietitian: ${dietitianProfile.firstName} ${dietitianProfile.lastName}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                    subtitle: Text('Email: ${dietitianProfile.companyEmail}'),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _buildSupportSection(context, client),
-                // Pass the simple info object
-              ],
-            );
-          },
-        ),
-        // Upcoming Appointments
-        _buildAppointmentsSection(context, upcomingMeetingsAsync),
-        // --- 🎯 NEW: Settings Section ---
-        const SizedBox(height: 20),
-        Text('App Settings', style: Theme.of(context).textTheme.titleLarge),
-        const Divider(),
-
-        // 1. Notification Settings
-        Card(
-          elevation: 2,
-          child: ListTile(
-            leading: Icon(
-              Icons.notifications_active,
-              color: Theme.of(context).colorScheme.secondary,
-            ),
-            title: const Text('Notification Settings'),
-            subtitle: const Text(
-              'Manage your daily reminders and voice alerts.',
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  // 🎯 Navigate to the new client-side screen
-                  builder: (_) => ClientReminderSettingsScreen(client: client),
-                ),
-              );
-            },
-          ),
-        ),
-
-        // 2. Sensor Settings
-        Card(
-          elevation: 2,
-          child: SwitchListTile(
-            title: const Text('Enable Phone Step Sensor'),
-            subtitle: const Text(
-              'Use this phone\'s sensor for live step tracking.',
-            ),
-            value: isSensorEnabled,
-            onChanged: (bool newValue) {
-              ref.read(stepSensorEnabledProvider.notifier).state = newValue;
-            },
-            secondary: Icon(
-              isSensorEnabled ? Icons.sensors : Icons.sensors_off,
-              color: isSensorEnabled
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.grey,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ... inside _CoachScreen class in client_dashboard_main_screen.dart
-
-// REPLACE the _buildContactActions method call or the contact buttons with:
-
-  Widget _buildSupportSection(BuildContext context, ClientModel client) {
-    return Card(
-      elevation: 4,
-      color: Colors.indigo.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const Text("Need Help or Have Questions?", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.chat_bubble),
-                label: const Text("Open Chat & Requests"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
-                onPressed: () {
-                  // 🎯 Navigate to the new Chat Screen
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => ClientChatScreen(clientName: client.name ?? 'Client')),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text("Upload reports, ask about meals, or book appointments directly.", style: TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
-        ),
-      ),
-    );
-  }
-
-// Call this method inside your _CoachScreen build() method list.
-
-  Widget _buildContactActions(
-    BuildContext context,
-    ClientModel clientInfo,
-    AdminProfileModel dietitianInfo,
-  ) {
-    final bool hasWebsite = dietitianInfo.website?.isNotEmpty == true;
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Direct Contact',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildContactButton(
-                  'Call',
-                  Icons.phone,
-                  Colors.blue,
-                  () => _launchUrl('tel:${dietitianInfo.mobile}', context),
-                ),
-                _buildContactButton(
-                  'Email',
-                  Icons.email,
-                  Colors.red,
-                  () => _launchUrl(
-                    'mailto:${dietitianInfo.companyEmail}',
-                    context,
-                  ),
-                ),
-                _buildContactButton(
-                  'WhatsApp',
-                  FontAwesomeIcons.whatsapp,
-                  Colors.green,
-                  () => _launchUrl(
-                    'https://wa.me/${client.whatsappNumber ?? client.mobile}',
-                    context,
-                  ),
-                ),
-                if (hasWebsite)
-                  _buildContactButton('Website', Icons.web, Colors.purple, () {
-                    // Ensure URL has http/https prefix for launching
-                    String url = dietitianInfo.website!;
-                    if (!url.startsWith('http')) {
-                      url = 'https://$url';
-                    }
-                    _launchUrl(url, context);
-                  }),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAppointmentsSection(
-    BuildContext context,
-    AsyncValue<List<MeetingModel>> meetingsAsync,
-  ) {
-    return Card(
-      elevation: 2,
-      child: ExpansionTile(
-        leading: const Icon(Icons.event, color: Colors.red),
-        title: const Text('Upcoming Appointments'),
-        children: [
-          meetingsAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: LinearProgressIndicator(),
-            ),
-            error: (e, s) => Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text('Failed to load appointments: $e'),
-            ),
-            data: (meetings) {
-              if (meetings.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('No upcoming sessions scheduled.'),
-                );
-              }
-              return Column(
-                children: [
-                  ...meetings
-                      .map(
-                        (meeting) => ListTile(
-                          title: Text(meeting.purpose),
-                          subtitle: Text(
-                            DateFormat(
-                              'EEE, MMM d, h:mm a',
-                            ).format(meeting.startTime),
-                          ),
-                          trailing: TextButton(
-                            onPressed: () {
-                              // You can implement launching the meet link or a reschedule dialog here
-                            },
-                            child: const Text('Join/Edit'),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.add_task),
-                    title: const Text('Request New Session'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Launching scheduling form...'),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContactButton(
-    String label,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return Column(
-      children: [
-        CircleAvatar(
-          backgroundColor: color.withOpacity(0.1),
-          child: IconButton(
-            icon: Icon(icon, color: color),
-            onPressed: onTap,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(label, style: TextStyle(fontSize: 12, color: color)),
-      ],
-    );
-  }
-
-  Future<void> _launchUrl(String url, BuildContext context) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not open $url')));
-    }
-  }
-}
-
-
 // ... (inside client_dashboard_main_screen.dart)
 
 // 🎯 REBUILT: Progress Report Card (with Vitals)

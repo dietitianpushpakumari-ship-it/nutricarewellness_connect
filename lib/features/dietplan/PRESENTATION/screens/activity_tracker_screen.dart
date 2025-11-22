@@ -1,26 +1,16 @@
-// =================================================================
-// --- 🎯 TAB 2: REBUILT ACTIVITY TRACKER SCREEN (Input Hub) ---
-// =================================================================
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/utils/movement_Details_sheet.dart';
+import 'package:nutricare_connect/core/utils/workout_entry_dialog.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
 import 'package:nutricare_connect/services/client_service.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
-
-
-
-
-// lib/features/dietplan/PRESENTATION/screens/client_dashboard_main_screen.dart
-
-// =================================================================
-// --- 🎯 TAB 2: REBUILT ACTIVITY TRACKER SCREEN (Input Hub) ---
-// =================================================================
 
 class ActivityTrackerScreen extends ConsumerStatefulWidget {
   final ClientModel client;
@@ -31,544 +21,531 @@ class ActivityTrackerScreen extends ConsumerStatefulWidget {
 }
 
 class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> {
-
-  // Admin-set
-  List<String> _mandatoryTasks = [];
-  int _stepGoal = 8000;
-
   // Sensor State
   Stream<StepCount>? _stepCountStream;
-  int _sensorSteps = 0; // This is the phone's TOTAL steps
+  int _sensorSteps = 0;
   bool _sensorActive = false;
-  String _sensorStatus = "Initializing...";
 
-  // Client-set
-  final _personalGoalController = TextEditingController();
-  List<String> _personalGoals = [];
-  Set<String> _completedPersonalGoals = {};
-
-  // Manual Input State
-  final _manualStepsController = TextEditingController();
-  Set<String> _completedMandatoryTasks = {};
+  // Local State for "Quick Check" interactions before saving
   bool _isSaving = false;
-
-  bool _isManualEntry = false; // Local toggle
 
   @override
   void initState() {
     super.initState();
+    // Initialize sensor if enabled
     final bool sensorEnabled = ref.read(stepSensorEnabledProvider);
     if (sensorEnabled) {
       _initPedometer();
-    } else {
-      _sensorStatus = "Sensor is disabled in settings.";
-      _isManualEntry = true;
-    }
-
-    // 🎯 CRITICAL FIX 1: Initial Load
-    // Read the *initial* state from the provider in initState.
-    final initialState = ref.read(activeDietPlanProvider);
-    _updateStateFromLog(initialState, isInit: true);
-  }
-
-  // 🎯 This method is no longer needed
-  // @override
-  // void didChangeDependencies() {
-  //   super.didChangeDependencies();
-  // }
-
-  /// Populates all local fields from the daily log
-  void _updateStateFromLog(DietPlanState state, {bool isInit = false}) {
-    final dailyLog = state.dailyLogs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
-    final activePlan = state.activePlan;
-
-    // Use setState to update the local controllers and lists
-    setState(() {
-      _stepGoal = activePlan?.dailyStepGoal ?? 8000;
-      _mandatoryTasks = activePlan?.mandatoryDailyTasks ?? [];
-
-      final savedStepsText = dailyLog?.stepCount?.toString() ?? '';
-      // Only update controller if it's init or the text doesn't match
-      if (isInit || _manualStepsController.text != savedStepsText) {
-        _manualStepsController.text = savedStepsText;
-      }
-
-      _completedMandatoryTasks = dailyLog?.completedMandatoryTasks.toSet() ?? {};
-      _personalGoals = dailyLog?.createdPersonalGoals ?? [];
-      _completedPersonalGoals = dailyLog?.completedPersonalGoals.toSet() ?? {};
-    });
-  }
-
-  @override
-  void dispose() {
-    _manualStepsController.dispose();
-    _personalGoalController.dispose();
-    super.dispose();
-  }
-
-  // --- 🎯 Pedometer & Sensor Logic ---
-  void _initPedometer() async {
-    var status = await Permission.activityRecognition.request();
-    if (status.isGranted) {
-      _stepCountStream = Pedometer.stepCountStream;
-      _stepCountStream?.listen((StepCount event) {
-        if (mounted) {
-          final bool sensorEnabled = ref.read(stepSensorEnabledProvider);
-          final bool autoSync = !_isManualEntry && sensorEnabled;
-
-          setState(() {
-            _sensorSteps = event.steps; // Live update of TOTAL steps
-            _sensorStatus = "Live Tracking: ${event.steps} steps";
-            _sensorActive = true;
-          });
-
-          if (autoSync) {
-            // Auto-sync logic
-            final state = ref.read(activeDietPlanProvider);
-            if (!DateUtils.isSameDay(state.selectedDate, DateTime.now())) return;
-
-            final dailyLog = state.dailyLogs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
-            final int baseline = dailyLog?.sensorStepsBaseline ?? 0;
-
-            if (baseline == 0) {
-              _saveActivities(stepsToSave: 0, setBaseline: _sensorSteps);
-            } else {
-              final int calculatedDailySteps = _sensorSteps - baseline;
-              final int savedSteps = dailyLog?.stepCount ?? 0;
-
-              if (calculatedDailySteps > savedSteps && !_isSaving) {
-                _saveActivities(stepsToSave: calculatedDailySteps);
-              }
-            }
-          }
-        }
-      }).onError((error) {
-        if (mounted) setState(() { _sensorStatus = "Sensor Error"; _sensorActive = false; });
-      });
-    } else {
-      if (mounted) setState(() { _sensorStatus = "Permission Denied. Enable in Settings."; _sensorActive = false; });
     }
   }
 
-  // --- 🎯 Personal Goal Handlers ---
-  void _addPersonalGoal() {
-    final newGoal = _personalGoalController.text.trim();
-    if (newGoal.isNotEmpty && !_personalGoals.contains(newGoal)) {
-      setState(() {
-        _personalGoals.add(newGoal);
-      });
-      _saveActivities(newPersonalGoal: newGoal);
-    }
-  }
-
-  void _removePersonalGoal(String goal) {
-    setState(() {
-      _personalGoals.remove(goal);
-      _completedPersonalGoals.remove(goal);
-    });
-    _saveActivities();
-  }
-
-  // --- 🎯 NEW: Manual Reset Logic ---
-  Future<void> _manualResetBaseline() async {
-    final bool isToday = DateUtils.isSameDay(ref.read(activeDietPlanProvider).selectedDate, DateTime.now());
-    if (!isToday) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('You can only reset the step baseline for today.'),
-        backgroundColor: Colors.orange,
-      ));
-      return;
-    }
-
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Reset Daily Steps?'),
-        content: const Text('This will set your current step count for today to 0. This is useful if you restarted your phone.\n\nAre you sure?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Reset', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      // 🎯 Call save with the reset flag
-      await _saveActivities(stepsToSave: 0, setBaseline: _sensorSteps);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Step count for today has been reset to 0.'),
-        backgroundColor: Colors.green,
-      ));
-    }
-  }
-
-
-  // --- 🎯 Save Activity Logic (Consolidated) ---
-  Future<void> _saveActivities({int? stepsToSave, String? newPersonalGoal, int? setBaseline}) async {
-    final notifier = ref.read(dietPlanNotifierProvider(widget.client.id).notifier);
-    final activePlan = ref.read(activeDietPlanProvider).activePlan;
-    if (activePlan == null) return;
-
-    setState(() { _isSaving = true; });
-
+  Future<void> _logWorkout(ClientLogModel? log, int calories, int durationMinutes) async {
+    setState(() => _isSaving = true);
     try {
-      final dailyLog = ref.read(activeDietPlanProvider).dailyLogs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
+      final notifier = ref.read(dietPlanNotifierProvider(widget.client.id).notifier);
+      final state = ref.read(activeDietPlanProvider);
 
-      final logToSave = dailyLog ?? ClientLogModel(
+      final logToSave = log ?? ClientLogModel(
         id: '',
-        clientId: activePlan.clientId,
-        dietPlanId: activePlan.id,
+        clientId: state.activePlan!.clientId,
+        dietPlanId: state.activePlan!.id,
         mealName: 'DAILY_WELLNESS_CHECK',
         actualFoodEaten: ['Daily Wellness Data'],
-        date: notifier.state.selectedDate,
+        date: state.selectedDate,
       );
 
-      List<String> newPersonalGoalsList = List.from(_personalGoals);
-      if (newPersonalGoal != null && newPersonalGoal.isNotEmpty && !newPersonalGoalsList.contains(newPersonalGoal)) {
-        newPersonalGoalsList.add(newPersonalGoal);
-      }
+      // 1. Add Calories
+      final int currentCals = logToSave.caloriesBurned ?? 0;
+      final int newCals = currentCals + calories;
 
-      int currentSteps = 0;
-      int? newBaseline = logToSave.sensorStepsBaseline;
-
-      if (setBaseline != null) {
-        // --- Resetting Baseline ---
-        currentSteps = 0;
-        newBaseline = setBaseline;
-      } else if (stepsToSave != null) {
-        // --- Syncing from Sensor ---
-        currentSteps = stepsToSave;
-        if (newBaseline == 0 || newBaseline == null) newBaseline = _sensorSteps - stepsToSave;
-      } else if (_isManualEntry) {
-        // --- Saving from Manual Field ---
-        currentSteps = int.tryParse(_manualStepsController.text) ?? 0;
-        newBaseline = null;
-      } else {
-        currentSteps = logToSave.stepCount ?? 0;
-      }
-
-      final int completedTasks = _completedMandatoryTasks.length + _completedPersonalGoals.length;
-
-      int score = 0;
-      if (_stepGoal > 0) {
-        score += ((currentSteps / _stepGoal) * 50).round().clamp(0, 50);
-      }
-      score += (completedTasks * 10).clamp(0, 50);
-      final int caloriesBurned = (currentSteps * 0.04).round();
+      // 2. Boost Score (Bonus points for logging a workout!)
+      final int currentScore = logToSave.activityScore ?? 0;
+      // Cap score addition so it doesn't exceed 100 easily
+      final int newScore = (currentScore + 15).clamp(0, 100);
 
       final updatedLog = logToSave.copyWith(
-        stepCount: currentSteps,
-        stepGoal: _stepGoal,
-        sensorStepsBaseline: newBaseline,
-        caloriesBurned: caloriesBurned,
-        completedMandatoryTasks: _completedMandatoryTasks.toList(),
-        createdPersonalGoals: newPersonalGoalsList,
-        completedPersonalGoals: _completedPersonalGoals.toList(),
-        activityScore: score.clamp(0, 100),
+        caloriesBurned: newCals,
+        activityScore: newScore,
       );
 
       await notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
 
-      if (mounted) {
-        if(newPersonalGoal != null) _personalGoalController.clear();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Activity saved!'),
-          backgroundColor: Colors.green,
-        ));
-      }
-    } catch (e) {
-      if (mounted) {
+      if(mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to save activity: $e'),
-          backgroundColor: Colors.red,
+            content: Text("Nice! +$calories kcal & Score Boosted! 🔥"),
+            backgroundColor: Colors.green
         ));
       }
     } finally {
-      if (mounted) setState(() { _isSaving = false; });
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
+  void _initPedometer() async {
+    if (await Permission.activityRecognition.request().isGranted) {
+      _stepCountStream = Pedometer.stepCountStream;
+      _stepCountStream?.listen((StepCount event) {
+        if (mounted) {
+          setState(() {
+            _sensorSteps = event.steps;
+            _sensorActive = true;
+          });
+        }
+      });
+    }
+  }
+
+  // --- ACTIONS ---
+
+  Future<void> _toggleTask(ClientLogModel? log, String task, bool isPersonal) async {
+    setState(() => _isSaving = true);
+    try {
+      final notifier = ref.read(dietPlanNotifierProvider(widget.client.id).notifier);
+      final state = ref.read(activeDietPlanProvider);
+
+      final logToSave = log ?? ClientLogModel(
+        id: '',
+        clientId: state.activePlan!.clientId,
+        dietPlanId: state.activePlan!.id,
+        mealName: 'DAILY_WELLNESS_CHECK',
+        actualFoodEaten: ['Daily Wellness Data'],
+        date: state.selectedDate,
+      );
+
+      ClientLogModel updatedLog;
+
+      if (isPersonal) {
+        final current = List<String>.from(logToSave.completedPersonalGoals);
+        if (current.contains(task)) current.remove(task);
+        else current.add(task);
+        updatedLog = logToSave.copyWith(completedPersonalGoals: current);
+      } else {
+        final current = List<String>.from(logToSave.completedMandatoryTasks);
+        if (current.contains(task)) current.remove(task);
+        else current.add(task);
+        updatedLog = logToSave.copyWith(completedMandatoryTasks: current);
+      }
+
+      // Recalculate Score
+      final int stepScore = (logToSave.stepCount ?? 0) > (logToSave.stepGoal ?? 8000) ? 50 : 30;
+      final int taskScore = (updatedLog.completedMandatoryTasks.length * 10).clamp(0, 50);
+      updatedLog = updatedLog.copyWith(activityScore: stepScore + taskScore);
+
+      await notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
+
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _addPersonalGoal(ClientLogModel? log, String newGoal) async {
+    if (newGoal.isEmpty) return;
+    final notifier = ref.read(dietPlanNotifierProvider(widget.client.id).notifier);
+    final state = ref.read(activeDietPlanProvider);
+
+    final logToSave = log ?? ClientLogModel(
+      id: '',
+      clientId: state.activePlan!.clientId,
+      dietPlanId: state.activePlan!.id,
+      mealName: 'DAILY_WELLNESS_CHECK',
+      actualFoodEaten: ['Daily Wellness Data'],
+      date: state.selectedDate,
+    );
+
+    final currentGoals = List<String>.from(logToSave.createdPersonalGoals);
+    if (!currentGoals.contains(newGoal)) {
+      currentGoals.add(newGoal);
+      final updatedLog = logToSave.copyWith(createdPersonalGoals: currentGoals);
+      await notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
+    }
+  }
+
+  Future<void> _deletePersonalGoal(ClientLogModel? log, String goal) async {
+    if (log == null) return;
+    final notifier = ref.read(dietPlanNotifierProvider(widget.client.id).notifier);
+
+    final currentGoals = List<String>.from(log.createdPersonalGoals);
+    final completed = List<String>.from(log.completedPersonalGoals);
+
+    currentGoals.remove(goal);
+    completed.remove(goal);
+
+    final updatedLog = log.copyWith(createdPersonalGoals: currentGoals, completedPersonalGoals: completed);
+    await notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
   }
 
   @override
   Widget build(BuildContext context) {
-    // 🎯 CRITICAL FIX 2: Listen for updates (like date changes) here
-    ref.listen(activeDietPlanProvider, (previous, next) {
-      if (previous?.selectedDate != next.selectedDate) {
-        _updateStateFromLog(next);
-      }
-    });
-
-    final colorScheme = Theme.of(context).colorScheme;
     final state = ref.watch(activeDietPlanProvider);
-    final bool isSensorGloballyEnabled = ref.watch(stepSensorEnabledProvider);
-    final bool showManualMode = !isSensorGloballyEnabled || _isManualEntry;
+    final notifier = ref.read(dietPlanNotifierProvider(widget.client.id).notifier);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (state.isLoading) return const Center(child: CircularProgressIndicator());
+    if (state.activePlan == null) return const Center(child: Text("No active plan."));
 
     final dailyLog = state.dailyLogs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
-    final int baseline = dailyLog?.sensorStepsBaseline ?? 0;
 
-    final int displayDailySteps = (isSensorGloballyEnabled && _sensorActive && baseline > 0 && _sensorSteps >= baseline)
-        ? _sensorSteps - baseline
-        : (dailyLog?.stepCount ?? 0);
+    final int currentSteps = dailyLog?.stepCount ?? 0;
+    final int stepGoal = state.activePlan!.dailyStepGoal > 0 ? state.activePlan!.dailyStepGoal : 8000;
+    final int score = dailyLog?.activityScore ?? 0;
+    final int calories = dailyLog?.caloriesBurned ?? 0;
+
+    final mandatoryTasks = state.activePlan!.mandatoryDailyTasks;
+    final personalGoals = dailyLog?.createdPersonalGoals ?? [];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Activity Tracker (${DateFormat.yMMMd().format(state.selectedDate)})'),
-        backgroundColor: Colors.white,
-        elevation: 1,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          // 0. Date Selector
-          _buildDateSelector(context, ref.read(dietPlanNotifierProvider(widget.client.id).notifier), state.selectedDate),
-          const SizedBox(height: 20),
+      backgroundColor: const Color(0xFFF8F9FE),
+      body: CustomScrollView(
+        slivers: [
+          // 1. Header & Date
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 60, 20, 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Activity Hub", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))),
 
-          // --- 1. Sensor / Manual Toggle ---
-          if (isSensorGloballyEnabled)
-            Center(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  setState(() => _isManualEntry = !showManualMode);
-                },
-                icon: Icon(showManualMode ? Icons.sensors : Icons.edit),
-                label: Text(showManualMode ? 'Switch to Sensor Sync' : 'Switch to Manual Entry'),
-                style: OutlinedButton.styleFrom(foregroundColor: colorScheme.secondary),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: state.selectedDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) notifier.selectDate(picked);
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today, size: 16, color: colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Text(DateFormat('MMM d').format(state.selectedDate), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          const SizedBox(height: 20),
+          ),
 
-          // --- 2. Conditional Input Cards ---
-          if (showManualMode)
-            _buildManualStepCard(colorScheme)
+          // 2. Scoreboard
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.deepPurple.shade700, Colors.deepPurple.shade500],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [BoxShadow(color: Colors.deepPurple.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))],
+              ),
+              child: Column(
+                children: [
+                  const Text("Daily Activity Score", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Text("$score", style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: (score / 100).clamp(0.0, 1.0),
+                      minHeight: 8,
+                      backgroundColor: Colors.black26,
+                      valueColor: const AlwaysStoppedAnimation(Colors.greenAccent),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(score >= 80 ? "Excellent work!" : "Keep moving to boost your score!", style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. Movement Summary
+          SliverToBoxAdapter(
+            child: GestureDetector(
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => MovementDetailSheet.withSteps(
+                    notifier: notifier,
+                    activePlan: state.activePlan!,
+                    dailyLog: dailyLog,
+                    currentSteps: currentSteps,
+                  ),
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.orange.shade50, shape: BoxShape.circle),
+                      child: Icon(Icons.directions_walk, color: Colors.orange.shade700, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("Movement", style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Text("$currentSteps", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              Text(" / $stepGoal steps", style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                            ],
+                          ),
+                          Text("$calories kcal burned", style: TextStyle(fontSize: 12, color: Colors.red.shade400, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ... below the Movement Summary Sliver ...
+
+// 3.5 Workout Logger
+          SliverToBoxAdapter(
+            child: GestureDetector(
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => WorkoutEntryDialog(
+                    onSave: (type, duration, cals) {
+                      _logWorkout(dailyLog, cals, duration);
+                    },
+                  ),
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.teal.shade400, Colors.teal.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                      child: const Icon(Icons.fitness_center, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Log Workout", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        Text("Yoga, Gym, Cycling...", style: TextStyle(fontSize: 12, color: Colors.white70)),
+                      ],
+                    ),
+                    const Spacer(),
+                    const Icon(Icons.add_circle, color: Colors.white, size: 28),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // 4. Mandatory Missions
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 10),
+              child: Text("Daily Missions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+            ),
+          ),
+
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                  final task = mandatoryTasks[index];
+                  final isCompleted = dailyLog?.completedMandatoryTasks.contains(task) ?? false;
+                  return _buildTaskCard(task, isCompleted, () => _toggleTask(dailyLog, task, false));
+                },
+                childCount: mandatoryTasks.length,
+              ),
+            ),
+          ),
+
+          // 5. Personal Goals (WITH DELETE BUTTON)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 30, 24, 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("My Goals", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle, color: Colors.teal),
+                    onPressed: () => _showAddGoalDialog(context, dailyLog),
+                  )
+                ],
+              ),
+            ),
+          ),
+
+          if (personalGoals.isEmpty)
+            const SliverToBoxAdapter(
+              child: Center(child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Text("No personal goals yet. Add one!", style: TextStyle(color: Colors.grey)),
+              )),
+            )
           else
-            _buildSensorSyncCard(colorScheme, displayDailySteps),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                    final goal = personalGoals[index];
+                    final isCompleted = dailyLog?.completedPersonalGoals.contains(goal) ?? false;
 
-          const SizedBox(height: 20),
+                    // 🎯 Swipe-to-delete AND Button-to-delete
+                    return Dismissible(
+                      key: Key(goal),
+                      direction: DismissDirection.endToStart,
+                      onDismissed: (_) => _deletePersonalGoal(dailyLog, goal),
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        color: Colors.red.shade100,
+                        child: Icon(Icons.delete, color: Colors.red.shade700),
+                      ),
+                      child: _buildTaskCard(
+                        goal,
+                        isCompleted,
+                            () => _toggleTask(dailyLog, goal, true),
+                        isPersonal: true,
+                        onDelete: () => _deletePersonalGoal(dailyLog, goal), // 🎯 Pass delete callback
+                      ),
+                    );
+                  },
+                  childCount: personalGoals.length,
+                ),
+              ),
+            ),
 
-          // 3. Mandatory Activity Checklist
-          _buildMandatoryTasksCard(colorScheme),
-          const SizedBox(height: 20),
-
-          // 4. Client's Personal Goals
-          _buildPersonalGoalsCard(colorScheme),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
   }
 
-  // --- 🎯 Refactored Card Widgets ---
+  // 🎯 WIDGET: Task Card with Optional Delete Button
+  Widget _buildTaskCard(String title, bool isCompleted, VoidCallback onTap, {bool isPersonal = false, VoidCallback? onDelete}) {
+    final color = isPersonal ? Colors.teal : Colors.deepPurple;
 
-  Widget _buildSensorSyncCard(ColorScheme colorScheme, int displayDailySteps) {
-    return Card(
-      elevation: 2,
-      color: _sensorActive ? Colors.green.shade50 : Colors.grey.shade200,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Phone Step Sensor', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.green.shade800)),
-            const SizedBox(height: 10),
-            Text(_sensorStatus, style: TextStyle(color: _sensorActive ? Colors.green : Colors.black54)),
-            const SizedBox(height: 10),
-            Text('TODAY\'S STEPS: $displayDailySteps', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            Text('(Total Sensor: $_sensorSteps)', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 10),
-
-            // 🎯 NEW: Manual Reset Button
-            OutlinedButton.icon(
-              onPressed: _sensorActive && !_isSaving && DateUtils.isSameDay(ref.read(activeDietPlanProvider).selectedDate, DateTime.now())
-                  ? _manualResetBaseline
-                  : null,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Reset Daily Baseline'),
-              style: OutlinedButton.styleFrom(foregroundColor: Colors.orange.shade800),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildManualStepCard(ColorScheme colorScheme) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-                'Manual Step Estimate',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: colorScheme.primary)
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _manualStepsController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
-                labelText: 'Enter estimated steps',
-                prefixIcon: Icon(Icons.edit),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: _isSaving ? null : () => _saveActivities(),
-              child: const Text('Save Manual Steps'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMandatoryTasksCard(ColorScheme colorScheme) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-                'Dietitian\'s Tasks (Mandatory)',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: colorScheme.secondary)
-            ),
-            const SizedBox(height: 10),
-            if (_mandatoryTasks.isEmpty)
-              const Text('No mandatory tasks assigned by your dietitian today.', style: TextStyle(fontStyle: FontStyle.italic)),
-            ..._mandatoryTasks.map((task) {
-              final bool isCompleted = _completedMandatoryTasks.contains(task);
-              return CheckboxListTile(
-                title: Text(task, style: TextStyle(decoration: isCompleted ? TextDecoration.lineThrough : null)),
-                value: isCompleted,
-                activeColor: colorScheme.primary,
-                onChanged: (bool? value) {
-                  setState(() {
-                    if (value == true) _completedMandatoryTasks.add(task);
-                    else _completedMandatoryTasks.remove(task);
-                  });
-                  _saveActivities(); // Auto-save on check
-                },
-              );
-            }).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPersonalGoalsCard(ColorScheme colorScheme) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-                'Your Personal Goals',
-                style: Theme.of(context).textTheme.titleLarge
-            ),
-            const SizedBox(height: 10),
-            ..._personalGoals.map((goal) {
-              final bool isCompleted = _completedPersonalGoals.contains(goal);
-              return CheckboxListTile(
-                title: Text(goal, style: TextStyle(decoration: isCompleted ? TextDecoration.lineThrough : null, fontStyle: FontStyle.italic)),
-                value: isCompleted,
-                activeColor: colorScheme.primary,
-                onChanged: (bool? value) {
-                  setState(() {
-                    if (value == true) _completedPersonalGoals.add(goal);
-                    else _completedPersonalGoals.remove(goal);
-                  });
-                  _saveActivities();
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-                secondary: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                  onPressed: () => _removePersonalGoal(goal),
-                ),
-              );
-            }).toList(),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _personalGoalController,
-                    decoration: const InputDecoration(hintText: 'Add a new goal...'),
-                    onSubmitted: (value) => _addPersonalGoal(),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle, color: Colors.green),
-                  onPressed: _addPersonalGoal,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDateSelector(BuildContext context, DietPlanNotifier notifier, DateTime selectedDate) {
-    final isToday = DateUtils.isSameDay(selectedDate, DateTime.now());
-
-    String formatDate(DateTime date) {
-      if (DateUtils.isSameDay(date, DateTime.now())) return 'Today';
-      if (DateUtils.isSameDay(date, DateTime.now().subtract(const Duration(days: 1)))) return 'Yesterday';
-      return DateFormat('EEE, MMM d').format(date);
-    }
-
-    return Card(
-      elevation: 2,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-            onPressed: () {
-              final previousDay = selectedDate.subtract(const Duration(days: 1));
-              notifier.selectDate(previousDay);
-            },
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), // Adjusted padding
+        decoration: BoxDecoration(
+          color: isCompleted ? color.withOpacity(0.1) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: isCompleted ? color.withOpacity(0.3) : Colors.grey.shade200,
+              width: 1.5
           ),
+          boxShadow: isCompleted ? [] : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5, offset: const Offset(0, 2))],
+        ),
+        child: Row(
+          children: [
+            // Checkbox Icon
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: isCompleted ? color : Colors.grey.shade300, width: 2),
+                color: isCompleted ? color : Colors.transparent,
+              ),
+              child: isCompleted
+                  ? const Icon(Icons.check, size: 14, color: Colors.white)
+                  : const SizedBox(width: 14, height: 14),
+            ),
+            const SizedBox(width: 16),
 
-          GestureDetector(
-            onTap: () async {
-              final newDate = await showDatePicker(
-                context: context,
-                initialDate: selectedDate,
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now(),
-              );
-              if (newDate != null && !DateUtils.isSameDay(newDate, selectedDate)) {
-                notifier.selectDate(newDate);
-              }
-            },
-            child: Text(
-              formatDate(selectedDate),
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
+            // Title
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
                   fontSize: 16,
-                  color: isToday ? Theme.of(context).colorScheme.primary : Colors.black87
+                  fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
+                  color: isCompleted ? color.shade900 : Colors.black87,
+                  decoration: isCompleted ? TextDecoration.lineThrough : null,
+                  decorationColor: color.shade200,
+                ),
               ),
             ),
-          ),
 
-          IconButton(
-            icon: const Icon(Icons.arrow_forward_ios, size: 20),
-            onPressed: isToday ? null : () {
-              final nextDay = selectedDate.add(const Duration(days: 1));
-              notifier.selectDate(nextDay);
+            // 🎯 NEW: Delete Button (Only for Personal Goals)
+            if (isPersonal && onDelete != null)
+              IconButton(
+                icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                onPressed: onDelete,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(), // Removes default padding
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddGoalDialog(BuildContext context, ClientLogModel? log) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("New Personal Goal"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: "e.g. 10 min meditation"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              _addPersonalGoal(log, controller.text.trim());
+              Navigator.pop(context);
             },
-            color: isToday ? Colors.grey : Theme.of(context).colorScheme.primary,
-          ),
+            child: const Text("Add"),
+          )
         ],
       ),
     );

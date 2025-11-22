@@ -3,11 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/lab_vitals_data.dart';
-import 'package:nutricare_connect/features/dietplan/dATA/services/vitals_service.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
 
-// 🎯 Using your lab data file
 class LogVitalsScreen extends ConsumerStatefulWidget {
   final String clientId;
   final VitalsModel? baseVitals; // The most recent vitals record
@@ -22,9 +20,14 @@ class LogVitalsScreen extends ConsumerStatefulWidget {
   ConsumerState<LogVitalsScreen> createState() => _LogVitalsScreenState();
 }
 
-class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
+class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  late TabController _tabController;
   bool _isSaving = false;
+  bool _isLoadingData = false; // 🎯 NEW: Loading state for fetching
+
+  DateTime _selectedDate = DateTime.now();
+  String? _existingRecordId; // 🎯 NEW: Track ID to enable updates
 
   // "At-Home" Vitals
   final _weightController = TextEditingController();
@@ -32,106 +35,154 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
   final _bpDiastolicController = TextEditingController();
   final _heartRateController = TextEditingController();
 
-  // "Lab Results" Vitals - One controller for every possible lab test
+  // "Lab Results"
   late Map<String, TextEditingController> _labControllers;
-
-  // State to track which "question" groups are expanded
   late Map<String, bool> _groupSwitchState;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
 
-    // Initialize controllers for all lab tests
     _labControllers = {
-      for (var key in LabVitalsData.allLabTests.keys)
-        key: TextEditingController(),
+      for (var key in LabVitalsData.allLabTests.keys) key: TextEditingController(),
     };
 
-    // Initialize all lab groups to be collapsed
     _groupSwitchState = {
-      for (var groupName in LabVitalsData.labTestGroups.keys)
-        groupName: false,
+      for (var groupName in LabVitalsData.labTestGroups.keys) groupName: false,
     };
 
-    // Pre-fill fields from the *most recent* vitals record
-    if (widget.baseVitals != null) {
-      final vitals = widget.baseVitals!;
-      // Pre-fill at-home vitals
-      _weightController.text = vitals.weightKg > 0 ? vitals.weightKg.toString() : '';
-      _bpSystolicController.text = vitals.bloodPressureSystolic?.toString() ?? '';
-      _bpDiastolicController.text = vitals.bloodPressureDiastolic?.toString() ?? '';
-      _heartRateController.text = vitals.heartRate?.toString() ?? '';
-
-      // Pre-fill lab results
-      vitals.labResults.forEach((key, value) {
-        if (_labControllers.containsKey(key)) {
-          _labControllers[key]!.text = value;
-        }
-      });
-    }
+    // 🎯 FIX: Don't just use baseVitals. Check if there is already a log for TODAY.
+    // If not, then fall back to baseVitals (pre-fill).
+    _loadDataForDate(_selectedDate);
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _weightController.dispose();
     _bpSystolicController.dispose();
     _bpDiastolicController.dispose();
     _heartRateController.dispose();
-    for (var controller in _labControllers.values) {
-      controller.dispose();
-    }
+    for (var c in _labControllers.values) c.dispose();
     super.dispose();
   }
 
+  // 🎯 NEW: Fetch data when date changes
+  Future<void> _loadDataForDate(DateTime date) async {
+    setState(() => _isLoadingData = true);
+
+    try {
+      final service = ref.read(vitalsServiceProvider);
+      final existingLog = await service.getDailyVitals(widget.clientId, date);
+
+      if (existingLog != null) {
+        // ✅ FOUND EXISTING: Populate fields with SAVED data
+        _existingRecordId = existingLog.id;
+        _weightController.text = existingLog.weightKg > 0 ? existingLog.weightKg.toString() : '';
+        _bpSystolicController.text = existingLog.bloodPressureSystolic?.toString() ?? '';
+        _bpDiastolicController.text = existingLog.bloodPressureDiastolic?.toString() ?? '';
+        _heartRateController.text = existingLog.heartRate?.toString() ?? '';
+
+        // Populate Labs
+        existingLog.labResults.forEach((key, value) {
+          if (_labControllers.containsKey(key)) {
+            _labControllers[key]!.text = value;
+          }
+        });
+
+        // Expand groups that have data
+        // (Optional logic to auto-expand groups with values)
+
+      } else {
+        // ❌ NO RECORD: This is a new entry.
+        _existingRecordId = null; // Clear ID so we create a new doc
+
+        // Pre-fill WEIGHT from base (previous record) for convenience
+        if (widget.baseVitals != null) {
+          _weightController.text = widget.baseVitals!.weightKg > 0 ? widget.baseVitals!.weightKg.toString() : '';
+        } else {
+          _weightController.clear();
+        }
+
+        // Clear daily fluctuating metrics (BP/HR) - don't copy these forward
+        _bpSystolicController.clear();
+        _bpDiastolicController.clear();
+        _heartRateController.clear();
+
+        // Clear Lab fields
+        for (var c in _labControllers.values) c.clear();
+      }
+    } catch (e) {
+      print("Error loading date: $e");
+    } finally {
+      if (mounted) setState(() => _isLoadingData = false);
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && !DateUtils.isSameDay(picked, _selectedDate)) {
+      setState(() => _selectedDate = picked);
+      // 🎯 FIX: Fetch data for the new date
+      await _loadDataForDate(picked);
+    }
+  }
+
   Future<void> _onSave() async {
+    if (_weightController.text.trim().isEmpty && _existingRecordId == null && widget.baseVitals == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter at least a Weight value.'), backgroundColor: Colors.orange));
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
+
     setState(() { _isSaving = true; });
 
     try {
-      final base = widget.baseVitals;
-
-      // 1. Create a new map of lab results, preserving old ones
-      final Map<String, String> newLabResults = Map.from(base?.labResults ?? {});
-
-      // 2. Update map with values from *all* controllers
+      // Prepare Maps
+      final Map<String, String> finalLabResults = {};
       _labControllers.forEach((key, controller) {
-        if (controller.text.isNotEmpty) {
-          newLabResults[key] = controller.text.trim();
+        if (controller.text.trim().isNotEmpty) {
+          finalLabResults[key] = controller.text.trim();
         }
       });
 
-      // 3. Parse new "at-home" values
-      final newWeight = double.tryParse(_weightController.text);
-      final newSystolic = int.tryParse(_bpSystolicController.text);
-      final newDiastolic = int.tryParse(_bpDiastolicController.text);
-      final newHeartRate = int.tryParse(_heartRateController.text);
+      // Helper parsing
+      double? safeParseDouble(String text) => text.trim().isEmpty ? null : double.tryParse(text.trim());
+      int? safeParseInt(String text) => text.trim().isEmpty ? null : double.tryParse(text.trim())?.toInt();
 
-      // 4. Create a *new* VitalsModel
-      // This creates a new historical record
-      final newVitalsRecord = VitalsModel(
-        id: '', // Set ID to empty to create a NEW record
+      final newWeight = safeParseDouble(_weightController.text);
+
+      // Use Base as fallback for static profile data
+      final base = widget.baseVitals;
+
+      final vitalsRecord = VitalsModel(
+        // 🎯 FIX: Use existing ID if updating, else empty string
+        id: _existingRecordId ?? '',
+
         clientId: widget.clientId,
-        date: DateTime.now(), // Set to today
+        date: _selectedDate, // Keep the selected date (don't overwrite with Now)
         isFirstConsultation: false,
 
-        // Overwrite with new data IF provided, otherwise use base data
         weightKg: newWeight ?? base?.weightKg ?? 0,
-        bloodPressureSystolic: newSystolic ?? base?.bloodPressureSystolic,
-        bloodPressureDiastolic: newDiastolic ?? base?.bloodPressureDiastolic,
-        heartRate: newHeartRate ?? base?.heartRate,
+        bloodPressureSystolic: safeParseInt(_bpSystolicController.text),
+        bloodPressureDiastolic: safeParseInt(_bpDiastolicController.text),
+        heartRate: safeParseInt(_heartRateController.text),
+        labResults: finalLabResults,
 
-        // Overwrite lab results
-        labResults: newLabResults,
-
-        // Copy all other non-loggable fields from base
+        // Carry forward static data
         heightCm: base?.heightCm ?? 0,
         bmi: base?.bmi ?? 0,
         idealBodyWeightKg: base?.idealBodyWeightKg ?? 0,
         bodyFatPercentage: base?.bodyFatPercentage ?? 0,
         measurements: base?.measurements ?? {},
-        notes: base?.notes,
-        labReportUrls: base?.labReportUrls ?? [],
+        notes: base?.notes, // Or null if you want fresh notes
+        labReportUrls: base?.labReportUrls ?? [], // Or handle new uploads
         assignedDietPlanIds: base?.assignedDietPlanIds ?? [],
         foodHabit: base?.foodHabit,
         activityType: base?.activityType,
@@ -143,27 +194,26 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
         otherLifestyleHabits: base?.otherLifestyleHabits,
       );
 
-      // 5. Save the new record
       final vitalsService = ref.read(vitalsServiceProvider);
-      await vitalsService.addVitals(newVitalsRecord);
 
-      // 6. Refresh all providers that depend on vitals
+      if (_existingRecordId != null && _existingRecordId!.isNotEmpty) {
+        // 🎯 UPDATE Existing
+        await vitalsService.updateVitals(vitalsRecord);
+      } else {
+        // 🎯 CREATE New
+        await vitalsService.addVitals(vitalsRecord);
+      }
+
+      // Refresh
       ref.invalidate(latestVitalsFutureProvider(widget.clientId));
       ref.invalidate(vitalsHistoryProvider(widget.clientId));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Vitals Saved Successfully!'), backgroundColor: Colors.green),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vitals Saved!'), backgroundColor: Colors.green));
         Navigator.of(context).pop();
       }
-
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving vitals: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() { _isSaving = false; });
     }
@@ -171,77 +221,282 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FE),
       appBar: AppBar(
-        title: const Text('Log New Vitals'),
+        title: const Text('Log Health Data'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        foregroundColor: Colors.black87,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: colorScheme.primary,
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: colorScheme.primary,
+          tabs: const [
+            Tab(text: "Daily Vitals", icon: Icon(Icons.monitor_heart_outlined)),
+            Tab(text: "Lab Reports", icon: Icon(Icons.science_outlined)),
+          ],
+        ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: _isSaving
-                ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                : IconButton(
-              icon: const Icon(Icons.save),
+          if (_isSaving)
+            const Center(child: Padding(padding: EdgeInsets.only(right: 16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
+          else
+            TextButton(
               onPressed: _onSave,
-              tooltip: 'Save Vitals',
-            ),
-          )
+              child: const Text("SAVE", style: TextStyle(fontWeight: FontWeight.bold)),
+            )
         ],
       ),
-      body: Form(
+      // 🎯 Show loading indicator while fetching data
+      body: _isLoadingData
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
         key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16.0),
+        child: TabBarView(
+          controller: _tabController,
           children: [
-            // --- SECTION 1: AT-HOME VITALS ---
-            _buildSectionHeader(context, 'At-Home Vitals', Icons.home_filled),
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    _buildVitalsField(_weightController, 'Current Weight (kg)'),
-                    _buildVitalsField(_bpSystolicController, 'Blood Pressure (Systolic)', isInt: true),
-                    _buildVitalsField(_bpDiastolicController, 'Blood Pressure (Diastolic)', isInt: true),
-                    _buildVitalsField(_heartRateController, 'Heart Rate (BPM)', isInt: true),
-                  ],
-                ),
-              ),
-            ),
-
-            // --- SECTION 2: LAB RESULTS ---
-            const SizedBox(height: 24),
-            _buildSectionHeader(context, 'Lab Results', Icons.science),
-
-            // Dynamically build "question cards" from lab_vitals_data.dart
-            ...LabVitalsData.labTestGroups.entries.map((groupEntry) {
-              final String groupName = groupEntry.key;
-              final List<String> testKeys = groupEntry.value;
-              final IconData icon = LabVitalsData.groupIcons[groupName] ?? Icons.science;
-
-              return _buildLabGroupCard(groupName, testKeys, icon);
-            }).toList(),
+            _buildDailyVitalsTab(context),
+            _buildLabReportsTab(context),
           ],
         ),
       ),
     );
   }
 
-  // --- UI Helpers ---
+  // ... (Keep _buildDailyVitalsTab, _buildLabReportsTab, and other helper widgets as they were) ...
+  // Make sure to paste the helper widgets here if you are replacing the whole file.
+  // For brevity, I assume you have them from the previous step. If not, let me know!
 
-  Widget _buildSectionHeader(BuildContext context, String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, top: 8.0),
-      child: Row(
-        children: [
-          Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
+  // --- TAB 1: DAILY VITALS ---
+  Widget _buildDailyVitalsTab(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        // Date Selector
+        _buildDateCard(context),
+        const SizedBox(height: 24),
+
+        const Text("Body Metrics", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+
+        // Weight Card
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.blue.shade50, shape: BoxShape.circle),
+                    child: Icon(Icons.monitor_weight, color: Colors.blue.shade700),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text("Weight", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _weightController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                      decoration: const InputDecoration(
+                        hintText: "0.0",
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const Text("kg", style: TextStyle(fontSize: 20, color: Colors.grey)),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Heart & BP Row
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                context,
+                title: "Heart Rate",
+                icon: Icons.favorite,
+                color: Colors.red,
+                controller: _heartRateController,
+                unit: "bpm",
+              ),
             ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.orange.shade50, shape: BoxShape.circle),
+                          child: Icon(Icons.bloodtype, color: Colors.orange.shade700, size: 20),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text("BP", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _bpSystolicController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(hintText: "Sys", border: InputBorder.none),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const Text("/", style: TextStyle(fontSize: 20, color: Colors.grey)),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _bpDiastolicController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(hintText: "Dia", border: InputBorder.none),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Text("mmHg", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // --- TAB 2: LAB REPORTS ---
+  Widget _buildLabReportsTab(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _buildDateCard(context),
+        const SizedBox(height: 20),
+        const Text("Enter Report Values", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        const Text("Select a category to expand and enter values.", style: TextStyle(color: Colors.grey)),
+        const SizedBox(height: 20),
+
+        // Dynamic Lab Groups
+        ...LabVitalsData.labTestGroups.entries.map((groupEntry) {
+          final String groupName = groupEntry.key;
+          final List<String> testKeys = groupEntry.value;
+          final IconData icon = LabVitalsData.groupIcons[groupName] ?? Icons.science;
+
+          return _buildLabGroupCard(groupName, testKeys, icon);
+        }).toList(),
+
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  // --- REUSABLE WIDGETS ---
+
+  Widget _buildDateCard(BuildContext context) {
+    return GestureDetector(
+      onTap: _pickDate,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text("Date of Record", style: TextStyle(fontWeight: FontWeight.w600)),
+            Row(
+              children: [
+                Text(DateFormat.yMMMd().format(_selectedDate), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricCard(BuildContext context, {required String title, required IconData icon, required MaterialColor color, required TextEditingController controller, required String unit}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: color.shade50, shape: BoxShape.circle),
+                child: Icon(icon, color: color.shade700, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  decoration: const InputDecoration(
+                    hintText: "--",
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                ),
+              ),
+              Text(unit, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+            ],
           ),
         ],
       ),
@@ -249,74 +504,46 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
   }
 
   Widget _buildLabGroupCard(String groupName, List<String> testKeys, IconData icon) {
+    final colorScheme = Theme.of(context).colorScheme;
     final bool isExpanded = _groupSwitchState[groupName] ?? false;
 
     return Card(
-      elevation: 2,
+      elevation: 0,
+      color: Colors.white,
       margin: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        children: [
-          // This is the "question"
-          SwitchListTile(
-            value: isExpanded,
-            onChanged: (bool newValue) {
-              setState(() {
-                _groupSwitchState[groupName] = newValue;
-              });
-            },
-            title: Text(
-              'Do you have a new $groupName report?',
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-            secondary: Icon(icon, color: Theme.of(context).colorScheme.secondary),
-            activeColor: Theme.of(context).colorScheme.secondary,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade200)),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, color: colorScheme.primary, size: 20),
           ),
+          title: Text(groupName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: testKeys.map((key) {
+            final testInfo = LabVitalsData.getTest(key);
+            if (testInfo == null) return const SizedBox.shrink();
 
-          // This is the content that appears
-          if (isExpanded)
-            Padding(
-              padding: const EdgeInsets.all(16.0).copyWith(top: 0),
-              child: Column(
-                children: [
-                  const Divider(),
-                  ...testKeys.map((key) {
-                    final testInfo = LabVitalsData.getTest(key);
-                    if (testInfo == null) return const SizedBox.shrink();
-
-                    return _buildVitalsField(
-                      _labControllers[key]!,
-                      testInfo.displayName,
-                      unit: testInfo.unit,
-                      hint: 'Ref: ${testInfo.referenceRange}',
-                    );
-                  }).toList(),
-                ],
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: TextFormField(
+                controller: _labControllers[key],
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: testInfo.displayName,
+                  suffixText: testInfo.unit,
+                  helperText: "Ref: ${testInfo.referenceRange}",
+                  helperStyle: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
               ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVitalsField(TextEditingController controller, String label, {bool isInt = false, String? unit, String? hint}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: TextInputType.numberWithOptions(decimal: !isInt),
-        inputFormatters: isInt
-            ? [FilteringTextInputFormatter.digitsOnly]
-            : [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-        decoration: InputDecoration(
-          labelText: label,
-          suffixText: unit,
-          hintText: hint,
-          hintStyle: const TextStyle(fontSize: 12),
-          border: const OutlineInputBorder(),
+            );
+          }).toList(),
         ),
       ),
     );
   }
 }
-
-

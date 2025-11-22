@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/utils/smart_dialogs.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
@@ -85,6 +86,7 @@ class _WaterQuickAddModalState extends ConsumerState<WaterQuickAddModal> {
           backgroundColor: Colors.green,
         ));
         Navigator.of(context).pop(); // Close the main modal
+        showContextualSuccessDialog(context, 'hydration');
       }
 
     } on Exception catch (e) {

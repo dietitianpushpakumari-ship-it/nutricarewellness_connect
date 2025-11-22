@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/utils/smart_dialogs.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
@@ -142,6 +143,7 @@ class _SleepEntryDialogState extends ConsumerState<SleepEntryDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sleep log saved!'), backgroundColor: Colors.green));
         Navigator.of(context).pop();
+        showContextualSuccessDialog(context, 'sleep');
       }
     } on Exception catch (e) {
       if (!mounted) return;

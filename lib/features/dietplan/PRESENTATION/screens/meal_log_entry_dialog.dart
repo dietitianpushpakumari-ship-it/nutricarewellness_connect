@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart'; // 🎯 Ensure this is imported
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:nutricare_connect/core/utils/smart_dialogs.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
@@ -217,6 +218,7 @@ class _MealLogEntryDialogState extends ConsumerState<MealLogEntryDialog> {
       if (mounted) {
         _showMessage('Log recorded successfully!', isError: false);
         Navigator.of(context).pop();
+        showContextualSuccessDialog(context, 'nutrition');
       }
     } on Exception catch (e) {
       if (!mounted) return;

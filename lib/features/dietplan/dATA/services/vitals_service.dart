@@ -51,10 +51,8 @@ class VitalsService {
   }
 
   // await _clientCollection.where('assignedDietPlanIds', isEqualTo: mobile).limit(1).get();
-  Future<List<VitalsModel>> getClientMappedVitals(
-    String clientId,
-    String planId,
-  ) async {
+  Future<List<VitalsModel>> getClientMappedVitals(String clientId,
+      String planId,) async {
     try {
       final snapshot = await _getVitalsCollection()
           .where('assignedDietPlanIds', arrayContains: planId)
@@ -108,11 +106,9 @@ class VitalsService {
     }
   }
 
-  Future<void> updateAssignedDietPlans(
-    String clientId,
-    String id,
-    List<String> finalAssignedIds,
-  ) async {
+  Future<void> updateAssignedDietPlans(String clientId,
+      String id,
+      List<String> finalAssignedIds,) async {
     try {
       await _getVitalsCollection(
       ).doc(id).update({'assignedDietPlanIds': finalAssignedIds});
@@ -123,6 +119,31 @@ class VitalsService {
         stackTrace: stack,
       );
       throw Exception('Failed to update vitals record.');
+    }
+  }
+
+
+// --- GET VITALS FOR SPECIFIC DATE ---
+  Future<VitalsModel?> getDailyVitals(String clientId, DateTime date) async {
+    try {
+      // Create a range for the whole day
+      final startOfDay = DateTime(date.year, date.month, date.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+
+      final snapshot = await _getVitalsCollection()
+          .where('clientId', isEqualTo: clientId)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('date', isLessThan: Timestamp.fromDate(endOfDay))
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        return VitalsModel.fromFirestore(snapshot.docs.first);
+      }
+      return null;
+    } catch (e) {
+      _logger.e('Error fetching daily vitals: $e');
+      return null;
     }
   }
 }

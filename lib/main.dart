@@ -6,6 +6,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 
 // 🎯 1. Import all the services and plugin instances
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/global_user_provider.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/tts_service.dart';
 import 'package:nutricare_connect/firebase_options.dart';
 import 'package:nutricare_connect/services/client_service.dart';
@@ -142,6 +143,8 @@ void main() async {
 // ... (Rest of your NutriCareClientApp class) ...
 
 
+// Inside lib/main.dart
+
 class NutriCareClientApp extends ConsumerWidget {
   const NutriCareClientApp({super.key});
 
@@ -149,37 +152,38 @@ class NutriCareClientApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authNotifierProvider);
 
-    // Check if initial Firebase Auth check is complete
     if (!authState.initialCheckComplete) {
-      return const MaterialApp(
-        home: Scaffold(body: Center(child: CircularProgressIndicator())),
-      );
+      return const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator())));
     }
 
-    // 1. Check if user is authenticated (clientId is available)
-    final isAuthenticated = authState.clientId != null;
+    // 1. Check Authentication
+    if (authState.clientId != null) {
+      final clientId = authState.clientId!;
 
-    if (isAuthenticated) {
-      // 2. Fetch the full client profile based on the authenticated UID
+      // 🎯 NEW: Use the Global Provider to fetch/cache data
+      // We use 'listen' to trigger the fetch if data is missing, but we return a FutureBuilder/Async logic
+      // Or simpler: we use the FutureProvider you already had, but update the Global State.
+
       final clientProfileAsync = ref.watch(clientProfileFutureProvider);
 
       return clientProfileAsync.when(
         loading: () => const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator()))),
-        error: (e, s) => MaterialApp(home: Scaffold(body: Center(child: Text('Error loading client profile: $e')))),
+        error: (e, s) => MaterialApp(home: Scaffold(body: Center(child: Text('Error: $e')))),
         data: (client) {
           if (client == null) {
-            // User is authenticated but the Firestore profile record is missing
-            return const MaterialApp(home: Scaffold(body: Center(child: Text('User profile data missing. Please complete setup.'))));
+            return const MaterialApp(home: Scaffold(body: Center(child: Text('Profile missing.'))));
           }
 
-          // 3. Navigate to the dashboard, passing the loaded ClientModel
+          // 🎯 CRITICAL: Save to Global Memory immediately
+          // This allows accessing 'ref.read(globalUserProvider)' anywhere later without await
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(globalUserProvider.notifier).setUser(client);
+          });
+
           return MaterialApp(
             title: 'NutriCare Client',
-            theme: ThemeData(
-              primarySwatch: Colors.teal,
-              visualDensity: VisualDensity.adaptivePlatformDensity,
-              useMaterial3: true,
-            ),
+            theme: AppTheme.lightTheme,
+            // Pass client to Dashboard (optional now, but good for legacy)
             home: ClientDashboardScreen(client: client),
             debugShowCheckedModeBanner: false,
           );
@@ -187,7 +191,7 @@ class NutriCareClientApp extends ConsumerWidget {
       );
     }
 
-    // Default to Auth Screen if not authenticated
+    // Default to Auth Screen
     return MaterialApp(
       title: 'NutriCare Client',
       theme: AppTheme.lightTheme,

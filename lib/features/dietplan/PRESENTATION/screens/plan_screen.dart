@@ -1,281 +1,433 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/utils/daily_wellness_sheet.dart';
+import 'package:nutricare_connect/core/utils/meal_detail_sheet.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/daily_wellness_entry_dialog.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/meal_log_entry_dialog.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/guidelines.dart';
 import 'package:nutricare_connect/services/client_service.dart';
 
 class PlanScreen extends ConsumerWidget {
   final ClientModel client;
-  const PlanScreen({required this.client});
+  const PlanScreen({super.key, required this.client});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(activeDietPlanProvider);
+    final notifier = ref.read(dietPlanNotifierProvider(client.id).notifier);
     final colorScheme = Theme.of(context).colorScheme;
 
-    // 1. Fetch the active plan state (which includes selectedDate and dailyLogs)
-    final state = ref.watch(activeDietPlanProvider);
-
-    // 2. Access the Notifier for actions
-    final notifier = ref.read(dietPlanNotifierProvider(client.id).notifier);
-
-    // --- Manual State Handling ---
-    if (state.isLoading) { return const Center(child: CircularProgressIndicator()); }
-    if (state.error != null) { return Center(child: Text('Error loading plan: ${state.error}')); }
+    if (state.isLoading) return const Center(child: CircularProgressIndicator());
+    if (state.error != null) return Center(child: Text('Error: ${state.error}'));
 
     final activePlan = state.activePlan;
+    if (activePlan == null) return const Center(child: Text('No active diet plan assigned.'));
+
+    final dayPlan = activePlan.days.isNotEmpty ? activePlan.days.first : null;
     final dailyLogs = state.dailyLogs;
 
-    if (activePlan == null) { return const Center(child: Text('No active diet plan assigned.')); }
+    // Check Wellness Status
+    final ClientLogModel? wellnessLog = dailyLogs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
+    final bool isWellnessComplete = wellnessLog != null;
 
-    final dayPlan = activePlan.days.firstWhereOrNull((d) => true);
-
-    // 🎯 CRITICAL: Find existing log for the SELECTED DATE's wellness metrics
-    final ClientLogModel? dailyWellnessLog = dailyLogs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
-    final bool isWellnessCheckComplete = dailyWellnessLog != null;
-
-    return ListView(
-      padding: const EdgeInsets.all(16.0),
-      children: [
-        // 🎯 1. DATE SELECTOR (Enables back-dating)
-        _buildDateSelector(context, notifier, state.selectedDate),
-        const SizedBox(height: 20),
-
-        // 🎯 2. DAILY WELLNESS CHECK-IN CARD (The daily form)
-        _buildDailyWellnessCard(context, isWellnessCheckComplete, notifier, dailyWellnessLog, activePlan),
-        const SizedBox(height: 20),
-
-        // Header for Meal Routine
-        Text('Meal Plan: ${activePlan.name}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold)),
-        Text('Assigned Date: ${DateFormat.yMMMd().format(activePlan.assignedDate ?? DateTime.now())}', style: TextStyle(color: Colors.grey.shade600)),
-        const Divider(height: 30),
-
-        // 🎯 3. DAILY MEAL TRACKER (Per-meal logs)
-        if (dayPlan != null)
-          ...dayPlan.meals.map((meal) {
-            final mealName = meal.mealName ?? 'Meal';
-            final mealLog = dailyLogs.firstWhereOrNull((log) => log.mealName == mealName);
-            final isLogged = mealLog != null;
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              elevation: 2,
-              child: ExpansionTile(
-                leading: Icon(isLogged ? Icons.check_circle : Icons.radio_button_unchecked, color: isLogged ? Colors.green : Colors.grey),
-                title: Text(mealName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(isLogged
-                    ? 'Logged: ${mealLog!.actualFoodEaten}'
-                    : 'Planned: ${meal.items.length} items'),
-                childrenPadding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  // --- Planned Items List (Items & Alternatives) ---
-                  ...meal.items.map((item) => _buildPlannedItemTile(context, item)),
-
-                  // --- Log/Edit Button ---
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10.0, top: 10.0),
-                    child: ElevatedButton.icon(
-                      icon: Icon(isLogged ? Icons.edit : Icons.add, color: colorScheme.onPrimary),
-                      onPressed: () {
-                        // Launch the existing MEAL log dialog
-                        // 🎯 This opens the dialog for MEALS
-                        showLogModificationDialog(context, notifier, mealName, activePlan, logToEdit: mealLog);
-                      },
-                      label: Text(isLogged ? 'EDIT MEAL' : 'LOG MEAL'),
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FE), // Clean Off-White
+        body: CustomScrollView(
+          slivers: [
+            // 1. Header & Date Switcher
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 60, 20, 10),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Today's Menu",
+                          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+                        ),
+                        // Date Picker Button
+                        InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: state.selectedDate,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null) notifier.selectDate(picked);
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.calendar_today, size: 16, color: colorScheme.primary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  DateFormat('MMM d').format(state.selectedDate),
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                  ],
+                ),
+              ),
+            ),
+      
+            // 2. The "Daily Mission" (Wellness Check)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: _buildWellnessBanner(context, isWellnessComplete, () {
+                  // 🎯 UPDATE: Use showModalBottomSheet
+                  showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true, // Full height
+                      backgroundColor: Colors.transparent, // Rounded corners
+                      builder: (_) => DailyWellnessSheet(
+                        notifier: notifier,
+                        activePlan: activePlan,
+                        dailyLog: wellnessLog,
+                      )
+                  );
+                }),
+              ),
+            ),
+      
+            // 3. The Meal Timeline
+            if (dayPlan != null)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                      final meal = dayPlan.meals[index];
+                      final log = dailyLogs.firstWhereOrNull((l) => l.mealName == meal.mealName);
+      
+                      return _buildMealTicket(context, meal, log, activePlan, notifier);
+                    },
+                    childCount: dayPlan.meals.length,
+                  ),
+                ),
+              )
+            else
+              const SliverToBoxAdapter(child: Center(child: Text("Rest Day - No Meals Planned"))),
+      
+            // 4. Guidelines Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                child: Text(
+                  "Guidelines & Tips",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                ),
+              ),
+            ),
+      
+            // 5. Guidelines Horizontal Scroll
+            SliverToBoxAdapter(
+              child: _buildGuidelinesCarousel(context, activePlan.guidelineIds, ref),
+            ),
+      
+            const SliverToBoxAdapter(child: SizedBox(height: 100)), // Bottom Padding
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- WIDGET: Wellness Banner ---
+  Widget _buildWellnessBanner(BuildContext context, bool isComplete, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isComplete
+                ? [Colors.green.shade600, Colors.green.shade400]
+                : [const Color(0xFF2E3A59), const Color(0xFF4B5D85)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(color: (isComplete ? Colors.green : Colors.blueGrey).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(isComplete ? Icons.check : Icons.wb_sunny_rounded, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isComplete ? "Daily Check-in Complete" : "Daily Wellness Check",
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isComplete ? "Great job staying consistent!" : "Log your sleep, mood & hydration.",
+                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
                   ),
                 ],
               ),
-            );
-          }).toList(),
-
-        const Divider(height: 30),
-        Text(
-          'Assigned Guidelines',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
+            ),
+            if (!isComplete)
+              const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+          ],
         ),
-        const SizedBox(height: 8),
-        _buildGuidelinesSection(context, activePlan.guidelineIds,ref),
-        const Divider(height: 30),
-
-      ],
+      ),
     );
   }
 
-  // --- NEW: Date Selector Widget ---
-  Widget _buildDateSelector(BuildContext context, DietPlanNotifier notifier, DateTime selectedDate) {
-    final isToday = DateUtils.isSameDay(selectedDate, DateTime.now());
+  // --- WIDGET: Meal Ticket ---
+  Widget _buildMealTicket(BuildContext context, DietPlanMealModel meal, ClientLogModel? log, ClientDietPlanModel activePlan, DietPlanNotifier notifier) {
+    final isLogged = log != null;
+    final isSkipped = log?.logStatus == LogStatus.skipped;
+    final isDeviated = log?.isDeviation ?? false;
 
-    String formatDate(DateTime date) {
-      if (DateUtils.isSameDay(date, DateTime.now())) return 'Today';
-      if (DateUtils.isSameDay(date, DateTime.now().subtract(const Duration(days: 1)))) return 'Yesterday';
-      return DateFormat('EEE, MMM d').format(date);
+    // Determine Status Colors
+    Color statusColor = Colors.grey;
+    IconData statusIcon = Icons.circle_outlined;
+
+    if (isLogged) {
+      if (isSkipped) {
+        statusColor = Colors.orange;
+        statusIcon = Icons.do_not_disturb;
+      } else if (isDeviated) {
+        statusColor = Colors.red;
+        statusIcon = Icons.warning_amber_rounded;
+      } else {
+        statusColor = Colors.green;
+        statusIcon = Icons.check_circle;
+      }
     }
 
-    return Card(
-      elevation: 2,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-            onPressed: () {
-              final previousDay = selectedDate.subtract(const Duration(days: 1));
-              notifier.selectDate(previousDay); // 🎯 Triggers loadInitialData
-            },
-          ),
-
-          GestureDetector(
-            onTap: () async {
-              final newDate = await showDatePicker(
-                context: context,
-                initialDate: selectedDate,
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now(), // Don't allow future logging
-              );
-              if (newDate != null && !DateUtils.isSameDay(newDate, selectedDate)) {
-                notifier.selectDate(newDate); // 🎯 Triggers loadInitialData
-              }
-            },
-            child: Text(
-              formatDate(selectedDate),
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: isToday ? Theme.of(context).colorScheme.primary : Colors.black87
-              ),
-            ),
-          ),
-
-          IconButton(
-            icon: const Icon(Icons.arrow_forward_ios, size: 20),
-            onPressed: isToday ? null : () {
-              final nextDay = selectedDate.add(const Duration(days: 1));
-              notifier.selectDate(nextDay); // 🎯 Triggers loadInitialData
-            },
-            color: isToday ? Colors.grey : Theme.of(context).colorScheme.primary,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- NEW: Daily Wellness Check Card Widget ---
-  Widget _buildDailyWellnessCard(BuildContext context, bool isComplete, DietPlanNotifier notifier, ClientLogModel? dailyLog, ClientDietPlanModel activePlan) {
-    final Color backgroundColor = isComplete ? Colors.green.shade50 : Colors.amber.shade50;
-    final Color iconColor = isComplete ? Colors.green.shade700 : Colors.amber.shade700;
-    final String statusText = isComplete ? 'Check-in Complete' : 'ACTION REQUIRED: Daily Wellness Check';
-
     return Container(
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: backgroundColor,
-          border: Border.all(color: iconColor.withOpacity(0.5))
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(statusText, style: TextStyle(fontWeight: FontWeight.bold, color: iconColor)),
-          const Divider(),
-          Text('Record your sleep, hydration, and energy levels for today.', style: TextStyle(color: Colors.black87)),
-          const SizedBox(height: 10),
-          ElevatedButton.icon(
-            onPressed: () {
-              // 🎯 LAUNCH THE NEW DAILY WELLNESS DIALOG
-              showDialog(context: context, builder: (_) => DailyWellnessEntryDialog(
-                notifier: notifier,
-                activePlan: activePlan,
-                dailyMetricsLog: dailyLog, // Pass existing data (if any) or null
-              ));
-            },
-            icon: Icon(isComplete ? Icons.edit_note : Icons.add_task),
-            label: Text(isComplete ? 'Edit Wellness Metrics' : 'Daily Wellness Check'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: iconColor,
-              foregroundColor: Colors.white,
-            ),
-          ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: isLogged ? Border.all(color: statusColor.withOpacity(0.3), width: 1.5) : null,
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
         ],
       ),
-    );
-  }
-
-// ... (omitted helper functions _buildPlannedItemTile, _buildGuidelinesSection, etc.) ...
-}
-
-
-// -------------------------------------------------------------------------
-Widget _buildPlannedItemTile(BuildContext context, DietPlanItemModel item) {
-  // Check if foodItemName exists and assume it has a value
-  if (item.foodItemName.isEmpty) return const SizedBox.shrink();
-
-  final hasAlternatives = item.alternatives.isNotEmpty;
-
-  return ListTile(
-    dense: true,
-    minLeadingWidth: 20,
-    leading: Icon(
-      hasAlternatives ? Icons.swap_horiz : Icons.fiber_manual_record,
-      size: 16,
-      color: hasAlternatives ? Colors.orange : Colors.green,
-    ),
-    title: Text(
-      item.foodItemName,
-      style: const TextStyle(fontWeight: FontWeight.w500),
-    ),
-    subtitle: hasAlternatives
-        ? Text(
-      'Alternatives: ${item.alternatives.map((a) => a.foodItemName).join(', ')}',
-      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-    )
-        : null,
-    trailing: Text(
-      '${item.quantity.toStringAsFixed(1)} ${item.unit}',
-      style: const TextStyle(fontWeight: FontWeight.bold),
-    ),
-  );
-}
-
-Widget _buildGuidelinesSection(BuildContext context, List<String> guidelineIds,WidgetRef ref) {
-  // 🎯 CRITICAL FIX: Use Riverpod to watch the actual data
-  final guidelinesAsync = ref.watch(guidelineProvider(guidelineIds));
-
-  return guidelinesAsync.when(
-    loading: () => const LinearProgressIndicator(),
-    error: (e, s) => Text('Failed to load guidelines: $e', style: const TextStyle(color: Colors.red)),
-    data: (guidelines) {
-      if (guidelines.isEmpty) {
-        return const Text('No general guidelines assigned for this plan.', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey));
-      }
-
-      return Card(
-        color: Theme.of(context).colorScheme.surface,
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-          child: Column(
-            children: guidelines.map((guideline) => Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          children: [
+            // A. Meal Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: isLogged ? statusColor.withOpacity(0.1) : Colors.grey.shade50,
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.check_circle, size: 16, color: Colors.green.shade700),
+                  Icon(Icons.restaurant, size: 18, color: isLogged ? statusColor : Colors.black54),
                   const SizedBox(width: 8),
-                  // Use the title from the Guideline model
-                  Expanded(child: Text(guideline.enTitle, style: TextStyle(color: Colors.black87))),
+                  Text(
+                    meal.mealName,
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: isLogged ? statusColor.withOpacity(0.8) : Colors.black87
+                    ),
+                  ),
+                  const Spacer(),
+                  if (isLogged)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                      child: Row(
+                        children: [
+                          Icon(statusIcon, size: 14, color: statusColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            isSkipped ? "Skipped" : (isDeviated ? "Deviated" : "Done"),
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
-            )).toList(),
-          ),
+            ),
+
+            // B. Meal Body
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Items List
+                  ...meal.items.map((item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 6),
+                          child: Icon(Icons.fiber_manual_record, size: 6, color: Colors.grey),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "${item.foodItemName} (${item.quantity} ${item.unit})",
+                            style: const TextStyle(fontSize: 14, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+
+                  const SizedBox(height: 16),
+                  const Divider(),
+
+                  // Action Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Logged Info (if any)
+                      if (isLogged && !isSkipped)
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("You ate:", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                              Text(
+                                  log!.actualFoodEaten.join(", "),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Log Button
+                      ElevatedButton.icon(
+                        onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true, // Required for the tall sheet
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => MealDetailSheet(
+                                notifier: notifier,
+                                mealName: meal.mealName,
+                                activePlan: activePlan,
+                                logToEdit: log, // Pass null if new, or the log object if editing
+                                plannedItems: meal.items, // Pass this to pre-fill data!
+                              ),
+                            );
+                          },
+                        //  showLogModificationDialog(context, notifier, meal.mealName, activePlan, logToEdit: log);
+                      //  },
+                        icon: Icon(isLogged ? Icons.edit : Icons.add_circle_outline, size: 16),
+                        label: Text(isLogged ? "Edit Log" : "Log Meal"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isLogged ? Colors.white : Theme.of(context).colorScheme.primary,
+                          foregroundColor: isLogged ? Colors.black87 : Colors.white,
+                          elevation: isLogged ? 0 : 2,
+                          side: isLogged ? BorderSide(color: Colors.grey.shade300) : null,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
+
+  // --- WIDGET: Guidelines Carousel ---
+  Widget _buildGuidelinesCarousel(BuildContext context, List<String> guidelineIds, WidgetRef ref) {
+    final guidelinesAsync = ref.watch(guidelineProvider(guidelineIds));
+
+    return SizedBox(
+      height: 140, // Fixed height for carousel
+      child: guidelinesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => const SizedBox(),
+        data: (guidelines) {
+          if (guidelines.isEmpty) {
+            return const Center(child: Text("No specific guidelines for today.", style: TextStyle(color: Colors.grey)));
+          }
+
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: guidelines.length,
+            itemBuilder: (context, index) {
+              final guide = guidelines[index];
+              return Container(
+                width: 240,
+                margin: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.teal.shade50),
+                  boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_outline, color: Colors.teal.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                            "Tip #${index + 1}",
+                            style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold, fontSize: 12)
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      guide.enTitle,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.black87),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
 }
