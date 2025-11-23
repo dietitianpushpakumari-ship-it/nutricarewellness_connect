@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/utils/activity_trend_chart.dart';
 import 'package:nutricare_connect/core/utils/movement_Details_sheet.dart';
 import 'package:nutricare_connect/core/utils/workout_entry_dialog.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
@@ -196,46 +197,32 @@ class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> {
       backgroundColor: const Color(0xFFF8F9FE),
       body: CustomScrollView(
         slivers: [
-          // 1. Header & Date
+
+          SliverToBoxAdapter(
+            child: ActivityTrendChart(
+              clientId: widget.client.id,
+              stepGoal: stepGoal,
+            ),
+          ),
+
+          // 1.5 Selected Date Indicator (Optional - just to show context)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 60, 20, 10),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Activity Hub", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))),
-
-                  InkWell(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: state.selectedDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null) notifier.selectDate(picked);
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.calendar_today, size: 16, color: colorScheme.primary),
-                          const SizedBox(width: 8),
-                          Text(DateFormat('MMM d').format(state.selectedDate), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
+                  const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Showing details for: ${DateFormat.yMMMd().format(state.selectedDate)}",
+                    style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
             ),
           ),
+          // 1. Header & Dat
 
           // 2. Scoreboard
           SliverToBoxAdapter(

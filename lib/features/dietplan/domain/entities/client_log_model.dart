@@ -42,6 +42,13 @@ class ClientLogModel extends Equatable {
   final double? totalSleepDurationHours; // Calculated on save
   final int? sleepScore; // Calculated on save (0-100)
 
+  // 🎯 NEW: DAILY VITALS FIELDS (Weight, BP, Diabetic Profile)
+  final double? weightKg;
+  final int? bloodPressureSystolic;
+  final int? bloodPressureDiastolic;
+  final double? fbsMgDl; // Fasting Blood Sugar
+  final double? ppbsMgDl; // Post-Prandial Blood Sugar
+
 
   final int? stepGoal; // Copied from the plan
   final int? stepCount;
@@ -68,7 +75,7 @@ class ClientLogModel extends Equatable {
     this.clientQuery,
     this.adminComment,
     this.adminReplied = false,
-    // Initialize new fields
+    // Initialize wellness fields
     this.sleepQualityRating,
     this.hydrationLiters,
     this.energyLevelRating,
@@ -76,13 +83,19 @@ class ClientLogModel extends Equatable {
     this.notesAndFeelings,
 
 
-    // 🎯 NEW
+    // 🎯 SLEEP TRACKING
     this.sleepTime,
     this.wakeTime,
     this.sleepInterruptions,
     this.totalSleepDurationHours,
     this.sleepScore,
 
+    // 🎯 NEW VITALS FIELDS (Removed Heart Rate)
+    this.weightKg,
+    this.bloodPressureSystolic,
+    this.bloodPressureDiastolic,
+    this.fbsMgDl,
+    this.ppbsMgDl,
 
     this.stepGoal,
     this.stepCount,
@@ -163,6 +176,13 @@ class ClientLogModel extends Equatable {
       totalSleepDurationHours: (json['totalSleepDurationHours'] as num?)?.toDouble(),
       sleepScore: (json['sleepScore'] as num?)?.toInt(),
 
+      // 🎯 MAP NEW VITALS FIELDS
+      weightKg: (json['weightKg'] as num?)?.toDouble(),
+      bloodPressureSystolic: (json['bloodPressureSystolic'] as num?)?.toInt(),
+      bloodPressureDiastolic: (json['bloodPressureDiastolic'] as num?)?.toInt(),
+      fbsMgDl: (json['fbsMgDl'] as num?)?.toDouble(),
+      ppbsMgDl: (json['ppbsMgDl'] as num?)?.toDouble(),
+
 
       stepGoal: (json['stepGoal'] as num?)?.toInt(),
       stepCount: (json['stepCount'] as num?)?.toInt(),
@@ -209,6 +229,12 @@ class ClientLogModel extends Equatable {
       'totalSleepDurationHours': totalSleepDurationHours ,
       'sleepScore': sleepScore ,
 
+      // 🎯 ADD NEW VITALS FIELDS
+      'weightKg': weightKg,
+      'bloodPressureSystolic': bloodPressureSystolic,
+      'bloodPressureDiastolic': bloodPressureDiastolic,
+      'fbsMgDl': fbsMgDl,
+      'ppbsMgDl': ppbsMgDl,
 
 
       'stepGoal': stepGoal,
@@ -241,12 +267,20 @@ class ClientLogModel extends Equatable {
     int? energyLevelRating,
     int? moodLevelRating,
     String? notesAndFeelings,
-    // 🎯 NEW
+    // 🎯 SLEEP TRACKING
     DateTime? sleepTime,
     DateTime? wakeTime,
     int? sleepInterruptions,
     double? totalSleepDurationHours,
     int? sleepScore,
+
+    // 🎯 NEW VITALS FIELDS
+    double? weightKg,
+    int? bloodPressureSystolic,
+    int? bloodPressureDiastolic,
+    double? fbsMgDl,
+    double? ppbsMgDl,
+
     int? stepGoal,
     int? stepCount,
     List<String>? completedMandatoryTasks,
@@ -279,18 +313,25 @@ class ClientLogModel extends Equatable {
       moodLevelRating: moodLevelRating ?? this.moodLevelRating,
       notesAndFeelings: notesAndFeelings ?? this.notesAndFeelings,
 
-      // 🎯 NEW
+      // 🎯 SLEEP TRACKING
       sleepTime: sleepTime ?? this.sleepTime,
       wakeTime: wakeTime ?? this.wakeTime,
       sleepInterruptions: sleepInterruptions ?? this.sleepInterruptions,
       totalSleepDurationHours: totalSleepDurationHours ?? this.totalSleepDurationHours,
       sleepScore: sleepScore ?? this.sleepScore,
 
+      // 🎯 USE NEW VITALS FIELDS
+      weightKg: weightKg ?? this.weightKg,
+      bloodPressureSystolic: bloodPressureSystolic ?? this.bloodPressureSystolic,
+      bloodPressureDiastolic: bloodPressureDiastolic ?? this.bloodPressureDiastolic,
+      fbsMgDl: fbsMgDl ?? this.fbsMgDl,
+      ppbsMgDl: ppbsMgDl ?? this.ppbsMgDl,
+
 
       stepGoal: stepGoal ?? this.stepGoal,
       stepCount: stepCount ?? this.stepCount,
       completedMandatoryTasks: completedMandatoryTasks ?? this.completedMandatoryTasks,
-      createdPersonalGoals: createdPersonalGoals ?? this.createdPersonalGoals,
+      createdPersonalGoals: createdPersonalGoals ?? this.completedMandatoryTasks,
       completedPersonalGoals: completedPersonalGoals ?? this.completedPersonalGoals,
       activityScore: activityScore ?? this.activityScore,
       caloriesBurned: caloriesBurned ?? this.caloriesBurned,
@@ -363,6 +404,13 @@ class ClientLogModel extends Equatable {
       totalSleepDurationHours: (data['totalSleepDurationHours'] as num?)?.toDouble(),
       sleepScore: (data['sleepScore'] as num?)?.toInt(),
 
+      // 🎯 MAP NEW VITALS FIELDS
+      weightKg: (data['weightKg'] as num?)?.toDouble(),
+      bloodPressureSystolic: (data['bloodPressureSystolic'] as num?)?.toInt(),
+      bloodPressureDiastolic: (data['bloodPressureDiastolic'] as num?)?.toInt(),
+      fbsMgDl: (data['fbsMgDl'] as num?)?.toDouble(),
+      ppbsMgDl: (data['ppbsMgDl'] as num?)?.toDouble(),
+
 
       stepGoal: (data['stepGoal'] as num?)?.toInt(),
       stepCount: (data['stepCount'] as num?)?.toInt(),
@@ -385,6 +433,8 @@ class ClientLogModel extends Equatable {
     id, clientId, dietPlanId, date, mealName, actualFoodEaten, caloriesEstimate, isDeviation, logStatus, mealPhotoUrls, deviationTime, clientQuery, adminComment, adminReplied,
     sleepQualityRating, hydrationLiters, energyLevelRating, moodLevelRating, notesAndFeelings,
     sleepTime, wakeTime, sleepInterruptions, totalSleepDurationHours, sleepScore,
+    // 🎯 UPDATED VITALS FIELDS
+    weightKg, bloodPressureSystolic, bloodPressureDiastolic, fbsMgDl, ppbsMgDl,
     stepGoal, stepCount, completedMandatoryTasks, createdPersonalGoals, completedPersonalGoals, activityScore,caloriesBurned,breathingMinutes,sensorStepsBaseline
   ];
 }

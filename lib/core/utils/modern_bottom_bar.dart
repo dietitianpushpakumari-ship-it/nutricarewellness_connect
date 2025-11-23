@@ -71,6 +71,11 @@ class ModernBottomBar extends StatelessWidget {
                 label: 'Wellness',
               ),
               NavigationDestination(
+                icon: Icon(Icons.rss_feed_rounded), // or Icons.article_outlined
+                selectedIcon: Icon(Icons.rss_feed),
+                label: 'Feed',
+              ),
+              NavigationDestination(
                 icon: Icon(Icons.support_agent_outlined),
                 selectedIcon: Icon(Icons.support_agent_rounded),
                 label: 'Coach',

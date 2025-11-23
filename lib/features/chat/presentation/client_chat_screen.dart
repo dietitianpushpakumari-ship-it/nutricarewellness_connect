@@ -410,43 +410,109 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
   void _showRequestBottomSheet(BuildContext context, ChatService service, String clientId, String name) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-        ),
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text("Quick Actions", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Quick Actions", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
 
-            Flexible(
-              child: GridView.count(
-                shrinkWrap: true,
-                crossAxisCount: 3,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 1.0,
-                children: [
-                  _buildQuickAction(Icons.restaurant_menu, "Meal Query", Colors.orange, () { Navigator.pop(ctx); _showMealQueryDialog(context, service, clientId, name); }),
-               //   _buildQuickAction(Icons.calendar_month, "Appointment", Colors.purple, () { Navigator.pop(ctx); _showAppointmentRequestDialog(context, service, clientId, name); }),
-                  _buildQuickAction(Icons.upload_file, "Lab Report", Colors.blue, () { Navigator.pop(ctx); _handleFileUpload(name, service, clientId, isReport: true); }),
-                  _buildQuickAction(Icons.chat_bubble_outline, "Custom Query", Colors.teal, () { Navigator.pop(ctx); _showCustomQueryDialog(context, service, clientId, name); }),
-                //  _buildQuickAction(Icons.add_call, "Call Me", Colors.green, () { Navigator.pop(ctx); _sendQuickMessage(service, clientId, "📞 Requesting a callback.", RequestType.callback, name); }),
-               //   _buildQuickAction(Icons.warning_rounded, "Priority", Colors.red, () { Navigator.pop(ctx); _sendQuickMessage(service, clientId, "❗ Priority Help Needed", RequestType.prioritySupport, name); }),
-                ],
+              Flexible(
+                child: GridView.count(
+                  shrinkWrap: true,
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 1.0,
+                  children: [
+                    _buildQuickAction(Icons.calendar_today, "Book New", Colors.purple, () {
+                      Navigator.pop(ctx);
+                      _showAppointmentRequestDialog(context, service, clientId, name, isReschedule: false);
+                    }),
+                    // 🎯 NEW: Reschedule Button
+                    _buildQuickAction(Icons.edit_calendar, "Reschedule", Colors.orange, () {
+                      Navigator.pop(ctx);
+                      _showAppointmentRequestDialog(context, service, clientId, name, isReschedule: true);
+                    }),
+                    _buildQuickAction(Icons.restaurant_menu, "Meal Query", Colors.blue, () {
+                      Navigator.pop(ctx);
+                      _showMealQueryDialog(context, service, clientId, name);
+                    }),
+                    _buildQuickAction(Icons.upload_file, "Lab Report", Colors.teal, () {
+                      Navigator.pop(ctx);
+                      _handleFileUpload(name, service, clientId, isReport: true);
+                    }),
+                    _buildQuickAction(Icons.add_call, "Call Me", Colors.green, () {
+                      Navigator.pop(ctx);
+                      _sendQuickMessage(service, clientId, "📞 Requesting a callback.", RequestType.callback, name);
+                    }),
+                    _buildQuickAction(Icons.warning_rounded, "Urgent", Colors.red, () {
+                      Navigator.pop(ctx);
+                      _sendQuickMessage(service, clientId, "❗ Priority Help Needed", RequestType.prioritySupport, name);
+                    }),
+                  ],
+                ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🎯 Update the Dialog to handle Rescheduling logic
+  void _showAppointmentRequestDialog(BuildContext context, ChatService service, String clientId, String name, {required bool isReschedule}) {
+    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
+    final noteController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(isReschedule ? "Reschedule Session" : "Request Session"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Select your preferred date:", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 10),
+              ListTile(
+                title: Text(DateFormat.yMMMd().format(selectedDate)),
+                trailing: const Icon(Icons.calendar_month),
+                onTap: () async {
+                  final d = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime(2030));
+                  if (d != null) setState(() => selectedDate = d);
+                },
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade300)),
+              ),
+              const SizedBox(height: 10),
+              TextField(controller: noteController, decoration: const InputDecoration(labelText: "Reason / Preferred Time")),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                final String typeText = isReschedule ? "Reschedule Request" : "New Appointment Request";
+                service.sendMessage(
+                  clientName: name,
+                  clientId: clientId,
+                  text: "$typeText: ${DateFormat.yMMMd().format(selectedDate)}",
+                  type: MessageType.request,
+                  requestType: RequestType.appointment,
+                  metadata: {
+                    'date': selectedDate.toIso8601String(),
+                    'note': noteController.text,
+                    'isReschedule': isReschedule
+                  },
+                );
+              },
+              child: const Text("Send Request"),
             ),
           ],
         ),
@@ -860,70 +926,6 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
     );
   }
 
-  void _showAppointmentRequestDialog(BuildContext context, ChatService service, String clientId, String name) {
-    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
-    final noteController = TextEditingController();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) => SafeArea(child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Request Appointment", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
-              ListTile(
-                title: Text(DateFormat.yMMMd().format(selectedDate)),
-                trailing: const Icon(Icons.calendar_month),
-                onTap: () async {
-                  final d = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime(2030));
-                  if (d != null) setState(() => selectedDate = d);
-                },
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade300)),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                  controller: noteController,
-                  decoration: InputDecoration(
-                    labelText: "Note (Optional)",
-                    filled: true,
-                    fillColor: Colors.grey.shade50,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  )
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    service.sendMessage(
-                      clientName: name,
-                      clientId: clientId,
-                      text: "Requesting Appt: ${DateFormat.yMMMd().format(selectedDate)}",
-                      type: MessageType.request,
-                      requestType: RequestType.appointment,
-                      metadata: {'date': selectedDate.toIso8601String(), 'note': noteController.text},
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  child: const Text("Request"),
-                ),
-              ),
-            ],
-          ),
-        ),)
-      ),
-    );
-  }
 
   // --- HELPERS ---
   Widget _buildEmptyState() => Center(

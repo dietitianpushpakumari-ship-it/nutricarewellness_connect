@@ -1,4 +1,6 @@
 // 🎯 PRIMARY WELLNESS PALETTE: Emerald Green / Sapphire Blue
+
+//bento grid theme
 import 'package:flutter/material.dart';
 
 const Color _wellnessPrimary = Color(0xFF00BFA5); // Emerald Green (Vibrancy)

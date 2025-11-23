@@ -3,6 +3,8 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:nutricare_connect/core/utils/geeta_repository.dart';
+import 'package:nutricare_connect/core/utils/geeta_shloka_model.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_dashboard_main_screen.dart';
 
 // 🎯 FIX: Corrected Repository Import Path (assumes dATA casing for local structure)
@@ -166,6 +168,13 @@ final clientLogHistoryProvider = FutureProvider.family<List<ClientLogModel>, Str
   return repository.fetchAllClientLogs(clientId);
 });
 
+final geetaRepositoryProvider = Provider((ref) => GeetaRepository());
+
+// 🎯 This FutureProvider will trigger the "Check Cache -> Fetch" logic once
+final geetaLibraryProvider = FutureProvider<List<GeetaShloka>>((ref) async {
+  final repo = ref.watch(geetaRepositoryProvider);
+  return repo.getAllShlokas();
+});
 final activeDietPlanProvider = Provider<DietPlanState>((ref) {
   final clientId = ref.watch(currentClientIdProvider);
 

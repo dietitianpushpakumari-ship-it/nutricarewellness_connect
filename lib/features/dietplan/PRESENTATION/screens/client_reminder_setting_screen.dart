@@ -86,140 +86,142 @@ class _ClientReminderSettingsScreenState extends ConsumerState<ClientReminderSet
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          // --- 1. Master Settings (FR-DAT-02) ---
-
-          _buildSectionHeader(context, 'Test Voice'),
-        Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  Text(
-                    'Tap the button to hear a test message using the currently selected voice profile and language.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.record_voice_over),
-                    label: const Text('Play Test Message'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.secondary,
-                      foregroundColor: Colors.white,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16.0),
+          children: [
+            // --- 1. Master Settings (FR-DAT-02) ---
+        
+            _buildSectionHeader(context, 'Test Voice'),
+          Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Text(
+                      'Tap the button to hear a test message using the currently selected voice profile and language.',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    onPressed: () {
-                      // 🎯 This calls the global ttsService instance from main.dart
-                      ttsService.speak(
-                        "This is a test of the empathetic reminder system.",
-                        _config.languageCode,
-                        _config.voiceProfile,
-                      );
-                    },
-                  )]))),
-          _buildSectionHeader(context, 'Master Settings'),
-          SwitchListTile(
-            title: const Text('Enable All Reminders'),
-            subtitle: const Text('Master On/Off switch for all notifications.'),
-            value: _config.isActive,
-            onChanged: (val) => setState(() => _config = _config.copyWith(isActive: val)),
-            activeColor: Theme.of(context).colorScheme.primary,
-          ),
-
-          const Divider(),
-
-          // --- 2. Voice Settings (FR-DAT-03, 05, 06 & US-ADM-04) ---
-          _buildSectionHeader(context, 'Voice Configuration'),
-          SwitchListTile(
-            title: const Text('Enable Voice Component'),
-            subtitle: const Text('Play reminders out loud (if available).'),
-            value: _config.isVoiceActive,
-            onChanged: (val) => setState(() => _config = _config.copyWith(isVoiceActive: val)),
-            activeColor: Theme.of(context).colorScheme.primary,
-          ),
-          _buildDropdown<String>(
-            label: 'Voice Profile (FR-DAT-05)',
-            value: _config.voiceProfile,
-            items: _voiceProfiles,
-            isEnabled: _config.isVoiceActive,
-            onChanged: (val) => setState(() => _config = _config.copyWith(voiceProfile: val)),
-          ),
-          _buildDropdown<String>(
-            label: 'Language / Accent (FR-DAT-06)',
-            value: _config.languageCode,
-            items: _languageCodes,
-            isEnabled: _config.isVoiceActive,
-            onChanged: (val) => setState(() => _config = _config.copyWith(languageCode: val)),
-          ),
-
-          const Divider(),
-
-          // --- 3. Goal-Based Reminders (FR-GOAL) ---
-          _buildSectionHeader(context, 'Goal-Based Reminders'),
-          _buildGoalReminderCard(
-            title: 'Hydration Reminders (US-ADM-01)',
-            settings: _config.hydrationReminder,
-            onActiveChanged: (val) {
-              setState(() => _config = _config.copyWith(
-                  hydrationReminder: _config.hydrationReminder.copyWith(isActive: val)
-              ));
-            },
-            onLevelChanged: (val) {
-              setState(() => _config = _config.copyWith(
-                  hydrationReminder: _config.hydrationReminder.copyWith(escalationLevel: val)
-              ));
-            },
-          ),
-          _buildGoalReminderCard(
-            title: 'Step Reminders (US-ADM-03)',
-            settings: _config.stepReminder,
-            onActiveChanged: (val) {
-              setState(() => _config = _config.copyWith(
-                  stepReminder: _config.stepReminder.copyWith(isActive: val)
-              ));
-            },
-            onLevelChanged: (val) {
-              setState(() => _config = _config.copyWith(
-                  stepReminder: _config.stepReminder.copyWith(escalationLevel: val)
-              ));
-            },
-          ),
-
-          const Divider(),
-
-          // --- 4. Time-Based Reminders (FR-TIME) ---
-          _buildSectionHeader(context, 'Time-Based Reminders'),
-          _buildTimeReminderCard(
-            title: 'Medicine Reminder',
-            settings: _config.medicineReminder,
-            onActiveChanged: (val) {
-              setState(() => _config = _config.copyWith(
-                  medicineReminder: _config.medicineReminder.copyWith(isActive: val)
-              ));
-            },
-            onTimeChanged: (newTime) {
-              setState(() => _config = _config.copyWith(
-                  medicineReminder: _config.medicineReminder.copyWith(time: newTime)
-              ));
-            },
-          ),
-          _buildTimeReminderCard(
-            title: 'End-of-Day Log Reminder',
-            settings: _config.dietRoutineReminder,
-            onActiveChanged: (val) {
-              setState(() => _config = _config.copyWith(
-                  dietRoutineReminder: _config.dietRoutineReminder.copyWith(isActive: val)
-              ));
-            },
-            onTimeChanged: (newTime) {
-              setState(() => _config = _config.copyWith(
-                  dietRoutineReminder: _config.dietRoutineReminder.copyWith(time: newTime)
-              ));
-            },
-          ),
-        ],
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.record_voice_over),
+                      label: const Text('Play Test Message'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.secondary,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: () {
+                        // 🎯 This calls the global ttsService instance from main.dart
+                        ttsService.speak(
+                          text: "This is a test of the empathetic reminder system.",
+                          languageCode :_config.languageCode,
+                          //voice : _config.voiceProfile,
+                        );
+                      },
+                    )]))),
+            _buildSectionHeader(context, 'Master Settings'),
+            SwitchListTile(
+              title: const Text('Enable All Reminders'),
+              subtitle: const Text('Master On/Off switch for all notifications.'),
+              value: _config.isActive,
+              onChanged: (val) => setState(() => _config = _config.copyWith(isActive: val)),
+              activeColor: Theme.of(context).colorScheme.primary,
+            ),
+        
+            const Divider(),
+        
+            // --- 2. Voice Settings (FR-DAT-03, 05, 06 & US-ADM-04) ---
+            _buildSectionHeader(context, 'Voice Configuration'),
+            SwitchListTile(
+              title: const Text('Enable Voice Component'),
+              subtitle: const Text('Play reminders out loud (if available).'),
+              value: _config.isVoiceActive,
+              onChanged: (val) => setState(() => _config = _config.copyWith(isVoiceActive: val)),
+              activeColor: Theme.of(context).colorScheme.primary,
+            ),
+            _buildDropdown<String>(
+              label: 'Voice Profile (FR-DAT-05)',
+              value: _config.voiceProfile,
+              items: _voiceProfiles,
+              isEnabled: _config.isVoiceActive,
+              onChanged: (val) => setState(() => _config = _config.copyWith(voiceProfile: val)),
+            ),
+            _buildDropdown<String>(
+              label: 'Language / Accent (FR-DAT-06)',
+              value: _config.languageCode,
+              items: _languageCodes,
+              isEnabled: _config.isVoiceActive,
+              onChanged: (val) => setState(() => _config = _config.copyWith(languageCode: val)),
+            ),
+        
+            const Divider(),
+        
+            // --- 3. Goal-Based Reminders (FR-GOAL) ---
+            _buildSectionHeader(context, 'Goal-Based Reminders'),
+            _buildGoalReminderCard(
+              title: 'Hydration Reminders (US-ADM-01)',
+              settings: _config.hydrationReminder,
+              onActiveChanged: (val) {
+                setState(() => _config = _config.copyWith(
+                    hydrationReminder: _config.hydrationReminder.copyWith(isActive: val)
+                ));
+              },
+              onLevelChanged: (val) {
+                setState(() => _config = _config.copyWith(
+                    hydrationReminder: _config.hydrationReminder.copyWith(escalationLevel: val)
+                ));
+              },
+            ),
+            _buildGoalReminderCard(
+              title: 'Step Reminders (US-ADM-03)',
+              settings: _config.stepReminder,
+              onActiveChanged: (val) {
+                setState(() => _config = _config.copyWith(
+                    stepReminder: _config.stepReminder.copyWith(isActive: val)
+                ));
+              },
+              onLevelChanged: (val) {
+                setState(() => _config = _config.copyWith(
+                    stepReminder: _config.stepReminder.copyWith(escalationLevel: val)
+                ));
+              },
+            ),
+        
+            const Divider(),
+        
+            // --- 4. Time-Based Reminders (FR-TIME) ---
+            _buildSectionHeader(context, 'Time-Based Reminders'),
+            _buildTimeReminderCard(
+              title: 'Medicine Reminder',
+              settings: _config.medicineReminder,
+              onActiveChanged: (val) {
+                setState(() => _config = _config.copyWith(
+                    medicineReminder: _config.medicineReminder.copyWith(isActive: val)
+                ));
+              },
+              onTimeChanged: (newTime) {
+                setState(() => _config = _config.copyWith(
+                    medicineReminder: _config.medicineReminder.copyWith(time: newTime)
+                ));
+              },
+            ),
+            _buildTimeReminderCard(
+              title: 'End-of-Day Log Reminder',
+              settings: _config.dietRoutineReminder,
+              onActiveChanged: (val) {
+                setState(() => _config = _config.copyWith(
+                    dietRoutineReminder: _config.dietRoutineReminder.copyWith(isActive: val)
+                ));
+              },
+              onTimeChanged: (newTime) {
+                setState(() => _config = _config.copyWith(
+                    dietRoutineReminder: _config.dietRoutineReminder.copyWith(time: newTime)
+                ));
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/core/utils/daily_wellness_sheet.dart';
+// 🎯 REMOVED: Old Wellness Sheets
+// import 'package:nutricare_connect/core/utils/daily_wellness_sheet.dart';
+// import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/daily_wellness_entry_dialog.dart';
+
+// 🎯 NEW: Import Sleep Detail Sheet (The Consolidated Check-in)
+import 'package:nutricare_connect/core/utils/sleep_details_screen.dart';
+
+import 'package:nutricare_connect/core/utils/diet_pdf_service.dart';
 import 'package:nutricare_connect/core/utils/meal_detail_sheet.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/daily_wellness_entry_dialog.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/meal_log_entry_dialog.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/guidelines.dart';
 import 'package:nutricare_connect/services/client_service.dart';
+import 'package:printing/printing.dart';
 
 class PlanScreen extends ConsumerWidget {
   final ClientModel client;
@@ -53,36 +60,56 @@ class PlanScreen extends ConsumerWidget {
                           "Today's Menu",
                           style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
                         ),
-                        // Date Picker Button
-                        InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: state.selectedDate,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime.now(),
-                            );
-                            if (picked != null) notifier.selectDate(picked);
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle),
+                                child: Icon(Icons.picture_as_pdf, color: Colors.red.shade700, size: 20),
+                              ),
+                              tooltip: "Download Plan",
+                              onPressed: () async {
+                                if (activePlan == null) return;
+                                // Generate PDF
+                                final pdfData = await DietPdfService.generateDietPdf(activePlan);
+                                // Share/Print
+                                await Printing.sharePdf(bytes: pdfData, filename: 'My_Diet_Plan.pdf');
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            // Date Picker Button
+                            InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: state.selectedDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime.now(),
+                                );
+                                if (picked != null) notifier.selectDate(picked);
+                              },
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade200),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.calendar_today, size: 16, color: colorScheme.primary),
-                                const SizedBox(width: 8),
-                                Text(
-                                  DateFormat('MMM d').format(state.selectedDate),
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey.shade200),
                                 ),
-                              ],
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.calendar_today, size: 16, color: colorScheme.primary),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      DateFormat('MMM d').format(state.selectedDate),
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
@@ -90,18 +117,18 @@ class PlanScreen extends ConsumerWidget {
                 ),
               ),
             ),
-      
+
             // 2. The "Daily Mission" (Wellness Check)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: _buildWellnessBanner(context, isWellnessComplete, () {
-                  // 🎯 UPDATE: Use showModalBottomSheet
+                  // 🎯 UPDATE: Opens SleepDetailSheet (The Consolidated Tool)
                   showModalBottomSheet(
                       context: context,
-                      isScrollControlled: true, // Full height
-                      backgroundColor: Colors.transparent, // Rounded corners
-                      builder: (_) => DailyWellnessSheet(
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => SleepDetailSheet(
                         notifier: notifier,
                         activePlan: activePlan,
                         dailyLog: wellnessLog,
@@ -110,7 +137,7 @@ class PlanScreen extends ConsumerWidget {
                 }),
               ),
             ),
-      
+
             // 3. The Meal Timeline
             if (dayPlan != null)
               SliverPadding(
@@ -120,7 +147,7 @@ class PlanScreen extends ConsumerWidget {
                         (context, index) {
                       final meal = dayPlan.meals[index];
                       final log = dailyLogs.firstWhereOrNull((l) => l.mealName == meal.mealName);
-      
+
                       return _buildMealTicket(context, meal, log, activePlan, notifier);
                     },
                     childCount: dayPlan.meals.length,
@@ -129,7 +156,7 @@ class PlanScreen extends ConsumerWidget {
               )
             else
               const SliverToBoxAdapter(child: Center(child: Text("Rest Day - No Meals Planned"))),
-      
+
             // 4. Guidelines Header
             SliverToBoxAdapter(
               child: Padding(
@@ -140,12 +167,12 @@ class PlanScreen extends ConsumerWidget {
                 ),
               ),
             ),
-      
+
             // 5. Guidelines Horizontal Scroll
             SliverToBoxAdapter(
               child: _buildGuidelinesCarousel(context, activePlan.guidelineIds, ref),
             ),
-      
+
             const SliverToBoxAdapter(child: SizedBox(height: 100)), // Bottom Padding
           ],
         ),
@@ -181,7 +208,7 @@ class PlanScreen extends ConsumerWidget {
                 color: Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: Icon(isComplete ? Icons.check : Icons.wb_sunny_rounded, color: Colors.white, size: 24),
+              child: Icon(isComplete ? Icons.check : Icons.bedtime, color: Colors.white, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -189,12 +216,12 @@ class PlanScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isComplete ? "Daily Check-in Complete" : "Daily Wellness Check",
+                    isComplete ? "Daily Check-in Complete" : "Log Sleep & Wellness",
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    isComplete ? "Great job staying consistent!" : "Log your sleep, mood & hydration.",
+                    isComplete ? "Great job staying consistent!" : "Track sleep quality, energy & mood.",
                     style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
                   ),
                 ],
@@ -208,13 +235,12 @@ class PlanScreen extends ConsumerWidget {
     );
   }
 
-  // --- WIDGET: Meal Ticket ---
+  // --- WIDGET: Meal Ticket (No Changes) ---
   Widget _buildMealTicket(BuildContext context, DietPlanMealModel meal, ClientLogModel? log, ClientDietPlanModel activePlan, DietPlanNotifier notifier) {
     final isLogged = log != null;
     final isSkipped = log?.logStatus == LogStatus.skipped;
     final isDeviated = log?.isDeviation ?? false;
 
-    // Determine Status Colors
     Color statusColor = Colors.grey;
     IconData statusIcon = Icons.circle_outlined;
 
@@ -245,7 +271,6 @@ class PlanScreen extends ConsumerWidget {
         borderRadius: BorderRadius.circular(20),
         child: Column(
           children: [
-            // A. Meal Header
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               color: isLogged ? statusColor.withOpacity(0.1) : Colors.grey.shade50,
@@ -281,13 +306,11 @@ class PlanScreen extends ConsumerWidget {
               ),
             ),
 
-            // B. Meal Body
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Items List
                   ...meal.items.map((item) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Row(
@@ -311,11 +334,9 @@ class PlanScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                   const Divider(),
 
-                  // Action Row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Logged Info (if any)
                       if (isLogged && !isSkipped)
                         Expanded(
                           child: Column(
@@ -332,24 +353,21 @@ class PlanScreen extends ConsumerWidget {
                           ),
                         ),
 
-                      // Log Button
                       ElevatedButton.icon(
                         onPressed: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true, // Required for the tall sheet
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => MealDetailSheet(
-                                notifier: notifier,
-                                mealName: meal.mealName,
-                                activePlan: activePlan,
-                                logToEdit: log, // Pass null if new, or the log object if editing
-                                plannedItems: meal.items, // Pass this to pre-fill data!
-                              ),
-                            );
-                          },
-                        //  showLogModificationDialog(context, notifier, meal.mealName, activePlan, logToEdit: log);
-                      //  },
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => MealDetailSheet(
+                              notifier: notifier,
+                              mealName: meal.mealName,
+                              activePlan: activePlan,
+                              logToEdit: log,
+                              plannedItems: meal.items,
+                            ),
+                          );
+                        },
                         icon: Icon(isLogged ? Icons.edit : Icons.add_circle_outline, size: 16),
                         label: Text(isLogged ? "Edit Log" : "Log Meal"),
                         style: ElevatedButton.styleFrom(
@@ -376,7 +394,7 @@ class PlanScreen extends ConsumerWidget {
     final guidelinesAsync = ref.watch(guidelineProvider(guidelineIds));
 
     return SizedBox(
-      height: 140, // Fixed height for carousel
+      height: 140,
       child: guidelinesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => const SizedBox(),

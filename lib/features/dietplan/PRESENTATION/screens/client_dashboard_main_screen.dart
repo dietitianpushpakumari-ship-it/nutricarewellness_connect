@@ -7,6 +7,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/custom_gradient_app_bar.dart';
 import 'package:nutricare_connect/core/utils/coach_tab.dart';
+import 'package:nutricare_connect/core/utils/feed_tab.dart';
+import 'package:nutricare_connect/core/utils/mantra_uploader.dart';
 import 'package:nutricare_connect/core/utils/modern_bottom_bar.dart';
 import 'package:nutricare_connect/core/utils/wellness_hub_screen.dart';
 import 'package:nutricare_connect/core/wave_clipper.dart';
@@ -37,6 +39,7 @@ import 'package:url_launcher/url_launcher.dart';
 // 🎯 ADJUST IMPORTS
 
 // Import necessary core files
+import '../../../../core/utils/geeta_uploader.dart';
 import '../../../../services/client_service.dart';
 import '../../domain/entities/client_diet_plan_model.dart';
 import '../../domain/entities/client_log_model.dart';
@@ -154,7 +157,8 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
           HomeScreen(client: client),              // 0: Home
           PlanScreen(client: client),              // 1: Plan
           ActivityTrackerScreen(client: client),   // 2: Move (The new Bento Screen)
-          WellnessHubScreen(client: client),      // 3: Wellness
+          WellnessHubScreen(client: client),
+          const FeedTab(),// 3: Wellness
           CoachTab(client: client),            // 4: Coach
         ];
 
@@ -184,6 +188,8 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
                 icon: const Icon(Icons.history),
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientLogHistoryScreen())),
               ),
+              IconButton(onPressed :() { GeetaUploader().uploadGeetaBank();}, icon: const Icon(Icons.history),),
+              IconButton(onPressed :() { MantraUploader().uploadMantras();}, icon: const Icon(Icons.history),)
             ],
           )
               : null,

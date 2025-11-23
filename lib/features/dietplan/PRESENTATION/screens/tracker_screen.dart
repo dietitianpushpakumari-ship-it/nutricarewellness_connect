@@ -25,6 +25,12 @@ class TrackerScreen extends ConsumerWidget {
     // 1. Live Activity Data (Water/Steps)
     final activityData = ref.watch(activityDataProvider);
 
+    final state = ref.read(activeDietPlanProvider);
+    final notifier = ref.read(dietPlanNotifierProvider(client.id).notifier);
+    final dailyLog = state.dailyLogs.firstWhereOrNull(
+          (l) => l.mealName == 'DAILY_WELLNESS_CHECK',
+    );
+
     // 2. Latest Vitals Data (For Profile/Medical History)
     final latestVitalsAsync = ref.watch(latestVitalsFutureProvider(client.id));
 
@@ -83,10 +89,7 @@ class TrackerScreen extends ConsumerWidget {
               // 2. Launch the new full screen
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => LogVitalsScreen(
-                    clientId: client.id,
-                    baseVitals: latestVitals,
-                  ),
+                  builder: (_) => LogVitalsScreen(notifier :notifier,activePlan: state.activePlan! ,dailyLog: dailyLog,)
                 ),
               );
             },

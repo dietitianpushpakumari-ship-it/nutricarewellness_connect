@@ -7,7 +7,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 // 🎯 1. Import all the services and plugin instances
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/global_user_provider.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/tts_service.dart';
+import 'package:nutricare_connect/core/utils/tts_service.dart';
 import 'package:nutricare_connect/firebase_options.dart';
 import 'package:nutricare_connect/services/client_service.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -72,7 +72,7 @@ void _handleNotificationPayload(String payload) {
       final String languageCode = data['languageCode'] ?? 'en-US';
       final String voiceProfile = data['voiceProfile'] ?? 'default';
 
-      ttsService.speak(textToSpeak, languageCode, voiceProfile);
+      ttsService.speak(text : textToSpeak, languageCode : languageCode);
     }
   } catch (e) {
     print("Error handling notification payload: $e. Payload was: $payload");

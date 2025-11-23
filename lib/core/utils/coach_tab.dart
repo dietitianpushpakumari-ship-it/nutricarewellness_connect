@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // 🎯 Ensure this is in pubspec
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/utils/active_package_card.dart';
+import 'package:nutricare_connect/core/utils/package_browser_screen.dart';
 import 'package:nutricare_connect/features/chat/presentation/client_chat_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_reminder_setting_screen.dart';
@@ -31,6 +33,25 @@ class CoachTab extends ConsumerWidget {
               child: const Text(
                 "My Care Team",
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+              ),
+            ),
+          ),
+
+          // 🎯 2. Active Membership Card
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Column(
+                children: [
+                  ActivePackageCard(clientId: client.id),
+                  const SizedBox(height: 10),
+                  // Link to Store
+                  TextButton.icon(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PackageBrowserScreen())),
+                    icon: const Icon(Icons.storefront, size: 16),
+                    label: const Text("Browse New Packages"),
+                  ),
+                ],
               ),
             ),
           ),
