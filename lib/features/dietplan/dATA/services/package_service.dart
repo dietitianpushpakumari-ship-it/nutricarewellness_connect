@@ -3,6 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/package_model.dart';
+import 'package:nutricare_connect/features/dietplan/domain/entities/payment_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/programme_feature_model.dart';
 
 
@@ -10,6 +11,7 @@ import 'package:nutricare_connect/features/dietplan/domain/entities/programme_fe
 class PackageService {
   final CollectionReference _packageCollection = FirebaseFirestore.instance.collection('packages');
   final CollectionReference _clientCollection = FirebaseFirestore.instance.collection('clients');
+  final CollectionReference _paymentCollection = FirebaseFirestore.instance.collection('payments');
   CollectionReference clientAssignmentCollection(String clientId) {
     // 🎯 FIX: Drill down from the existing _clientCollection reference.
     // This correctly returns a CollectionReference, resolving the type mismatch error
@@ -70,6 +72,21 @@ class PackageService {
     //  _logger.e('Error fetching client by ID: ${e.toString()}', error: e, stackTrace: stack);
       // Re-throw the original exception or a service-specific one
       rethrow;
+    }
+  }
+
+  Future<List<PaymentModel>> getPaymentsForAssignment(String assignmentId) async {
+    try {
+      final snapshot = await _paymentCollection
+          .where('packageAssignmentId', isEqualTo: assignmentId)
+          .orderBy('paymentDate', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) => PaymentModel.fromFirestore(doc)).toList();
+    } catch (e) {
+      // Return empty list on error or missing collection to prevent crash
+      print("Error loading payments: $e");
+      return [];
     }
   }
 

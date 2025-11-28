@@ -29,6 +29,8 @@ final String companyEmail;
   final String address;
   final String photoUrl;// UID of the user who last updated this account
 
+  final List<String> specializations;
+
   const AdminProfileModel( {
     required this.id,
     required this.email,
@@ -49,6 +51,7 @@ final String companyEmail;
     required this.address ,
     this.photoUrl = '',
     this.companyEmail = '',
+    this.specializations = const [],
   });
 
   // --- Firestore Conversion ---
@@ -73,7 +76,8 @@ final String companyEmail;
       address: data['address'] ?? '',
       companyEmail: data['companyEmail'] ?? '',
       alternateMobile: data['alternateMobile'] ?? '',
-      website: data['website'] ?? ''
+      website: data['website'] ?? '',
+      specializations: List<String>.from(data['specializations'] ?? []),
 
     );
   }
@@ -99,7 +103,8 @@ final String companyEmail;
       'address' : address,
       'companyEmail' : companyEmail,
       'alternateMobile' : alternateMobile,
-      'website' : website
+      'website' : website,
+      'specializations' : specializations
     };
   }
 
@@ -125,6 +130,7 @@ final String companyEmail;
       website: data['website'] ?? '',
       photoUrl: data['photoUrl'] ?? '',
       regdNo: data['regdNo'] ?? '',
+      specializations: List<String>.from(data['specializations'] ?? []),
     );
   }
 

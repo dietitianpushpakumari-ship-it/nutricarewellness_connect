@@ -5,6 +5,7 @@ import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_m
 import 'package:nutricare_connect/core/utils/sleep_details_screen.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/services/client_service.dart';
+import 'package:collection/collection.dart';
 
 import '../../features/dietplan/domain/entities/diet_plan_item_model.dart';
 

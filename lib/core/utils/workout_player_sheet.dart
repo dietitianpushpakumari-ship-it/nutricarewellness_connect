@@ -12,6 +12,7 @@ import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_it
 import 'package:nutricare_connect/main.dart';
 import 'package:nutricare_connect/services/client_service.dart';
 import 'package:wakelock_plus/wakelock_plus.dart'; // For ttsService
+import 'package:collection/collection.dart';
 
 
 class WorkoutPlayerSheet extends ConsumerStatefulWidget {

@@ -11,22 +11,18 @@ class EyeYogaSheet extends StatefulWidget {
 
 class _EyeYogaSheetState extends State<EyeYogaSheet> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  String _mode = "Infinity"; // Box, Pulse
-
+  String _mode = "Infinity";
+  final _audio = WellnessAudioService();
 
   @override
   void initState() {
     super.initState();
-    final _audio = WellnessAudioService();
     _controller = AnimationController(vsync: this, duration: const Duration(seconds: 10))..repeat();
     _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed ||
-          status == AnimationStatus.dismissed) {
-        // 🎯 Play sound on loop complete
-        _audio.playClick();
+      if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+        _audio.playTick(); // Soft tick at cycle end
       }
     });
-
   }
 
   @override
@@ -37,59 +33,57 @@ class _EyeYogaSheetState extends State<EyeYogaSheet> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A2138), // Dark Mode for Eye Comfort
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          const Text("Eye Yoga", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-          const Text("Follow the dot without moving your head", style: TextStyle(color: Colors.white54)),
-          const SizedBox(height: 20),
-
-          // Mode Selector
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: ["Infinity", "Box", "Focus"].map((m) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: ChoiceChip(
-                  label: Text(m),
-                  selected: _mode == m,
-                  onSelected: (val) => setState(() => _mode = m),
-                  selectedColor: Colors.teal,
-                  backgroundColor: Colors.white10,
-                  labelStyle: TextStyle(color: _mode == m ? Colors.white : Colors.grey),
-                ),
-              );
-            }).toList(),
-          ),
-
-          Expanded(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return CustomPaint(
-                  painter: _EyeGuidePainter(progress: _controller.value, mode: _mode),
-                  child: Container(),
+    return SafeArea(
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: const BoxDecoration(
+          color: Color(0xFF0F172A), // Dark Slate Blue (Eye Comfort)
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 30),
+      
+            const Text("Eye Yoga", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+            const Text("Keep your head still. Follow the dot with your eyes.", style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+            const SizedBox(height: 30),
+      
+            // Mode Selector
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: ["Infinity", "Box", "Focus"].map((m) {
+                final isSel = _mode == m;
+                return GestureDetector(
+                  onTap: () => setState(() => _mode = m),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSel ? Colors.teal : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: isSel ? Colors.teal : Colors.white24),
+                    ),
+                    child: Text(m, style: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)),
+                  ),
                 );
-              },
+              }).toList(),
             ),
-          ),
-
-          // Close Button
-          Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.white10, shape: const CircleBorder(), padding: const EdgeInsets.all(20)),
-              child: const Icon(Icons.close, color: Colors.white),
+      
+            Expanded(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, child) {
+                  return CustomPaint(
+                    painter: _EyeGuidePainter(progress: _controller.value, mode: _mode),
+                    child: Container(),
+                  );
+                },
+              ),
             ),
-          )
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -103,35 +97,42 @@ class _EyeGuidePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final paint = Paint()..color = Colors.teal.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 2;
-    final dotPaint = Paint()..color = Colors.teal..style = PaintingStyle.fill..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+    final pathPaint = Paint()..color = Colors.teal.withOpacity(0.2)..style = PaintingStyle.stroke..strokeWidth = 2;
+    final dotPaint = Paint()..color = Colors.tealAccent..style = PaintingStyle.fill..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    final corePaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
 
     Offset dotPos = center;
 
     if (mode == "Infinity") {
-      // Figure 8
       final t = progress * 2 * pi;
       final x = 150 * cos(t) / (1 + sin(t) * sin(t));
       final y = 150 * sin(t) * cos(t) / (1 + sin(t) * sin(t));
       dotPos = center + Offset(x, y);
-      // Draw Path Trail (Optional)
-    } else if (mode == "Box") {
-      // Rectangular movement
-      final side = progress * 4;
-      if (side < 1) dotPos = center + Offset(-100 + (200 * side), -100); // Top
-      else if (side < 2) dotPos = center + Offset(100, -100 + (200 * (side - 1))); // Right
-      else if (side < 3) dotPos = center + Offset(100 - (200 * (side - 2)), 100); // Bottom
-      else dotPos = center + Offset(-100, 100 - (200 * (side - 3))); // Left
 
-      canvas.drawRect(Rect.fromCenter(center: center, width: 200, height: 200), paint);
+      // Draw Path (Figure 8)
+      // (Path drawing logic omitted for brevity, dot movement creates the visual)
+    } else if (mode == "Box") {
+      final side = progress * 4;
+      double dx = 0, dy = 0;
+      if (side < 1) { dx = -100 + (200 * side); dy = -100; } // Top
+      else if (side < 2) { dx = 100; dy = -100 + (200 * (side - 1)); } // Right
+      else if (side < 3) { dx = 100 - (200 * (side - 2)); dy = 100; } // Bottom
+      else { dx = -100; dy = 100 - (200 * (side - 3)); } // Left
+      dotPos = center + Offset(dx, dy);
+
+      canvas.drawRect(Rect.fromCenter(center: center, width: 200, height: 200), pathPaint);
     } else {
-      // Pulse (Near/Far)
-      final scale = 0.5 + 0.5 * sin(progress * 2 * pi);
-      canvas.drawCircle(center, 20 * scale, dotPaint..color = Colors.teal.withOpacity(0.8));
-      return;
+      // Focus (Zoom In/Out)
+      // Dot stays center, just grows/shrinks logic handled by caller if needed,
+      // here we move it Near/Far in Z-space representation
+      double y = sin(progress * 2 * pi) * 150;
+      dotPos = center + Offset(0, y);
+      canvas.drawLine(Offset(center.dx, center.dy - 150), Offset(center.dx, center.dy + 150), pathPaint);
     }
 
+    // Glow & Dot
     canvas.drawCircle(dotPos, 15, dotPaint);
+    canvas.drawCircle(dotPos, 6, corePaint);
   }
   @override
   bool shouldRepaint(covariant _EyeGuidePainter old) => true;

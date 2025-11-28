@@ -49,8 +49,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> signIn(String loginId, String password) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
+      // 1. Perform the API call
       await _clientService.clientSignIn(loginId, password);
-    } on Exception catch (e) {
+
+      // 🎯 FIX 1: Force loading to false immediately on success.
+      // Don't rely solely on the stream listener, as it might lag.
+      if (mounted) {
+        state = state.copyWith(isLoading: false);
+      }
+
+    } catch (e, stack) {
+      // 🎯 FIX 2: Catch 'e' (Everything), not just 'Exception'.
+      // This catches TypeErrors (like the one in Step 1) that were freezing the UI.
+
+      print("SignIn Error: $e");
       state = state.copyWith(isLoading: false, error: e.toString());
       rethrow;
     }
@@ -64,7 +76,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
 // --- Riverpod Providers ---
 
-final clientServiceProvider = Provider((ref) => ClientService());
+//final clientServiceProvider = Provider((ref) => ClientService());
 
 final authNotifierProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(ref.watch(clientServiceProvider));

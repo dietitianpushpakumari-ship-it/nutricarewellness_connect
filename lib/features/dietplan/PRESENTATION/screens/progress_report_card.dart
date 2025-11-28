@@ -2,6 +2,7 @@
 
 // 🎯 ADD/VERIFY THIS IMPORT for the charts
 import 'package:fl_chart/fl_chart.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';

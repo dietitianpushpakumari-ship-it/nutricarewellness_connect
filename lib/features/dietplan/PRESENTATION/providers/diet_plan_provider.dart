@@ -24,6 +24,7 @@ import 'package:nutricare_connect/features/dietplan/domain/entities/package_assi
 import 'package:nutricare_connect/features/dietplan/domain/entities/schedule_meeting_utils.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
 import 'package:nutricare_connect/services/client_service.dart';
+import 'package:collection/collection.dart';
 import 'package:nutricare_connect/services/local_reminder_service.dart';
 // 🎯 Required to access ClientService methods
 

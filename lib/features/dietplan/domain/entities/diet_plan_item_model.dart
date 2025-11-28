@@ -1,17 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:collection/collection.dart'; // 🎯 Use standard package instead
 
-// --- Utility Extensions ---
-extension IterableExtensions<T> on Iterable<T> {
-  T? firstWhereOrNull(bool Function(T) test) {
-    for (final element in this) {
-      if (test(element)) return element;
-    }
-    return null;
-  }
-}
+// 🎯 REMOVED: Custom 'extension IterableExtensions' block to avoid conflicts.
 
 // --- CORE MODELS ---
-
 
 class FoodItemAlternative {
   final String id;
@@ -129,11 +121,11 @@ class DietPlanMealModel {
     ).toList();
 
     return DietPlanMealModel(
-      id: mealId,
-      mealNameId: data['mealNameId'] as String? ?? '',
-      mealName: data['mealName'] as String? ?? 'Unknown Meal',
-      items: itemsList,
-      order: data['order'] ?? 99
+        id: mealId,
+        mealNameId: data['mealNameId'] as String? ?? '',
+        mealName: data['mealName'] as String? ?? 'Unknown Meal',
+        items: itemsList,
+        order: data['order'] ?? 99
     );
   }
 }
@@ -159,34 +151,35 @@ class MasterDayPlanModel {
     },
   };
 
-  // 🎯 NEW: Factory for parsing embedded Map data
   factory MasterDayPlanModel.fromMap(Map<String, dynamic> data, String id) {
-    final mealsData = data['dayPlan'] ['meals']as Map<String, dynamic>? ?? {};
+    final mealsData = data['dayPlan'] != null && data['dayPlan']['meals'] != null
+        ? data['dayPlan']['meals'] as Map<String, dynamic>
+        : <String, dynamic>{};
+
     final mealsList = mealsData.entries.map((e) =>
         DietPlanMealModel.fromFirestore(e.value as Map<String, dynamic>, e.key)
     ).toList();
 
     return MasterDayPlanModel(
       id: id,
-      dayName: data['dayPlan']['dayName'] as String? ?? 'Fixed Day',
+      dayName: data['dayPlan'] != null ? data['dayPlan']['dayName'] as String? ?? 'Fixed Day' : 'Fixed Day',
       meals: mealsList,
     );
   }
 
-  // EXISTING: Factory for parsing DocumentSnapshot
   factory MasterDayPlanModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
-    // Reuse the fromMap logic
     return MasterDayPlanModel.fromMap(data, doc.id);
   }
 }
+
 class MasterDietPlanModel {
   final String id;
   final String name;
   final String description;
   final List<String> dietPlanCategoryIds;
   final List<MasterDayPlanModel> days;
-  final bool isActive; // Should contain ONE MasterDayPlanModel
+  final bool isActive;
 
   const MasterDietPlanModel({
     this.id = '',
@@ -197,7 +190,6 @@ class MasterDietPlanModel {
     this.isActive = true,
   });
 
-  // 🎯 FIX: 'id' is now optional in copyWith to avoid the error
   MasterDietPlanModel copyWith({
     String? id,
     String? name,
@@ -206,7 +198,7 @@ class MasterDietPlanModel {
     List<MasterDayPlanModel>? days,
     bool? isActive,
   }) => MasterDietPlanModel(
-    id: id ?? this.id, // Defaults to existing id if not provided
+    id: id ?? this.id,
     name: name ?? this.name,
     description: description ?? this.description,
     dietPlanCategoryIds: dietPlanCategoryIds ?? this.dietPlanCategoryIds,
@@ -214,23 +206,18 @@ class MasterDietPlanModel {
     isActive: isActive ?? this.isActive ,
   );
 
-  /// Creates a deep copy of the plan, resetting the ID for cloning.
   MasterDietPlanModel clone() {
     return MasterDietPlanModel(
-      id: '', // Crucial: Reset ID for a new Firestore document
+      id: '',
       name: 'CLONE of ${this.name}',
       description: this.description,
       dietPlanCategoryIds: this.dietPlanCategoryIds,
       isActive: this.isActive,
-      // Assuming all nested model lists/objects are immutable, a shallow copy
-      // of the lists is sufficient for the structure to be identical but independent.
       days: List.from(this.days.map((day) => day.copyWith(meals: List.from(day.meals)))),
     );
   }
 
-  // TO FIREBASE (Used for Set/Update)
   Map<String, dynamic> toFirestore() {
-    // Only one day is expected per template
     final dayData = days.isNotEmpty
         ? days.first.toFirestore()
         : MasterDayPlanModel(id: 'd1', dayName: 'Fixed Day').toFirestore();
@@ -240,7 +227,6 @@ class MasterDietPlanModel {
       'name': name,
       'description': description,
       'dietPlanCategoryIds': dietPlanCategoryIds,
-      // Embed the single day plan directly
       'dayPlan': dayData,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -248,13 +234,11 @@ class MasterDietPlanModel {
     };
   }
 
-  // FROM FIREBASE (Used for Get/Stream)
   factory MasterDietPlanModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
     if (data == null) throw StateError('MasterDietPlan document data is null for ID: ${doc.id}');
 
-    final dayData = data['dayPlan'] as Map<String, dynamic>? ?? {};
-    final dayPlan = MasterDayPlanModel.fromFirestore(doc); // Use fixed ID 'd1'
+    final dayPlan = MasterDayPlanModel.fromFirestore(doc);
 
     return MasterDietPlanModel(
       id: doc.id,
@@ -266,17 +250,3 @@ class MasterDietPlanModel {
     );
   }
 }
-
-/*class MasterMealName {
-  final String id;
-  final String enName;
-  const MasterMealName({this.id = '', this.enName = ''});
-
-  factory MasterMealName.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>?;
-    return MasterMealName(
-      id: doc.id,
-      enName: data?['enName'] as String? ?? 'Unknown Meal',
-    );
-  }*/
-//}

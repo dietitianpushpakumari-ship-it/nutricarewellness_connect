@@ -1,9 +1,17 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/wave_clipper.dart';
+import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/wave_clipper.dart';
+
+// 🎨 PREMIUM DESIGN CONSTANTS
+const double kCardRadius = 28.0;
+const BoxShadow kPremiumShadow = BoxShadow(
+  color: Color(0x0D000000), // Very soft black (5% opacity)
+  blurRadius: 20,
+  offset: Offset(0, 8),
+);
 
 // =================================================================
-// 1. MINI HYDRATION CARD (Live Wave + Quick Add)
+// 1. PREMIUM HYDRATION CARD (Fluid & Clean)
 // =================================================================
 class MiniHydrationCard extends StatelessWidget {
   final double currentLiters;
@@ -23,6 +31,7 @@ class MiniHydrationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isEmpty = currentLiters <= 0;
     final double progress = (currentLiters / (goalLiters == 0 ? 3.0 : goalLiters)).clamp(0.0, 1.0);
     final percent = (progress * 100).toInt();
 
@@ -31,90 +40,103 @@ class MiniHydrationCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+          borderRadius: BorderRadius.circular(kCardRadius),
+          boxShadow: [kPremiumShadow],
         ),
-        clipBehavior: Clip.antiAlias, // Clips the wave inside
+        clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            // 🌊 The Wave Background
-            Positioned.fill(
-              child: AnimatedBuilder(
-                animation: waveAnimation,
-                builder: (context, child) {
-                  return ClipPath(
-                    clipper: WaveClipper(waveProgress: waveAnimation.value, fillProgress: progress),
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [Color(0xFF0077B6), Color(0xFF48CAE4)],
+            // 🌊 Premium Wave Background
+            if (!isEmpty)
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: waveAnimation,
+                  builder: (context, child) {
+                    return ClipPath(
+                      clipper: WaveClipper(waveProgress: waveAnimation.value, fillProgress: progress),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomLeft,
+                            end: Alignment.topRight,
+                            colors: [Color(0xFF4FC3F7), Color(0xFF00BFA5)], // Cyan to Teal
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
 
-            // 📝 Content Overlay
+            // 📝 Content
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(18.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Icon & Label
+                  // Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.water_drop, color: progress > 0.5 ? Colors.white : Colors.blue, size: 20),
+                      Icon(Icons.water_drop_rounded, color: progress > 0.5 ? Colors.white : const Color(0xFF00BFA5), size: 22),
                       if (progress >= 1.0)
-                        const Icon(Icons.check_circle, color: Colors.white, size: 18),
+                        const Icon(Icons.verified, color: Colors.white, size: 18),
                     ],
                   ),
 
                   // Stats
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "$percent%",
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: progress > 0.6 ? Colors.white : Colors.black87,
+                  if (isEmpty)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Hydrate", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF00695C))),
+                        const SizedBox(height: 2),
+                        Text("Goal: ${goalLiters}L", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      ],
+                    )
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "$percent%",
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: progress > 0.5 ? Colors.white : const Color(0xFF263238),
+                            height: 1.0,
+                          ),
                         ),
-                      ),
-                      Text(
-                        "${currentLiters.toStringAsFixed(1)}L",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: progress > 0.6 ? Colors.white.withOpacity(0.9) : Colors.grey.shade600,
+                        const SizedBox(height: 4),
+                        Text(
+                          "${currentLiters.toStringAsFixed(1)}L",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: progress > 0.5 ? Colors.white.withOpacity(0.9) : Colors.grey.shade600,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                 ],
               ),
             ),
 
-            // ➕ Quick Add Button (Floating)
+            // ➕ Floating Glass Button
             Positioned(
-              bottom: 8,
-              right: 8,
+              bottom: 12, right: 12,
               child: InkWell(
                 onTap: onQuickAdd,
+                borderRadius: BorderRadius.circular(30),
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.9),
                     shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
                   ),
-                  child: const Icon(Icons.add, size: 18, color: Colors.blue),
+                  child: const Icon(Icons.add, size: 18, color: Color(0xFF00BFA5)),
                 ),
               ),
             ),
@@ -126,80 +148,75 @@ class MiniHydrationCard extends StatelessWidget {
 }
 
 // =================================================================
-// 2. MINI STEP CARD (Radial Progress)
+// 2. PREMIUM STEP CARD (Minimalist Ring)
 // =================================================================
 class MiniStepCard extends StatelessWidget {
   final int steps;
   final int goal;
   final VoidCallback onTap;
 
-  const MiniStepCard({
-    super.key,
-    required this.steps,
-    required this.goal,
-    required this.onTap,
-  });
+  const MiniStepCard({super.key, required this.steps, required this.goal, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final double progress = (steps / (goal == 0 ? 8000 : goal)).clamp(0.0, 1.0);
-    final Color ringColor = progress >= 1.0 ? Colors.green : Colors.orange;
+    final Color ringColor = progress >= 1.0 ? const Color(0xFF43A047) : const Color(0xFFFF7043); // Soft Green / Burnt Orange
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+          borderRadius: BorderRadius.circular(kCardRadius),
+          boxShadow: [kPremiumShadow],
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               children: [
-                Icon(Icons.directions_walk, color: Colors.orange.shade700, size: 20),
-                const SizedBox(width: 8),
-                Text("Movement", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                Icon(Icons.directions_run_rounded, color: Colors.grey.shade400, size: 20),
+                const Spacer(),
+                if (progress >= 1.0) const Icon(Icons.star, color: Colors.amber, size: 16),
               ],
             ),
 
-            // Radial Graph
-            SizedBox(
-              height: 80,
-              width: 80,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    value: 1.0,
-                    strokeWidth: 8,
-                    color: Colors.grey.shade100,
-                  ),
-                  CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 8,
-                    color: ringColor,
-                    strokeCap: StrokeCap.round,
-                  ),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+            // Centered Ring
+            Expanded(
+              child: Center(
+                child: SizedBox(
+                  height: 75, width: 75,
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Icon(Icons.bolt, size: 16, color: ringColor),
-                      Text(
-                        "${(progress * 100).toInt()}%",
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      CircularProgressIndicator(value: 1.0, strokeWidth: 5, color: Colors.grey.shade100),
+                      CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 5,
+                          color: ringColor,
+                          strokeCap: StrokeCap.round
+                      ),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.bolt, size: 18, color: ringColor),
+                          Text("${(progress * 100).toInt()}%", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
 
-            Text(
-              "$steps Steps",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("$steps", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black87)),
+                const Text("Steps", style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
+              ],
             ),
           ],
         ),
@@ -209,7 +226,7 @@ class MiniStepCard extends StatelessWidget {
 }
 
 // =================================================================
-// 3. MINI SLEEP CARD (Simple Stat)
+// 3. PREMIUM SLEEP CARD (Dark Mode Elegance)
 // =================================================================
 class MiniSleepCard extends StatelessWidget {
   final double hours;
@@ -225,11 +242,14 @@ class MiniSleepCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xFF2E3A59), // Dark Indigo
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.indigo.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))],
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF2E3A59), Color(0xFF151925)], // Deep Space
+          ),
+          borderRadius: BorderRadius.circular(kCardRadius),
+          boxShadow: [BoxShadow(color: const Color(0xFF2E3A59).withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 6))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,35 +258,39 @@ class MiniSleepCard extends StatelessWidget {
             const Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.bedtime, color: Colors.white, size: 20),
-                Text("Sleep", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                Icon(Icons.bedtime_rounded, color: Color(0xFF9FA8DA), size: 20),
+                Text("Sleep", style: TextStyle(color: Color(0xFF9FA8DA), fontSize: 12, fontWeight: FontWeight.w600)),
               ],
             ),
 
-            if (hasData) ...[
-              Text(
-                "${hours.toStringAsFixed(1)} hr",
-                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              Row(
+            if (hasData)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.star, color: Colors.amber, size: 14),
-                  const SizedBox(width: 4),
-                  Text("Score: $score", style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(text: hours.floor().toString(), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
+                        const TextSpan(text: "h ", style: TextStyle(fontSize: 16, color: Colors.white70)),
+                        TextSpan(text: ((hours - hours.floor()) * 60).toInt().toString(), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
+                        const TextSpan(text: "m", style: TextStyle(fontSize: 16, color: Colors.white70)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(8)),
+                    child: Text("Score: $score", style: const TextStyle(color: Color(0xFFB39DDB), fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
                 ],
               )
-            ] else ...[
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0),
-                  child: Text("Log\nSleep", textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 14)),
+            else
+              const Expanded(
+                child: Center(
+                  child: Text("Log\nRest", style: TextStyle(color: Colors.white38, fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
               ),
-              const Align(
-                alignment: Alignment.bottomRight,
-                child: Icon(Icons.add_circle_outline, color: Colors.white54, size: 20),
-              )
-            ],
           ],
         ),
       ),
@@ -275,7 +299,7 @@ class MiniSleepCard extends StatelessWidget {
 }
 
 // =================================================================
-// 4. MINI BREATHING CARD
+// 4. PREMIUM BREATHING CARD (Calm & Soft)
 // =================================================================
 class MiniBreathingCard extends StatelessWidget {
   final int minutesLogged;
@@ -288,11 +312,12 @@ class MiniBreathingCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.teal.shade50,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.teal.shade100),
+          color: const Color(0xFFE0F2F1), // Very Soft Teal
+          borderRadius: BorderRadius.circular(kCardRadius),
+          border: Border.all(color: Colors.white, width: 2), // White Border Stroke
+          boxShadow: [kPremiumShadow],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,23 +326,31 @@ class MiniBreathingCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.self_improvement, color: Colors.teal.shade700, size: 20),
+                Icon(Icons.self_improvement_rounded, color: Colors.teal.shade700, size: 22),
                 if (minutesLogged > 0)
-                  const Icon(Icons.check, color: Colors.teal, size: 16),
+                  Icon(Icons.check_circle, color: Colors.teal.shade400, size: 18),
               ],
             ),
 
             const Spacer(),
-            Text(
-              minutesLogged > 0 ? "$minutesLogged min" : "Start\nBreathe",
-              style: TextStyle(
-                  fontSize: minutesLogged > 0 ? 20 : 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.teal.shade900
+
+            if (minutesLogged > 0)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("$minutesLogged", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.teal.shade800, height: 1.0)),
+                  Text("min mindful", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal.shade600)),
+                ],
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Take a\nBreath", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.teal.shade800, height: 1.1)),
+                  const SizedBox(height: 4),
+                  Text("Start Now", style: TextStyle(fontSize: 11, color: Colors.teal.shade600, fontWeight: FontWeight.bold)),
+                ],
               ),
-            ),
-            if (minutesLogged == 0)
-              Text("Relax now", style: TextStyle(fontSize: 11, color: Colors.teal.shade600)),
           ],
         ),
       ),

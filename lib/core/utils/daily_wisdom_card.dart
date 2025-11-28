@@ -8,7 +8,9 @@ import 'package:path_provider/path_provider.dart';
 
 class DailyWisdomCard extends ConsumerStatefulWidget {
   final String clientId;
-  const DailyWisdomCard({super.key, required this.clientId});
+  final bool compactMode; // 🎯 New Flag
+
+  const DailyWisdomCard({super.key, required this.clientId, this.compactMode = false});
 
   @override
   ConsumerState<DailyWisdomCard> createState() => _DailyWisdomCardState();
@@ -17,14 +19,11 @@ class DailyWisdomCard extends ConsumerStatefulWidget {
 class _DailyWisdomCardState extends ConsumerState<DailyWisdomCard> {
   final PageController _pageController = PageController();
   int _currentIndex = 0;
-
-  // 🎯 Variable to hold the data once fetched
   late Future<List<Map<String, dynamic>>> _contentFuture;
 
   @override
   void initState() {
     super.initState();
-    // 🎯 Initialize fetch ONLY ONCE here
     final List<String> userTags = ['general', 'weight_loss', 'diabetes'];
     _contentFuture = _getDailyContent(userTags);
   }
@@ -38,26 +37,25 @@ class _DailyWisdomCardState extends ConsumerState<DailyWisdomCard> {
 
         final items = snapshot.data!;
 
+        // 🎯 1. COMPACT MODE (For Home Screen Carousel)
+        // Just return the FIRST item as a static widget. No internal PageView.
+        if (widget.compactMode) {
+          return _buildInsightCard(context, items.first);
+        }
+
+        // 2. FULL MODE (Original)
         return Column(
           children: [
-            // 1. The Swipeable Cards
             SizedBox(
               height: 180,
               child: PageView.builder(
                 controller: _pageController,
                 itemCount: items.length,
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                },
-                itemBuilder: (context, index) {
-                  return _buildInsightCard(context, items[index]);
-                },
+                onPageChanged: (index) => setState(() => _currentIndex = index),
+                itemBuilder: (context, index) => _buildInsightCard(context, items[index]),
               ),
             ),
-
             const SizedBox(height: 8),
-
-            // 2. Dot Indicators
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(items.length, (index) {
@@ -89,39 +87,25 @@ class _DailyWisdomCardState extends ConsumerState<DailyWisdomCard> {
     Color color;
     IconData icon;
 
-    if (type == 'MYTH') {
-      color = Colors.purple;
-      icon = Icons.help_outline;
-    } else if (type == 'FACT') {
-      color = Colors.blue;
-      icon = Icons.lightbulb_outline;
-    } else if (type == 'WARNING' || type == 'CAUTION') {
-      color = Colors.orange;
-      icon = Icons.warning_amber_rounded;
-    } else {
-      color = Colors.teal;
-      icon = Icons.spa;
-    }
+    if (type == 'MYTH') { color = Colors.purple; icon = Icons.help_outline; }
+    else if (type == 'FACT') { color = Colors.blue; icon = Icons.lightbulb_outline; }
+    else if (type == 'WARNING') { color = Colors.orange; icon = Icons.warning_amber_rounded; }
+    else { color = Colors.teal; icon = Icons.spa; }
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
+      // 🎯 Removed horizontal margin to fit better in carousel
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [color.withOpacity(0.9), color.withOpacity(0.7)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: color.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))
-        ],
+        boxShadow: [BoxShadow(color: color.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            // Detail or Share action
-          },
+          onTap: () {},
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -132,45 +116,19 @@ class _DailyWisdomCardState extends ConsumerState<DailyWisdomCard> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
                       child: Icon(icon, color: Colors.white, size: 20),
                     ),
                     const SizedBox(width: 10),
-                    Text(
-                      type,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
+                    Text(type, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                     const Spacer(),
                     const Icon(Icons.share, color: Colors.white54, size: 18),
                   ],
                 ),
                 const Spacer(),
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    height: 1.2,
-                  ),
-                ),
+                Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, height: 1.2)),
                 const SizedBox(height: 6),
-                Text(
-                  body,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
+                Text(body, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13)),
                 const SizedBox(height: 4),
               ],
             ),
@@ -180,46 +138,31 @@ class _DailyWisdomCardState extends ConsumerState<DailyWisdomCard> {
     );
   }
 
-  // 🎯 CACHING LOGIC
-// 🎯 CACHING LOGIC
+  // ... (Keep _getDailyContent and _fetchFromFirestore exactly as they are)
   Future<List<Map<String, dynamic>>> _getDailyContent(List<String> tags) async {
     try {
       final directory = await getTemporaryDirectory();
       final file = File('${directory.path}/daily_wisdom_cache.json');
       final todayDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-      // 1. Check Cache
       if (await file.exists()) {
         final content = await file.readAsString();
         try {
           final Map<String, dynamic> cache = jsonDecode(content);
           if (cache['date'] == todayDate && (cache['items'] as List).isNotEmpty) {
-            debugPrint("✅ Loaded Wisdom from Local Cache");
             return List<Map<String, dynamic>>.from(cache['items']);
           }
-        } catch (e) {
-          // If JSON is corrupt, ignore and fetch fresh
-        }
+        } catch (e) {}
       }
 
-      // 2. Fetch from Firestore
-      debugPrint("🌍 Fetching Wisdom from Firestore...");
       final fetchedItems = await _fetchFromFirestore(tags);
 
-      // 3. Save to Cache (Sanitized)
       if (fetchedItems.isNotEmpty) {
-        final cacheData = {
-          'date': todayDate,
-          'items': fetchedItems // These are already sanitized Maps now
-        };
-        // Write nicely to avoid partial writes
+        final cacheData = {'date': todayDate, 'items': fetchedItems};
         await file.writeAsString(jsonEncode(cacheData), flush: true);
       }
-
       return fetchedItems;
-
     } catch (e) {
-      debugPrint("Error in daily content cache: $e");
       return [];
     }
   }

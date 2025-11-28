@@ -11,145 +11,192 @@ class WorkoutEntryDialog extends StatefulWidget {
 }
 
 class _WorkoutEntryDialogState extends State<WorkoutEntryDialog> {
-  String _selectedActivity = 'Yoga';
-  double _duration = 30; // minutes
-  String _intensity = 'Moderate';
+  String _selectedType = 'Walking';
+  double _duration = 30; // Slider value
+  final TextEditingController _caloriesCtrl = TextEditingController();
 
-  // MET values (Metabolic Equivalent of Task) approx
-  final Map<String, double> _activities = {
+  // 🎯 Smart Calorie Multipliers (approx kcal per minute)
+  final Map<String, double> _mets = {
+    'Walking': 4.0,
+    'Running': 11.0,
+    'Cycling': 8.0,
     'Yoga': 3.0,
-    'Weight Training': 4.0,
-    'HIIT / Cardio': 8.0,
-    'Cycling': 6.0,
-    'Swimming': 7.0,
-    'Pilates': 3.5,
-    'Dance': 5.0,
+    'Gym': 6.0,
+    'Swimming': 10.0,
+    'Sports': 7.0,
   };
 
-  int get _estimatedCalories {
-    // Formula: MET * 3.5 * weight(kg) / 200 * duration
-    // Simplified: MET * duration * 0.1 * 70kg (avg user)
-    // Adjusting multiplier for realism without weight data
-    double multiplier = 1.0;
-    if (_intensity == 'Low') multiplier = 0.8;
-    if (_intensity == 'High') multiplier = 1.2;
+  // 🎯 Icons for Visual Selector
+  final Map<String, IconData> _icons = {
+    'Walking': Icons.directions_walk,
+    'Running': Icons.directions_run,
+    'Cycling': Icons.directions_bike,
+    'Yoga': Icons.self_improvement,
+    'Gym': Icons.fitness_center,
+    'Swimming': Icons.pool,
+    'Sports': Icons.sports_basketball,
+  };
 
-    return (_activities[_selectedActivity]! * _duration * 5 * multiplier).round();
+  @override
+  void initState() {
+    super.initState();
+    _updateCalories();
+  }
+
+  void _updateCalories() {
+    // Basic calc: MET * 3.5 * weight(70kg avg) / 200 * minutes
+    // Simplified: MET * Duration * 0.8
+    final multiplier = _mets[_selectedType] ?? 5.0;
+    final est = (multiplier * _duration * 0.8).toInt();
+    _caloriesCtrl.text = est.toString();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return AlertDialog(
-      title: const Text("Log Workout"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Activity Dropdown
-          DropdownButtonFormField<String>(
-            value: _selectedActivity,
-            decoration: const InputDecoration(
-              labelText: "Activity Type",
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-              prefixIcon: Icon(Icons.fitness_center),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.orange.shade50, shape: BoxShape.circle),
+                  child: const Icon(Icons.local_fire_department, color: Colors.deepOrange),
+                ),
+                const SizedBox(width: 12),
+                const Text("Log Activity", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
+              ],
             ),
-            items: _activities.keys.map((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(value),
-              );
-            }).toList(),
-            onChanged: (newValue) => setState(() => _selectedActivity = newValue!),
-          ),
-          const SizedBox(height: 16),
 
-          // 2. Duration Slider
-          Text("Duration: ${_duration.round()} min", style: const TextStyle(fontWeight: FontWeight.bold)),
-          Slider(
-            value: _duration,
-            min: 5,
-            max: 180,
-            divisions: 35,
-            activeColor: colorScheme.primary,
-            label: "${_duration.round()} min",
-            onChanged: (val) => setState(() => _duration = val),
-          ),
+            const SizedBox(height: 24),
 
-          // 3. Intensity Selector
-          const Text("Intensity", style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Row(
-            children: ['Low', 'Moderate', 'High'].map((level) {
-              final isSelected = _intensity == level;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _intensity = level),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    alignment: Alignment.center,
+            // 2. Visual Selector
+            const Text("What did you do?", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: _icons.keys.map((type) {
+                final isSelected = _selectedType == type;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedType = type);
+                    _updateCalories();
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isSelected ? colorScheme.primary : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: isSelected ? colorScheme.primary : Colors.grey.shade300),
+                      color: isSelected ? Colors.orange : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: isSelected ? Colors.orange : Colors.grey.shade200),
                     ),
-                    child: Text(
-                      level,
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        fontSize: 12,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_icons[type], size: 18, color: isSelected ? Colors.white : Colors.grey),
+                        const SizedBox(width: 8),
+                        Text(type, style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 24),
+
+            // 3. Duration Slider
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Duration", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                Text("${_duration.toInt()} min", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+              ],
+            ),
+            Slider(
+              value: _duration,
+              min: 5,
+              max: 120,
+              divisions: 23,
+              activeColor: Colors.orange,
+              inactiveColor: Colors.orange.shade100,
+              onChanged: (val) {
+                setState(() => _duration = val);
+                _updateCalories();
+              },
+            ),
+
+            // 4. Calories Input (Editable)
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(16)),
+                    child: TextField(
+                      controller: _caloriesCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        labelText: "Calories Burned (kcal)",
+                        labelStyle: TextStyle(color: Colors.grey),
                       ),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ),
                 ),
-              );
-            }).toList(),
-          ),
-
-          const SizedBox(height: 24),
-
-          // 4. Calorie Preview
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.shade200),
+              ],
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+
+            const SizedBox(height: 30),
+
+            // 5. Actions
+            Row(
               children: [
-                const Icon(Icons.local_fire_department, color: Colors.deepOrange),
-                const SizedBox(width: 8),
-                Text(
-                  "Est. Burn: $_estimatedCalories kcal",
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange, fontSize: 16),
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                    child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final cals = int.tryParse(_caloriesCtrl.text) ?? 0;
+                      widget.onSave(_selectedType, _duration.toInt(), cals);
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1A1A1A), // Dark Button
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      elevation: 0,
+                    ),
+                    child: const Text("Log Workout", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
                 ),
               ],
             ),
-          )
-        ],
+          ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Cancel"),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            widget.onSave(_selectedActivity, _duration.round(), _estimatedCalories);
-            Navigator.pop(context);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: colorScheme.primary,
-            foregroundColor: Colors.white,
-          ),
-          child: const Text("Log Workout"),
-        ),
-      ],
     );
   }
 }

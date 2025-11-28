@@ -1,8 +1,5 @@
-// lib/models/client_diet_plan_model.dart (REVISED)
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
-
 
 class ClientDietPlanModel {
   final String id;
@@ -10,29 +7,37 @@ class ClientDietPlanModel {
   final String masterPlanId;
   final String name;
   final String description;
+
   final List<String> guidelineIds;
-  final List<MasterDayPlanModel> days; // The plan content
+  final List<MasterDayPlanModel> days;
+
   final DateTime? assignedDate;
   final bool isActive;
   final bool isArchived;
   final bool isDeleted;
   final String? revisedFromPlanId;
-  final List<String> diagnosisIds; // List of IDs from the Diagnosis Master
+
+  final List<String> diagnosisIds;
   final String? linkedVitalsId;
   final int? followUpDays;
   final String clinicalNotes;
   final String complaints;
-
   final String instructions;
   final List<String> investigationIds;
   final List<String> suplimentIds;
+
   final bool isProvisional;
   final bool isFreezed;
   final bool isReadyToDeliver;
 
-  // 🎯 NEW: ADMIN-SET MOVEMENT GOALS
+  // 🎯 1. CORE NUMERIC GOALS
   final int dailyStepGoal;
-  final List<String> mandatoryDailyTasks;
+  final double dailyWaterGoal;
+  final double dailySleepGoal;
+  final int dailyMindfulnessMinutes; // 🎯 NEW
+
+  // 🎯 2. HABIT GOALS (Boolean Checks)
+  final List<String> mandatoryDailyTasks; // e.g. ["Morning Sunlight", "Digital Detox"]
 
   const ClientDietPlanModel({
     this.id = '',
@@ -58,16 +63,20 @@ class ClientDietPlanModel {
     this.isProvisional = false,
     this.isFreezed = false,
     this.isReadyToDeliver = false,
-    this.dailyStepGoal = 8000, // Default goal
+
+    // Goals Defaults
+    this.dailyStepGoal = 8000,
+    this.dailyWaterGoal = 3.0,
+    this.dailySleepGoal = 7.0,
+    this.dailyMindfulnessMinutes = 15, // Default 15 min
     this.mandatoryDailyTasks = const [],
   });
 
-  // For creating an editable copy during assignment
   factory ClientDietPlanModel.fromMaster(
-    MasterDietPlanModel masterPlan,
-    String clientId,
-    List<String> guidelineIds,
-  ) {
+      MasterDietPlanModel masterPlan,
+      String clientId,
+      List<String> guidelineIds,
+      ) {
     return ClientDietPlanModel(
       id: '',
       clientId: clientId,
@@ -78,23 +87,15 @@ class ClientDietPlanModel {
       days: masterPlan.days,
       assignedDate: DateTime.now(),
       isActive: true,
-      diagnosisIds: const [],
-      linkedVitalsId: null,
-      followUpDays: 0,
-      clinicalNotes: '',
-      complaints: '',
-      instructions: '',
-      investigationIds: const [],
-      suplimentIds: const [],
-      isProvisional: false,
-      isFreezed: false,
-      isReadyToDeliver: false,
-      dailyStepGoal: 0,
-      mandatoryDailyTasks: const[],
+      // Defaults
+      dailyStepGoal: 8000,
+      dailyWaterGoal: 3.0,
+      dailySleepGoal: 7.0,
+      dailyMindfulnessMinutes: 15,
+      mandatoryDailyTasks: const ["Morning Sunlight (15m)", "No Screens 1hr before bed"],
     );
   }
 
-  // Used for editing/updating status
   ClientDietPlanModel copyWith({
     String? id,
     String? clientId,
@@ -119,7 +120,12 @@ class ClientDietPlanModel {
     bool? isProvisionals,
     bool? isFreezed,
     bool? isReadyToDeliver,
+
+    // Goals
     int? dailyStepGoal,
+    double? dailyWaterGoal,
+    double? dailySleepGoal,
+    int? dailyMindfulnessMinutes,
     List<String>? mandatoryDailyTasks,
   }) {
     return ClientDietPlanModel(
@@ -146,13 +152,16 @@ class ClientDietPlanModel {
       isProvisional: isProvisionals ?? this.isProvisional,
       isFreezed: isFreezed ?? this.isFreezed,
       isReadyToDeliver: isReadyToDeliver ?? this.isReadyToDeliver,
-      dailyStepGoal: dailyStepGoal ?? this.dailyStepGoal,
-      mandatoryDailyTasks: mandatoryDailyTasks ?? this.mandatoryDailyTasks,
 
+      // Goals
+      dailyStepGoal: dailyStepGoal ?? this.dailyStepGoal,
+      dailyWaterGoal: dailyWaterGoal ?? this.dailyWaterGoal,
+      dailySleepGoal: dailySleepGoal ?? this.dailySleepGoal,
+      dailyMindfulnessMinutes: dailyMindfulnessMinutes ?? this.dailyMindfulnessMinutes,
+      mandatoryDailyTasks: mandatoryDailyTasks ?? this.mandatoryDailyTasks,
     );
   }
 
-  // TO FIRESTORE
   Map<String, dynamic> toFirestore() {
     return {
       'clientId': clientId,
@@ -160,9 +169,8 @@ class ClientDietPlanModel {
       'name': name,
       'description': description,
       'guidelineIds': guidelineIds,
-      // Embedding the single day plan directly
       'dayPlan': days.isNotEmpty ? days.first.toFirestore() : null,
-      'assignedDate': Timestamp.fromDate(assignedDate!),
+      'assignedDate': assignedDate != null ? Timestamp.fromDate(assignedDate!) : null,
       'isActive': isActive,
       'isArchived': isArchived,
       'isDeleted': isDeleted,
@@ -179,28 +187,19 @@ class ClientDietPlanModel {
       'isProvisional': isProvisional,
       'isFreezed': isFreezed,
       'isReadyToDeliver' : isReadyToDeliver,
-      'dailyStepGoal': dailyStepGoal ,
+
+      // 🎯 Write All Goals
+      'dailyStepGoal': dailyStepGoal,
+      'dailyWaterGoal': dailyWaterGoal,
+      'dailySleepGoal': dailySleepGoal,
+      'dailyMindfulnessMinutes': dailyMindfulnessMinutes,
       'mandatoryDailyTasks': mandatoryDailyTasks,
     };
   }
 
-  // FROM FIRESTORE
   factory ClientDietPlanModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
-
     final dayData = data['dayPlan'] as Map<String, dynamic>?;
-
-    final guidelineIds = data['guidelineIds'] as List<dynamic>?;
-
-    final diagnosisIds = data['diagnosisIds'] as List<dynamic>?;
-
-    final investigationIds = data['investigationIds'] as List<dynamic>?;
-
-    final suplimentIds = data['suplimentIds'] as List<dynamic>?;
-
-    final mandatoryDailyTasks = data['mandatoryDailyTasks'] as List<dynamic>?;
-
-    // 🎯 FIX: Correctly call MasterDayPlanModel.fromMap on the embedded 'dayPlan' map
     final MasterDayPlanModel? dayPlan = dayData != null
         ? MasterDayPlanModel.fromMap(data, 'd1')
         : null;
@@ -211,52 +210,51 @@ class ClientDietPlanModel {
       masterPlanId: data['masterPlanId'] ?? '',
       name: data['name'] ?? 'Untitled Plan',
       description: data['description'] ?? '',
-      guidelineIds: List<String>.from(guidelineIds ?? []),
+      guidelineIds: List<String>.from(data['guidelineIds'] ?? []),
       days: dayPlan != null ? [dayPlan] : [],
-      assignedDate:
-          (data['assignedDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      assignedDate: (data['assignedDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isActive: data['isActive'] ?? true,
       isArchived: data['isArchived'] ?? false,
       isDeleted: data['isDeleted'] ?? false,
       revisedFromPlanId: data['revisedFromPlanId'] as String?,
-      diagnosisIds: List<String>.from(diagnosisIds ?? []),
+      diagnosisIds: List<String>.from(data['diagnosisIds'] ?? []),
       linkedVitalsId: data['linkedVitalsId'] as String?,
       followUpDays: data['followUpDays'] ?? 0,
       clinicalNotes: data['clinicalNotes'] ?? '',
       complaints: data['complaints'] ?? '',
       instructions: data['instructions'] ?? '',
-      investigationIds: List<String>.from(investigationIds ?? []),
-      suplimentIds: List<String>.from(suplimentIds ?? []),
+      investigationIds: List<String>.from(data['investigationIds'] ?? []),
+      suplimentIds: List<String>.from(data['suplimentIds'] ?? []),
       isProvisional: data['isProvisional'] ?? false,
-        isFreezed:data['isFreezed'] ?? false,
+      isFreezed: data['isFreezed'] ?? false,
       isReadyToDeliver: data['isReadyToDeliver'] ?? false,
-      dailyStepGoal: data['dailyStepGoal'] ?? 8000,
-      mandatoryDailyTasks:  List<String>.from(mandatoryDailyTasks ?? []),
 
+      // 🎯 Read All Goals (With Defaults)
+      dailyStepGoal: (data['dailyStepGoal'] as num?)?.toInt() ?? 8000,
+      dailyWaterGoal: (data['dailyWaterGoal'] as num?)?.toDouble() ?? 3.0,
+      dailySleepGoal: (data['dailySleepGoal'] as num?)?.toDouble() ?? 7.0,
+      dailyMindfulnessMinutes: (data['dailyMindfulnessMinutes'] as num?)?.toInt() ?? 15,
+      mandatoryDailyTasks: List<String>.from(data['mandatoryDailyTasks'] ?? []),
     );
   }
 
   ClientDietPlanModel clone() {
     return ClientDietPlanModel(
       id: '',
-      // Crucial: Reset ID for a new Firestore document
       name: 'CLONE of ${this.name}',
       description: this.description,
       clientId: this.clientId,
       isActive: this.isActive,
-      // Assuming all nested model lists/objects are immutable, a shallow copy
-      // of the lists is sufficient for the structure to be identical but independent.
-      days: List.from(
-        this.days.map((day) => day.copyWith(meals: List.from(day.meals))),
-      ),
+      days: List.from(this.days.map((day) => day.copyWith(meals: List.from(day.meals)))),
       diagnosisIds: this.diagnosisIds,
       guidelineIds: this.guidelineIds,
-      dailyStepGoal: dailyStepGoal ?? this.dailyStepGoal,
-      mandatoryDailyTasks: mandatoryDailyTasks ?? this.mandatoryDailyTasks,
 
-      // linkedVitalsId: this.linkedVitalsId,
-      //    followUpDays : this.followUpDays,
-      //   planNotes : this.planNotes
+      // Clone Goals
+      dailyStepGoal: dailyStepGoal,
+      dailyWaterGoal: dailyWaterGoal,
+      dailySleepGoal: dailySleepGoal,
+      dailyMindfulnessMinutes: dailyMindfulnessMinutes,
+      mandatoryDailyTasks: List.from(mandatoryDailyTasks),
     );
   }
 }

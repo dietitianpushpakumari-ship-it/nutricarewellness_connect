@@ -189,43 +189,50 @@ class _QuizSwipeScreenState extends ConsumerState<QuizSwipeScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(color: Colors.indigo.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(30),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 🎯 Show Category as a small tag
             Container(
-              margin: const EdgeInsets.only(bottom: 20),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(12)),
-              child: Text(q.category.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.indigo.shade300)),
+              decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(20)),
+              child: Text(q.category.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.indigo.shade400, letterSpacing: 1.2)),
             ),
-
+            const SizedBox(height: 24),
             Text(
               q.question,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, height: 1.3, color: Colors.black87),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, height: 1.4, color: Color(0xFF1A1A1A)),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 40),
+
+            // Instructional Arrows
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Icon(Icons.arrow_back, size: 16, color: Colors.grey.shade400),
-                const SizedBox(width: 8),
-                Text("MYTH", style: TextStyle(color: Colors.red.shade300, fontWeight: FontWeight.bold)),
-                const SizedBox(width: 20),
-                Text("FACT", style: TextStyle(color: Colors.green.shade300, fontWeight: FontWeight.bold)),
-                const SizedBox(width: 8),
-                Icon(Icons.arrow_forward, size: 16, color: Colors.grey.shade400),
+                _buildSwipeHint(Icons.arrow_back, "MYTH", Colors.red),
+                _buildSwipeHint(Icons.arrow_forward, "FACT", Colors.green),
               ],
             )
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSwipeHint(IconData icon, String label, Color color) {
+    return Column(
+      children: [
+        Icon(icon, color: color.withOpacity(0.5), size: 28),
+        const SizedBox(height: 4),
+        Text(label, style: TextStyle(color: color.withOpacity(0.8), fontWeight: FontWeight.bold, fontSize: 12)),
+      ],
     );
   }
 

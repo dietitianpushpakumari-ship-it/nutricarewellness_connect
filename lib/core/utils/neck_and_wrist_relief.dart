@@ -50,34 +50,37 @@ class _NeckWristSheetState extends State<NeckWristSheet> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 450,
-      padding: const EdgeInsets.all(30),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-      child: Column(
-        children: [
-          Text(widget.isNeck ? "Neck Release" : "Wrist Relief", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 40),
-
-          // 🎯 VISUAL TRAINER
-          SizedBox(
-            height: 200,
-            width: 200,
-            child: AnimatedBuilder(
-              animation: _animController,
-              builder: (context, child) {
-                return CustomPaint(
-                  painter: _StretchPainter(isNeck: widget.isNeck, progress: _animController.value),
-                );
-              },
+    return  SafeArea(
+      child: Container(
+        height: 500,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ), child: Column(
+          children: [
+            Text(widget.isNeck ? "Neck Release" : "Wrist Relief", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 40),
+      
+            // 🎯 VISUAL TRAINER
+            SizedBox(
+              height: 200,
+              width: 200,
+              child: AnimatedBuilder(
+                animation: _animController,
+                builder: (context, child) {
+                  return CustomPaint(
+                    painter: _StretchPainter(isNeck: widget.isNeck, progress: _animController.value),
+                  );
+                },
+              ),
             ),
-          ),
-
-          const Spacer(),
-          Text("$_seconds", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.teal)),
-          const SizedBox(height: 20),
-          ElevatedButton(onPressed: _toggle, child: Text(_isRunning ? "Pause" : "Start Timer"))
-        ],
+      
+            const Spacer(),
+            Text("$_seconds", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.teal)),
+            const SizedBox(height: 20),
+            ElevatedButton(onPressed: _toggle, child: Text(_isRunning ? "Pause" : "Start Timer"))
+          ],
+        ),
       ),
     );
   }

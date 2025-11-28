@@ -243,72 +243,74 @@ class _SpiritualHealingSheetState extends State<SpiritualHealingSheet> with Tick
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFF8E1), // Saffron tint
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('mantra_library').snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.orange));
-            final docs = snapshot.data?.docs ?? [];
-            final mantras = docs.map((d) => SpiritualMantraModel.fromFirestore(d)).toList();
-
-            if (mantras.isEmpty) return const Center(child: Text("No Mantras found."));
-
-            if (_selectedMantra == null) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if(mounted) {
-                  final first = mantras.first;
-                  _onMantraChanged(first);
-                }
-              });
-            }
-
-            final currentMantra = _selectedMantra ?? mantras.first;
-
-            return Column(
-              children: [
-                const SizedBox(height: 16),
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.orange.shade200, borderRadius: BorderRadius.circular(2)))),
-
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 20, 24, 10),
-                  child: Text("Spiritual Sanctuary", textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.brown)),
-                ),
-
-                // 1. MODE TOGGLE
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 24),
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(25), border: Border.all(color: Colors.orange.shade100)),
-                  child: Row(
-                    children: [
-                      _buildModeButton("Chant Myself", !_isListeningMode, () {
-                        _videoController.pause();
-                        setState(() => _isListeningMode = false);
-                      }),
-                      _buildModeButton("Listen Guide", _isListeningMode, () {
-                        setState(() => _isListeningMode = true);
-                        Future.delayed(const Duration(milliseconds: 300), () => _videoController.play());
-                      }),
-                    ],
+    return SafeArea(
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.9,
+        decoration: const BoxDecoration(
+          color: Color(0xFFFFF8E1), // Saffron tint
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('mantra_library').snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.orange));
+              final docs = snapshot.data?.docs ?? [];
+              final mantras = docs.map((d) => SpiritualMantraModel.fromFirestore(d)).toList();
+      
+              if (mantras.isEmpty) return const Center(child: Text("No Mantras found."));
+      
+              if (_selectedMantra == null) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if(mounted) {
+                    final first = mantras.first;
+                    _onMantraChanged(first);
+                  }
+                });
+              }
+      
+              final currentMantra = _selectedMantra ?? mantras.first;
+      
+              return Column(
+                children: [
+                  const SizedBox(height: 16),
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.orange.shade200, borderRadius: BorderRadius.circular(2)))),
+      
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(24, 20, 24, 10),
+                    child: Text("Spiritual Sanctuary", textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.brown)),
                   ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 2. DYNAMIC CONTENT
-                Expanded(
-                  child: _isListeningMode
-                      ? _buildListeningContent(currentMantra, mantras)
-                      : _buildChantingContent(currentMantra, mantras),
-                ),
-              ],
-            );
-          }
+      
+                  // 1. MODE TOGGLE
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(25), border: Border.all(color: Colors.orange.shade100)),
+                    child: Row(
+                      children: [
+                        _buildModeButton("Chant Myself", !_isListeningMode, () {
+                          _videoController.pause();
+                          setState(() => _isListeningMode = false);
+                        }),
+                        _buildModeButton("Listen Guide", _isListeningMode, () {
+                          setState(() => _isListeningMode = true);
+                          Future.delayed(const Duration(milliseconds: 300), () => _videoController.play());
+                        }),
+                      ],
+                    ),
+                  ),
+      
+                  const SizedBox(height: 20),
+      
+                  // 2. DYNAMIC CONTENT
+                  Expanded(
+                    child: _isListeningMode
+                        ? _buildListeningContent(currentMantra, mantras)
+                        : _buildChantingContent(currentMantra, mantras),
+                  ),
+                ],
+              );
+            }
+        ),
       ),
     );
   }

@@ -10,6 +10,8 @@ import 'package:nutricare_connect/core/utils/coach_tab.dart';
 import 'package:nutricare_connect/core/utils/feed_tab.dart';
 import 'package:nutricare_connect/core/utils/mantra_uploader.dart';
 import 'package:nutricare_connect/core/utils/modern_bottom_bar.dart';
+import 'package:nutricare_connect/core/utils/profile_Screen.dart';
+import 'package:nutricare_connect/core/utils/sync_manager.dart';
 import 'package:nutricare_connect/core/utils/wellness_hub_screen.dart';
 import 'package:nutricare_connect/core/wave_clipper.dart';
 import 'package:nutricare_connect/features/chat/presentation/client_chat_screen.dart';
@@ -35,6 +37,7 @@ import 'package:nutricare_connect/features/dietplan/domain/entities/programme_fe
 import 'package:nutricare_connect/features/dietplan/domain/entities/schedule_meeting_utils.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:collection/collection.dart';
 
 // 🎯 ADJUST IMPORTS
 
@@ -131,6 +134,9 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      SyncManager().checkAppLaunchSync();
+    });
   }
 
   void _onItemTapped(int index) {
@@ -187,6 +193,10 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
               IconButton(
                 icon: const Icon(Icons.history),
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientLogHistoryScreen())),
+              ),
+              IconButton(
+                icon: const Icon(Icons.account_circle),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
               ),
               IconButton(onPressed :() { GeetaUploader().uploadGeetaBank();}, icon: const Icon(Icons.history),),
               IconButton(onPressed :() { MantraUploader().uploadMantras();}, icon: const Icon(Icons.history),)

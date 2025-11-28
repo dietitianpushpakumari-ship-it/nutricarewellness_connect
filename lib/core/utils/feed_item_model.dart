@@ -1,67 +1,65 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum FeedType { youtube, image, article, promotion, facebookPost }
+// Match the Admin Enum exactly
+enum FeedContentType {
+  video,
+  imagePost,
+  articleLink,
+  recipe,
+  advertisement,
+  socialPost,
+}
 
 class FeedItemModel {
   final String id;
   final String title;
-  final String subtitle;
-  final String? imageUrl;
-  final String? actionUrl;
-  final FeedType type;
+  final String description;
+  final FeedContentType type;
+
+  final String? mediaUrl;      // Image URL or Youtube Thumbnail
+  final String? actionUrl;     // External Link
+  final String? callToAction;  // Button Label
+
+  final Map<String, dynamic>? recipeData; // { ingredients, steps... }
+  final List<String> targetTags;
+
   final DateTime postedAt;
-  final bool isPinned;
+  final int views;
+  final int shares;
 
   FeedItemModel({
     required this.id,
     required this.title,
-    required this.subtitle,
-    this.imageUrl,
-    this.actionUrl,
+    required this.description,
     required this.type,
+    this.mediaUrl,
+    this.actionUrl,
+    this.callToAction,
+    this.recipeData,
+    this.targetTags = const [],
     required this.postedAt,
-    this.isPinned = false,
+    this.views = 0,
+    this.shares = 0,
   });
 
-  // ... (Keep your existing fromFirestore factory) ...
   factory FeedItemModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return FeedItemModel(
       id: doc.id,
       title: data['title'] ?? '',
-      subtitle: data['subtitle'] ?? '',
-      imageUrl: data['imageUrl'],
+      description: data['description'] ?? '',
+      // Robust Enum Parsing
+      type: FeedContentType.values.firstWhere(
+              (e) => e.name == (data['type'] ?? 'imagePost'),
+          orElse: () => FeedContentType.imagePost),
+      mediaUrl: data['mediaUrl'],
       actionUrl: data['actionUrl'],
-      type: FeedType.values.firstWhere((e) => e.name == (data['type'] ?? 'article'), orElse: () => FeedType.article),
-      postedAt: (data['postedAt'] as Timestamp).toDate(),
-      isPinned: data['isPinned'] ?? false,
-    );
-  }
-
-  // 🎯 NEW: For Local Caching (File IO)
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'title': title,
-      'subtitle': subtitle,
-      'imageUrl': imageUrl,
-      'actionUrl': actionUrl,
-      'type': type.name,
-      'postedAt': postedAt.toIso8601String(), // Store date as String
-      'isPinned': isPinned,
-    };
-  }
-
-  factory FeedItemModel.fromJson(Map<String, dynamic> json) {
-    return FeedItemModel(
-      id: json['id'],
-      title: json['title'],
-      subtitle: json['subtitle'],
-      imageUrl: json['imageUrl'],
-      actionUrl: json['actionUrl'],
-      type: FeedType.values.firstWhere((e) => e.name == json['type'], orElse: () => FeedType.article),
-      postedAt: DateTime.parse(json['postedAt']),
-      isPinned: json['isPinned'] ?? false,
+      callToAction: data['callToAction'],
+      recipeData: data['recipeData'],
+      targetTags: List<String>.from(data['targetTags'] ?? []),
+      postedAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      views: data['views'] ?? 0,
+      shares: data['shares'] ?? 0,
     );
   }
 }

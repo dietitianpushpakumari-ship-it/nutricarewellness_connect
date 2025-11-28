@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+   import 'package:flutter/material.dart';
 import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
 
 
@@ -46,22 +46,30 @@ class _KegelTrainerSheetState extends State<KegelTrainerSheet> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 500,
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text("Kegel Trainer", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          const Text("Phone will vibrate to guide you.", style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 30),
-
-          CustomPaint(
-            painter: _KegelPainter(squeezeValue: _controller.value), // 0 to 1
-            size: Size(200, 200),
-          )
-        ],
+    return SafeArea(
+      child: Container(
+        height: 500,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFE3F2FD), Colors.white] // Soft Blue to White
+          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text("Kegel Trainer", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text("Phone will vibrate to guide you.", style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 30),
+      
+            CustomPaint(
+              painter: _KegelPainter(squeezeValue: _controller.value), // 0 to 1
+              size: Size(200, 200),
+            )
+          ],
+        ),
       ),
     );
   }

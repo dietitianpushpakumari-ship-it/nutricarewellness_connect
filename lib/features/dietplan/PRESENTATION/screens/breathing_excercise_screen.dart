@@ -7,6 +7,7 @@ import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_m
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
 import 'package:nutricare_connect/services/client_service.dart';
+import 'package:collection/collection.dart';
 
 class BreathingExerciseScreen extends ConsumerStatefulWidget {
   final ClientModel client;

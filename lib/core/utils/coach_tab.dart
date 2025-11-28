@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // 🎯 Ensure this is in pubspec
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/core/utils/active_package_card.dart';
 import 'package:nutricare_connect/core/utils/package_browser_screen.dart';
+import 'package:nutricare_connect/core/utils/package_payment_status_card.dart';
+import 'package:nutricare_connect/core/utils/dietitian_business_card.dart'; // 🎯 1. Import Digital Card
 import 'package:nutricare_connect/features/chat/presentation/client_chat_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_reminder_setting_screen.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/schedule_meeting_utils.dart';
 import 'package:nutricare_connect/services/client_service.dart';
@@ -20,304 +20,219 @@ class CoachTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dietitianAsync = ref.watch(dietitianProfileProvider);
     final meetingsAsync = ref.watch(upcomingMeetingsProvider(client.id));
-    final bool isSensorEnabled = ref.watch(stepSensorEnabledProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
-      body: CustomScrollView(
-        slivers: [
-          // 1. Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
-              child: const Text(
-                "My Care Team",
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            // 1. COMPACT HEADER
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
+                child: const Text(
+                  "My Care Team",
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+                ),
               ),
             ),
-          ),
 
-          // 🎯 2. Active Membership Card
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Column(
+            // 🎯 2. DIGITAL BUSINESS CARD (Replaces old Hero Card)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: dietitianAsync.when(
+                  loading: () => const Center(child: LinearProgressIndicator(minHeight: 2)),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (profile) {
+                    if (profile == null) return const SizedBox.shrink();
+                    return DietitianBusinessCard(
+                      profile: profile,
+                      onShare: () {
+                        // 🎯 Mock Share Logic
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Sharing Profile Card via WhatsApp..."), backgroundColor: Colors.green)
+                        );
+                        // TODO: Add real share logic here later
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            // 3. UPCOMING SESSION
+            SliverToBoxAdapter(
+              child: meetingsAsync.when(
+                loading: () => const SizedBox(),
+                error: (_, __) => const SizedBox(),
+                data: (meetings) {
+                  if (meetings.isEmpty) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: _buildNextSessionBanner(context, meetings.first),
+                  );
+                },
+              ),
+            ),
+
+            // 4. MEMBERSHIP SECTION
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                child: const Text("My Plan", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: PackagePaymentStatusCard(clientId: client.id),
+              ),
+            ),
+
+            // 5. QUICK ACTIONS GRID
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverGrid.count(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 2.4,
                 children: [
-                  ActivePackageCard(clientId: client.id),
-                  const SizedBox(height: 10),
-                  // Link to Store
-                  TextButton.icon(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PackageBrowserScreen())),
-                    icon: const Icon(Icons.storefront, size: 16),
-                    label: const Text("Browse New Packages"),
+                  _buildCompactActionCard(
+                    context, "Chat Coach", Icons.chat_bubble_outline, Colors.indigo,
+                        () => Navigator.push(context, MaterialPageRoute(builder: (_) => ClientChatScreen(clientName: client.name ?? 'Client'))),
+                  ),
+                  _buildCompactActionCard(
+                    context, "Explore Plans", Icons.storefront, Colors.orange,
+                        () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PackageBrowserScreen())),
+                  ),
+                  _buildCompactActionCard(
+                    context, "Book Session", Icons.calendar_month, Colors.teal,
+                        () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Booking flow coming soon"))),
+                  ),
+                  _buildCompactActionCard(
+                    context, "Payments", Icons.payment, Colors.green,
+                        () => showModalBottomSheet(context: context, builder: (_) => const PaymentModesSheet()),
                   ),
                 ],
               ),
             ),
-          ),
 
-          // 2. Dietitian Profile Card
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: dietitianAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Text("Error: $e"),
-                data: (profile) => _buildDietitianCard(context, profile, client),
+            // 6. COMMUNITY
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 10),
+                    const Text("Join the Tribe", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    const SizedBox(height: 10),
+                    _buildSocialsCard(context),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          // 3. Quick Actions
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverGrid.count(
-              crossAxisCount: 2,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 1.5,
-              children: [
-                _buildActionCard(
-                  context, "Chat Now", "Ask a question", Icons.chat_bubble_outline, Colors.indigo,
-                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => ClientChatScreen(clientName: client.name ?? 'Client'))),
-                ),
-                _buildActionCard(
-                  context, "Schedule", "Book Session", Icons.calendar_today, Colors.orange,
-                      () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Booking flow coming soon"))),
-                ),
-              ],
-            ),
-          ),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          ],
+        ),
+      ),
+    );
+  }
 
-          // 🎯 4. NEW: REFERRAL & SOCIALS SECTION
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Community & Support", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
+  // --- WIDGET BUILDERS ---
 
-                  // A. Referral Card
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [Colors.teal.shade400, Colors.teal.shade600]),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(FontAwesomeIcons.whatsapp, color: Colors.white, size: 32),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text("Invite a Friend", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                              Text("Share the journey on WhatsApp.", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12)),
-                            ],
-                          ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => _shareAppOnWhatsApp(context),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.teal,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          ),
-                          child: const Text("Share"),
-                        )
-                      ],
-                    ),
-                  ),
+  // 🎯 Note: _buildDietitianHeroCard was removed as we now use DietitianBusinessCard
 
-                  const SizedBox(height: 16),
-
-                  // B. Social Media Row
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildSocialBtn(FontAwesomeIcons.globe, "Website", Colors.blueGrey, "https://yourwebsite.com"),
-                        _buildSocialBtn(FontAwesomeIcons.instagram, "Instagram", Colors.pink, "https://instagram.com/yourhandle"),
-                        _buildSocialBtn(FontAwesomeIcons.facebook, "Facebook", Colors.blue, "https://facebook.com/yourpage"),
-                        _buildSocialBtn(FontAwesomeIcons.youtube, "YouTube", Colors.red, "https://youtube.com/@yourchannel"),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 5. Upcoming Sessions Title
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 30, 20, 10),
-              child: const Text("Upcoming Sessions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-          ),
-
-          SliverToBoxAdapter(
-            child: meetingsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const SizedBox(),
-              data: (meetings) {
-                if (meetings.isEmpty) return _buildEmptyState();
-                return SizedBox(
-                  height: 140,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: meetings.length,
-                    itemBuilder: (context, index) => _buildMeetingCard(context, meetings[index]),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // 6. Settings
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 30, 20, 10),
-              child: const Text("Preferences", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-          ),
-
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildSettingsTile(
-                  context, "Notifications", Icons.notifications_outlined,
-                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => ClientReminderSettingsScreen(client: client))),
-                ),
-                _buildSwitchTile(
-                  context, "Step Sensor", Icons.directions_walk, isSensorEnabled,
-                      (val) => ref.read(stepSensorEnabledProvider.notifier).state = val,
-                ),
-              ]),
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+  Widget _buildNextSessionBanner(BuildContext context, MeetingModel meeting) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.shade200)),
+      child: Row(
+        children: [
+          const Icon(Icons.video_call, color: Colors.deepOrange, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Upcoming: ${meeting.purpose}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)), Text(DateFormat("MMM d, h:mm a").format(meeting.startTime), style: TextStyle(color: Colors.grey.shade700, fontSize: 12))])),
+          const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.orange),
         ],
       ),
     );
   }
 
-  // --- NEW WIDGETS ---
+  Widget _buildCompactActionCard(BuildContext context, String title, IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))], border: Border.all(color: Colors.grey.shade100)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 20)),
+            const SizedBox(width: 10),
+            Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSocialsCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildSocialBtn(FontAwesomeIcons.globe, "Web", Colors.blueGrey, "https://yourwebsite.com"),
+          _buildSocialBtn(FontAwesomeIcons.instagram, "Insta", Colors.pink, "https://instagram.com"),
+          _buildSocialBtn(FontAwesomeIcons.facebook, "Facebook", Colors.blue, "https://facebook.com"),
+          _buildSocialBtn(FontAwesomeIcons.youtube, "YouTube", Colors.red, "https://youtube.com"),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSocialBtn(IconData icon, String label, Color color, String url) {
     return GestureDetector(
       onTap: () => _launch(url),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
-        ],
-      ),
+      child: Column(children: [Icon(icon, color: color, size: 24), const SizedBox(height: 4), Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w500))]),
     );
   }
 
-  Future<void> _shareAppOnWhatsApp(BuildContext context) async {
-    // 🎯 Customize your message here
-    const String message = "Hey! I'm getting healthier with NutriCare. Check it out: https://nutricare.com/app";
-    const String url = "https://wa.me/?text=$message"; // Universal link
-
-    await _launch(url);
-  }
-
-  // --- EXISTING WIDGETS ---
-  // (DietitianCard, ActionCard, MeetingCard, SettingsTile code remains same as previous step)
-  // ... (Paste previous helper methods here) ...
-
-  Widget _buildDietitianCard(BuildContext context, AdminProfileModel? profile, ClientModel client) {
-    if (profile == null) return const SizedBox();
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.indigo.shade800, Colors.indigo.shade600]), borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.indigo.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))]),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              CircleAvatar(radius: 30, backgroundColor: Colors.white24, child: Text(profile.firstName[0], style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white))),
-              const SizedBox(width: 16),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("${profile.firstName} ${profile.lastName}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)), Text(profile.designation.isNotEmpty ? profile.designation : "Senior Dietitian", style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8)))])),
-            ],
-          ),
-          const SizedBox(height: 20),
-          const Divider(color: Colors.white24),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildContactAction(Icons.call, "Call", () => _launch("tel:${profile.mobile}")),
-              _buildContactAction(Icons.email, "Email", () => _launch("mailto:${profile.companyEmail}")),
-              _buildContactAction(Icons.message, "WhatsApp", () => _launch("https://wa.me/${client.whatsappNumber ?? client.mobile}")),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContactAction(IconData icon, String label, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(children: [Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 20)), const SizedBox(height: 4), Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12))]),
-    );
-  }
-
-  Widget _buildActionCard(BuildContext context, String title, String subtitle, IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Icon(icon, color: color, size: 28), const Spacer(), Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), Text(subtitle, style: TextStyle(color: Colors.grey.shade500, fontSize: 12))]),
-      ),
-    );
-  }
-
-  Widget _buildMeetingCard(BuildContext context, MeetingModel meeting) {
-    return Container(
-      width: 240, margin: const EdgeInsets.only(right: 12), padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)), child: Text(DateFormat("MMM d, h:mm a").format(meeting.startTime), style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 12))), const Spacer(), Text(meeting.purpose, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(height: 4), Text("Via ${meeting.meetingType}", style: const TextStyle(color: Colors.grey, fontSize: 12))]),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Container(margin: const EdgeInsets.symmetric(horizontal: 16), padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200)), child: Center(child: Text("No upcoming sessions.", style: TextStyle(color: Colors.grey.shade500))));
-  }
-
-  Widget _buildSettingsTile(BuildContext context, String title, IconData icon, VoidCallback onTap) {
-    return Container(margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5)]), child: ListTile(leading: Icon(icon, color: Colors.grey.shade700), title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey), onTap: onTap));
-  }
-
-  Widget _buildSwitchTile(BuildContext context, String title, IconData icon, bool value, Function(bool) onChanged) {
-    return Container(margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5)]), child: SwitchListTile(secondary: Icon(icon, color: value ? Colors.green : Colors.grey), title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), value: value, onChanged: onChanged, activeColor: Colors.green));
-  }
-
-  // 🎯 LAUNCH METHOD
   Future<void> _launch(String url) async {
     final uri = Uri.parse(url);
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      debugPrint("Could not launch $url: $e");
-    }
+    try { await launchUrl(uri, mode: LaunchMode.externalApplication); } catch (e) { debugPrint("Could not launch $url"); }
+  }
+}
+
+class PaymentModesSheet extends StatelessWidget {
+  const PaymentModesSheet({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      height: 350,
+      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 20),
+          const Text("Select Payment Method", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          _payTile(Icons.qr_code, "UPI / GPay / PhonePe", () {}),
+          _payTile(Icons.credit_card, "Credit / Debit Card", () {}),
+          _payTile(Icons.account_balance, "Net Banking", () {}),
+          const Divider(),
+          _payTile(Icons.support_agent, "Contact Support", () {}),
+        ],
+      ),
+    );
+  }
+  Widget _payTile(IconData icon, String label, VoidCallback onTap) {
+    return ListTile(leading: Icon(icon, color: Colors.indigo, size: 20), title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)), trailing: const Icon(Icons.chevron_right, size: 18), onTap: onTap, dense: true);
   }
 }

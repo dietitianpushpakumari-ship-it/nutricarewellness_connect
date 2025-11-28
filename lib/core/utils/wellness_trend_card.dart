@@ -26,8 +26,9 @@ class WellnessTrendsCard extends ConsumerWidget {
         );
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        padding: const EdgeInsets.all(20),
+        // 🎯 FIX: Removed bottom margin (handled by parent carousel)
+        // 🎯 FIX: Reduced padding from 20 to 16 to save space
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
@@ -35,6 +36,7 @@ class WellnessTrendsCard extends ConsumerWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, // Shrink to fit
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -42,20 +44,24 @@ class WellnessTrendsCard extends ConsumerWidget {
                 const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Weekly Consistency", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text("Your daily wellness score", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    // 🎯 FIX: Slightly smaller fonts
+                    Text("Weekly Consistency", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    Text("Your daily wellness score", style: TextStyle(fontSize: 11, color: Colors.grey)),
                   ],
                 ),
-                Icon(Icons.bar_chart, color: Colors.teal.shade300),
+                Icon(Icons.bar_chart, color: Colors.teal.shade300, size: 20),
               ],
             ),
-            const SizedBox(height: 20),
+
+            // 🎯 FIX: Reduced spacing from 20 to 10
+            const SizedBox(height: 10),
 
             // The Mini Chart
+            // 🎯 FIX: Reduced height from 120 to 100 to fit in carousel
             SizedBox(
-              height: 120,
+              height: 100,
               child: historyAsync.when(
-                loading: () => const SizedBox(), // Fade in later
+                loading: () => const SizedBox(),
                 error: (_, __) => const SizedBox(),
                 data: (logs) {
                   return BarChart(
@@ -81,7 +87,6 @@ class WellnessTrendsCard extends ConsumerWidget {
                       borderData: FlBorderData(show: false),
                       barGroups: List.generate(7, (index) {
                         // Calculate Score for each day (0-6, where 6 is Today)
-                        // We need to map index 0 -> 6 days ago, index 6 -> Today
                         final date = DateTime.now().subtract(Duration(days: 6 - index));
                         final dayKey = DateTime(date.year, date.month, date.day);
                         final log = logs[dayKey]?.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
