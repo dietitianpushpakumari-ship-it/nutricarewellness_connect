@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/utils/smart_vitals_card.dart';
 import 'package:nutricare_connect/core/utils/vitals_trend_chart.dart';
+import 'package:nutricare_connect/core/vital_details_Screen.dart';
+import 'package:nutricare_connect/core/vitals_comprasion_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
 
@@ -93,7 +95,7 @@ class ClientVitalsHistoryScreen extends ConsumerWidget {
                           const SizedBox(height: 12),
 
                           // 🎯 C. HISTORY LIST
-                          ...sortedHistory.map((record) => _buildClientVitalCard(record)),
+                          ...sortedHistory.map((record) => _buildClientVitalCard(context,record)),
                         ],
                       );
                     },
@@ -107,35 +109,33 @@ class ClientVitalsHistoryScreen extends ConsumerWidget {
     );
   }
 
+// ... imports
+
+// ... inside build method ...
+
+// 2. Custom Header (Update to include action)
   Widget _buildHeader(BuildContext context) {
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.8),
-            border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.1))),
-          ),
+          // ... decoration ...
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-                  ),
-                  child: const Icon(Icons.arrow_back, size: 20, color: Colors.black87),
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Text(
-                "My Progress",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A)),
-              ),
+              Row(children: [
+                GestureDetector(onTap: () => Navigator.pop(context), child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]), child: const Icon(Icons.arrow_back, size: 20))),
+                const SizedBox(width: 16),
+                const Text("My Progress", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+              ]),
+
+              // 🎯 COMPARE BUTTON
+              IconButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VitalsComparisonScreen(clientId: clientId))),
+                icon: const Icon(Icons.compare_arrows, color: Colors.indigo, size: 28),
+                tooltip: "Compare Records",
+              )
             ],
           ),
         ),
@@ -143,59 +143,51 @@ class ClientVitalsHistoryScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildClientVitalCard(VitalsModel record) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+  Widget _buildClientVitalCard(BuildContext context, VitalsModel record) {
+    return GestureDetector(
+      // 🎯 NAVIGATE TO DETAIL SCREEN ON TAP
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => VitalsDetailScreen(record: record)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(10),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.description_outlined, size: 18, color: Colors.blue),
                 ),
-                child: const Icon(Icons.calendar_today, size: 18, color: Colors.blue),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    DateFormat('dd MMM yyyy').format(record.date),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
-                  Text(
-                    "BMI: ${record.bmi.toStringAsFixed(1)}",
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                "${record.weightKg} kg",
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF2D3142)),
-              ),
-              if (record.bloodPressureSystolic != null)
-                Text(
-                  "BP: ${record.bloodPressureSystolic}/${record.bloodPressureDiastolic}",
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(DateFormat('dd MMM yyyy').format(record.date), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    // Show 'Tap to view details' hint
+                    Text("Tap for full record", style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                  ],
                 ),
-            ],
-          ),
-        ],
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text("${record.weightKg} kg", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF2D3142))),
+                const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

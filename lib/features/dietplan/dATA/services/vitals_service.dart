@@ -146,4 +146,22 @@ class VitalsService {
       return null;
     }
   }
+  // 🎯 NEW: SAVE METHOD
+  Future<void> saveVitals(VitalsModel vital) async {
+    try {
+      // If ID exists, update. If empty, create new.
+      if (vital.id.isNotEmpty) {
+        await _getVitalsCollection(
+        )
+            .doc(vital.id)
+            .set(vital.toMap(), SetOptions(merge: true));
+      } else {
+       await _getVitalsCollection(
+        ).add(vital.toMap());
+      }
+    } catch (e) {
+      throw Exception("Failed to save vitals: $e");
+    }
+  }
+
 }

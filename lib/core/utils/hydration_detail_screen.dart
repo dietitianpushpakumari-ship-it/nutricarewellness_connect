@@ -26,11 +26,15 @@ class HydrationDetailSheet extends ConsumerStatefulWidget {
 class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> with SingleTickerProviderStateMixin {
   late AnimationController _waveController;
   bool _isSaving = false;
-  final double _goalLiters = 3.0; // Default goal
+  final double _goalLiters = 3.0;
+
+  // 🎯 1. Local State for smooth animation
+  late double _displayIntake;
 
   @override
   void initState() {
     super.initState();
+    _displayIntake = widget.currentIntake;
     _waveController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
@@ -49,7 +53,9 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
     setState(() => _isSaving = true);
 
     try {
-      final newTotal = (widget.currentIntake + amountToAdd).clamp(0.0, 10.0);
+      // 🎯 2. Calculate & Update Local State Instantly
+      final newTotal = (_displayIntake + amountToAdd).clamp(0.0, 10.0);
+      setState(() => _displayIntake = newTotal);
 
       final logToSave = widget.dailyLog ?? ClientLogModel(
         id: '',
@@ -61,11 +67,16 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
       );
 
       final updatedLog = logToSave.copyWith(hydrationLiters: newTotal);
+
+      // 🎯 3. Save silently (Don't await if you want super fast UI, but safer to await)
       await widget.notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
 
-      if (mounted) Navigator.pop(context); // Close sheet on success
+      // 🎯 4. DO NOT POP. Keep sheet open.
+
     } catch (e) {
-      // Handle error if needed
+      // Revert on error
+      setState(() => _displayIntake = widget.currentIntake);
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error updating water: $e")));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -73,13 +84,13 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
 
   @override
   Widget build(BuildContext context) {
-    final double progress = (widget.currentIntake / _goalLiters).clamp(0.0, 1.0);
+    // Use local state for smooth animation
+    final double progress = (_displayIntake / _goalLiters).clamp(0.0, 1.0);
     final int percent = (progress * 100).toInt();
-    final colorScheme = Theme.of(context).colorScheme;
 
     return SafeArea(
       child: Container(
-        height: MediaQuery.of(context).size.height * 0.85, // Tall sheet
+        height: MediaQuery.of(context).size.height * 0.85,
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
@@ -87,15 +98,23 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         child: Column(
           children: [
-            // 1. Handle Bar
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
-              ),
+            // 1. Header Row with Close Button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const SizedBox(width: 40), // Spacer for balance
+                Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.grey),
+                  onPressed: () => Navigator.pop(context), // Manual Close
+                )
+              ],
             ),
-            const SizedBox(height: 30),
-      
+            const SizedBox(height: 20),
+
             // 2. Header Stats
             Text("Current Hydration", style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
             const SizedBox(height: 4),
@@ -104,7 +123,7 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  widget.currentIntake.toStringAsFixed(1),
+                  _displayIntake.toStringAsFixed(2),
                   style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.blue.shade900, height: 1.0),
                 ),
                 Padding(
@@ -113,9 +132,9 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
                 ),
               ],
             ),
-      
+
             const Spacer(),
-      
+
             // 3. THE BIG WATER TANK VISUAL
             SizedBox(
               height: 300,
@@ -152,8 +171,8 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
                               );
                             },
                           ),
-      
-                          // C. Measurement Lines (Ticks)
+
+                          // C. Measurement Lines
                           Positioned(
                             right: 0, top: 0, bottom: 0, width: 20,
                             child: Column(
@@ -170,8 +189,8 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
                       ),
                     ),
                   ),
-      
-                  // D. Percent Overlay (Floating in middle)
+
+                  // D. Percent Overlay
                   Positioned(
                     bottom: 130,
                     child: Text(
@@ -186,25 +205,25 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
                 ],
               ),
             ),
-      
+
             const Spacer(),
-      
+
             // 4. Quick Add Controls
-            const Text("Quick Add", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text("Tap to Add Water", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _buildAddBtn(0.25, "Glass", Icons.local_drink),
                 _buildAddBtn(0.50, "Bottle", Icons.water_drop),
-                _buildAddBtn(0.75, "Jug", Icons.local_cafe), // Renamed "Large" to "Jug" for fun
+                _buildAddBtn(0.75, "Jug", Icons.local_cafe),
               ],
             ),
-      
+
             // Reset
             const SizedBox(height: 20),
             TextButton(
-              onPressed: _isSaving ? null : () => _updateWater(-widget.currentIntake),
+              onPressed: _isSaving ? null : () => _updateWater(-_displayIntake),
               child: const Text("Reset to 0", style: TextStyle(color: Colors.red, fontSize: 12)),
             ),
           ],
@@ -217,7 +236,7 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
     return Column(
       children: [
         ElevatedButton(
-          onPressed: _isSaving ? null : () => _updateWater(amount),
+          onPressed: () => _updateWater(amount), // 🎯 Instant tap, no loader blocking
           style: ElevatedButton.styleFrom(
             shape: const CircleBorder(),
             padding: const EdgeInsets.all(20),

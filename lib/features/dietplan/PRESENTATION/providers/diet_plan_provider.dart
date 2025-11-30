@@ -3,6 +3,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:nutricare_connect/core/clinical_master_service.dart';
 import 'package:nutricare_connect/core/utils/geeta_repository.dart';
 import 'package:nutricare_connect/core/utils/geeta_shloka_model.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_dashboard_main_screen.dart';
@@ -338,4 +339,7 @@ final historicalLogProvider = FutureProvider.family<Map<DateTime, List<ClientLog
 final vitalsHistoryProvider = FutureProvider.family<List<VitalsModel>, String>((ref, clientId) async {
   final service = ref.watch(vitalsServiceProvider);
   return service.getClientVitals(clientId);
+});
+final clinicalMasterServiceProvider = Provider<ClinicalMasterService>((ref) {
+  return ClinicalMasterService();
 });
