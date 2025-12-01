@@ -23,13 +23,18 @@ class ActivityTrendChart extends ConsumerStatefulWidget {
 class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
   int _selectedRange = 7; // Default to 7 days
 
+  // Helper getter
+  int get _selectedDays => _selectedRange;
+
   @override
   Widget build(BuildContext context) {
+    // Watch history
     final historyAsync = ref.watch(historicalLogProvider((clientId: widget.clientId, days: _selectedDays)));
     final selectedDate = ref.watch(activeDietPlanProvider).selectedDate;
 
     return Container(
-      margin: const EdgeInsets.all(16),
+      // Removed margin here as parent usually handles it, or keep if standalone
+      // Kept internal padding
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -39,20 +44,32 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row
+          // Header Row (Fixed Overflow)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Step History", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text(
+              // 🎯 FIX: Expanded allows text to shrink if toggle needs space
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Step History",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
                       "Last $_selectedDays Days",
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500)
-                  ),
-                ],
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8), // Spacing
+
               // Toggle 7/15/30 Days
               Container(
                 decoration: BoxDecoration(
@@ -65,7 +82,8 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
                     bool isSelected = _selectedRange == days;
                     return GestureDetector(
                       onTap: () => setState(() => _selectedRange = days),
-                      child: Container(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: isSelected ? Colors.white : Colors.transparent,
@@ -115,7 +133,7 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
                         if (!event.isInterestedForInteractions || barTouchResponse == null || barTouchResponse.spot == null) {
                           return;
                         }
-                        // 🎯 INTERACTIVE: Tap bar to select date
+                        // Interactive: Tap bar to select date
                         if (event is FlTapUpEvent) {
                           final index = barTouchResponse.spot!.touchedBarGroupIndex;
                           final date = DateTime.now().subtract(Duration(days: (_selectedRange - 1) - index));
@@ -142,15 +160,15 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
                             if (_selectedRange > 10 && index % 3 != 0) return const SizedBox();
 
                             final isToday = DateUtils.isSameDay(date, DateTime.now());
-                            final isSelected = DateUtils.isSameDay(date, selectedDate);
+                            final isSelectedDate = DateUtils.isSameDay(date, selectedDate);
 
                             return Padding(
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
                                 isToday ? "Today" : DateFormat('d/M').format(date),
                                 style: TextStyle(
-                                    color: isSelected ? Colors.deepPurple : Colors.grey.shade400,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    color: isSelectedDate ? Colors.deepPurple : Colors.grey.shade400,
+                                    fontWeight: isSelectedDate ? FontWeight.bold : FontWeight.normal,
                                     fontSize: 10
                                 ),
                               ),
@@ -178,8 +196,8 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
                       else if (steps >= (widget.stepGoal * 0.5)) barColor = Colors.orange;
 
                       // Highlight Selected Date
-                      final isSelected = DateUtils.isSameDay(date, selectedDate);
-                      if (isSelected) barColor = Colors.deepPurple;
+                      final isSelectedDate = DateUtils.isSameDay(date, selectedDate);
+                      if (isSelectedDate) barColor = Colors.deepPurple;
 
                       return BarChartGroupData(
                         x: index,
@@ -187,7 +205,7 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
                           BarChartRodData(
                             toY: steps,
                             color: barColor,
-                            width: _selectedRange == 7 ? 16 : 8, // Thinner bars for more days
+                            width: _selectedRange == 7 ? 12 : 8, // Slightly thinner to be safe
                             borderRadius: BorderRadius.circular(4),
                             backDrawRodData: BackgroundBarChartRodData(
                               show: true,
@@ -207,7 +225,4 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
       ),
     );
   }
-
-  // Helper getter for current _selectedRange from state
-  int get _selectedDays => _selectedRange;
 }

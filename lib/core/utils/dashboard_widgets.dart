@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/wave_clipper.dart';
 
 // 🎨 PREMIUM DESIGN CONSTANTS
-const double kCardRadius = 24.0; // Slightly reduced for tighter look
+const double kCardRadius = 24.0;
 const BoxShadow kPremiumShadow = BoxShadow(
   color: Color(0x0D000000),
   blurRadius: 20,
@@ -70,11 +70,12 @@ class MiniHydrationCard extends StatelessWidget {
 
             // 📝 Content
             Padding(
-              padding: const EdgeInsets.all(14.0), // Reduced Padding
+              padding: const EdgeInsets.all(12.0), // 🎯 Reduced Padding
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -82,38 +83,46 @@ class MiniHydrationCard extends StatelessWidget {
                       if (progress >= 1.0) const Icon(Icons.verified, color: Colors.white, size: 16),
                     ],
                   ),
-                  if (isEmpty)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text("Hydrate", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF00695C))),
-                        const SizedBox(height: 2),
-                        Text("Goal: ${goalLiters}L", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                      ],
-                    )
-                  else
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text("$percent%", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: progress > 0.5 ? Colors.white : const Color(0xFF263238), height: 1.0)),
-                        const SizedBox(height: 2),
-                        Text("${currentLiters.toStringAsFixed(1)}L", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: progress > 0.5 ? Colors.white.withOpacity(0.9) : Colors.grey.shade600)),
-                      ],
+
+                  // Stats
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: isEmpty
+                          ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text("Hydrate", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF00695C))),
+                          const SizedBox(height: 2),
+                          Text("Goal: ${goalLiters}L", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        ],
+                      )
+                          : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FittedBox(
+                            child: Text("$percent%", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: progress > 0.5 ? Colors.white : const Color(0xFF263238), height: 1.0)),
+                          ),
+                          const SizedBox(height: 2),
+                          Text("${currentLiters.toStringAsFixed(1)}L", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: progress > 0.5 ? Colors.white.withOpacity(0.9) : Colors.grey.shade600)),
+                        ],
+                      ),
                     ),
+                  ),
                 ],
               ),
             ),
 
             // ➕ Add Button
             Positioned(
-              bottom: 10, right: 10,
+              bottom: 8, right: 8,
               child: InkWell(
                 onTap: onQuickAdd,
                 borderRadius: BorderRadius.circular(30),
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(6), // Smaller button
                   decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)]),
                   child: const Icon(Icons.add, size: 16, color: Color(0xFF00BFA5)),
                 ),
@@ -127,7 +136,7 @@ class MiniHydrationCard extends StatelessWidget {
 }
 
 // =================================================================
-// 2. PREMIUM STEP CARD (Fixed Overflow)
+// 2. PREMIUM STEP CARD
 // =================================================================
 class MiniStepCard extends StatelessWidget {
   final int steps;
@@ -144,7 +153,7 @@ class MiniStepCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14), // 🎯 Reduced Padding to prevent overflow
+        padding: const EdgeInsets.all(12), // 🎯 Reduced Padding
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(kCardRadius),
@@ -163,44 +172,34 @@ class MiniStepCard extends StatelessWidget {
               ],
             ),
 
-            // Centered Ring (Flexible to take available space)
+            // Centered Ring (Flexible)
             Expanded(
               child: Center(
-                child: SizedBox(
-                  height: 65, width: 65, // Slightly smaller ring
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(value: 1.0, strokeWidth: 6, color: Colors.grey.shade100),
-                      CircularProgressIndicator(value: progress, strokeWidth: 6, color: ringColor, strokeCap: StrokeCap.round),
-
-                      // 🎯 FIX: FittedBox ensures inner text never overflows the ring
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.bolt, size: 14, color: ringColor),
-                            Text("${(progress * 100).toInt()}%", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87)),
-                          ],
-                        ),
-                      ),
-                    ],
+                child: FittedBox( // 🎯 Scales down if space is tight
+                  fit: BoxFit.scaleDown,
+                  child: SizedBox(
+                    height: 55, width: 55, // 🎯 Reduced base size
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(value: 1.0, strokeWidth: 5, color: Colors.grey.shade100),
+                        CircularProgressIndicator(value: progress, strokeWidth: 5, color: ringColor, strokeCap: StrokeCap.round),
+                        Icon(Icons.bolt, size: 16, color: ringColor),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
 
-            // Bottom Stats (Flexible to prevent bottom overflow)
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FittedBox(child: Text("$steps", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.black87))),
-                  const Text("Steps", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w500)),
-                ],
-              ),
+            // Bottom Stats
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FittedBox(child: Text("$steps", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.black87))),
+                const Text("Steps", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w500)),
+              ],
             ),
           ],
         ),
@@ -226,7 +225,7 @@ class MiniSleepCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12), // 🎯 Reduced Padding
         decoration: BoxDecoration(
           gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF2E3A59), Color(0xFF151925)]),
           borderRadius: BorderRadius.circular(kCardRadius),
@@ -240,22 +239,23 @@ class MiniSleepCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Icon(Icons.bedtime_rounded, color: Color(0xFF9FA8DA), size: 18),
-                Text("Sleep", style: TextStyle(color: Color(0xFF9FA8DA), fontSize: 11, fontWeight: FontWeight.w600)),
+                Text("Sleep", style: TextStyle(color: Color(0xFF9FA8DA), fontSize: 10, fontWeight: FontWeight.w600)),
               ],
             ),
 
             if (hasData)
-              Flexible(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     FittedBox(
                       child: RichText(
                         text: TextSpan(children: [
-                          TextSpan(text: hours.floor().toString(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
+                          TextSpan(text: hours.floor().toString(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                           const TextSpan(text: "h ", style: TextStyle(fontSize: 12, color: Colors.white70)),
-                          TextSpan(text: ((hours - hours.floor()) * 60).toInt().toString(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
+                          TextSpan(text: ((hours - hours.floor()) * 60).toInt().toString(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                           const TextSpan(text: "m", style: TextStyle(fontSize: 12, color: Colors.white70)),
                         ]),
                       ),
@@ -266,7 +266,7 @@ class MiniSleepCard extends StatelessWidget {
                 ),
               )
             else
-              const Expanded(child: Center(child: Text("Log\nRest", textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 13, fontWeight: FontWeight.w600)))),
+              const Expanded(child: Center(child: Text("Log\nRest", textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)))),
           ],
         ),
       ),
@@ -275,7 +275,7 @@ class MiniSleepCard extends StatelessWidget {
 }
 
 // =================================================================
-// 4. PREMIUM BREATHING CARD (Calm & Soft)
+// 4. PREMIUM BREATHING CARD
 // =================================================================
 class MiniBreathingCard extends StatelessWidget {
   final int minutesLogged;
@@ -288,7 +288,7 @@ class MiniBreathingCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12), // 🎯 Reduced Padding
         decoration: BoxDecoration(
           color: const Color(0xFFE0F2F1),
           borderRadius: BorderRadius.circular(kCardRadius),
@@ -310,22 +310,20 @@ class MiniBreathingCard extends StatelessWidget {
             const Spacer(),
 
             if (minutesLogged > 0)
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FittedBox(child: Text("$minutesLogged", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.teal.shade800, height: 1.0))),
-                    Text("min mindful", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.teal.shade600)),
-                  ],
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FittedBox(child: Text("$minutesLogged", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.teal.shade800, height: 1.0))),
+                  Text("min mindful", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.teal.shade600)),
+                ],
               )
             else
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text("Take a\nBreath", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.teal.shade800, height: 1.1)),
+                  Text("Take a\nBreath", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.teal.shade800, height: 1.1)),
                   const SizedBox(height: 4),
                   Text("Start Now", style: TextStyle(fontSize: 10, color: Colors.teal.shade600, fontWeight: FontWeight.bold)),
                 ],

@@ -6,6 +6,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/auth_provider.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart' hide clientServiceProvider; // For sensor provider
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/global_user_provider.dart';
+import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_auth_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_reminder_setting_screen.dart';
 import 'package:nutricare_connect/services/client_service.dart';
 import 'dart:io';
@@ -173,7 +174,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.red),
                 title: const Text("Log Out", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                onTap: () => ref.read(authNotifierProvider.notifier).signOut(),
+                  // In CoachTab or Profile Screen
+                  onTap: () async {
+                    await ref.read(authNotifierProvider.notifier).signOut();
+                    Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const ClientAuthScreen()),
+                            (route) => false
+                    );
+                  }
               )
             ]),
 

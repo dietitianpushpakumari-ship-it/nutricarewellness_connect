@@ -1,205 +1,258 @@
-// lib/features/dietplan/PRESENTATION/screens/client_dashboard_main_screen.dart
-
-// 🎯 ADD/VERIFY THIS IMPORT for the charts
 import 'package:fl_chart/fl_chart.dart';
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:collection/collection.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
 
-// lib/features/dietplan/PRESENTATION/screens/client_dashboard_main_screen.dart
-
-// 🎯 ADD/VERIFY THIS IMPORT for the charts
-import 'package:fl_chart/fl_chart.dart';
-
-// ... (omitted other classes and imports) ...
-
-// 🎯 NEW WIDGET (Place inside _HomeScreenState or as a top-level widget)
 class ProgressReportCard extends ConsumerStatefulWidget {
   final String clientId;
-  const ProgressReportCard({required this.clientId});
+  const ProgressReportCard({super.key, required this.clientId});
 
   @override
   ConsumerState<ProgressReportCard> createState() => _ProgressReportCardState();
 }
 
-class _ProgressReportCardState extends ConsumerState<ProgressReportCard> {
-  // 🎯 State for the date range filter
+class _ProgressReportCardState extends ConsumerState<ProgressReportCard> with SingleTickerProviderStateMixin {
   int _selectedDays = 7;
-  final List<int> _dayOptions = [7, 15,30]; // Last 7, 15, 30, 90 days
+  bool _isExpanded = true; // Expanded by default for engagement
+  final List<int> _dayOptions = [7, 15, 30, 90];
 
   @override
   Widget build(BuildContext context) {
-    // 🎯 Watch the new provider with the selected day range
-    final historyAsync = ref.watch(historicalLogProvider((clientId: widget.clientId, days: _selectedDays)));
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      elevation: 4,
-      child: ExpansionTile(
-        leading: Icon(Icons.show_chart, color: colorScheme.secondary),
-        title: const Text('Your Progress Report', style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('Showing trends from the last $_selectedDays days.'),
+    // Watch Data
+    final dailyLogHistoryAsync = ref.watch(historicalLogProvider((clientId: widget.clientId, days: _selectedDays)));
+    final vitalsHistoryAsync = ref.watch(vitalsHistoryProvider(widget.clientId));
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 4), // Add margin for shadow
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          )
+        ],
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- 1. Date Range Filter Buttons ---
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: SegmentedButton<int>(
-              segments: _dayOptions.map((days) => ButtonSegment<int>(
-                value: days,
-                label: Text('$days D'),
-              )).toList(),
-              selected: {_selectedDays},
-              onSelectionChanged: (Set<int> newSelection) {
-                setState(() {
-                  _selectedDays = newSelection.first;
-                });
-              },
-              style: SegmentedButton.styleFrom(
-                selectedBackgroundColor: colorScheme.primary.withOpacity(0.2),
-                selectedForegroundColor: colorScheme.primary,
+          // 1. PREMIUM HEADER (Custom, no ExpansionTile borders)
+          InkWell(
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.auto_graph_rounded, color: Colors.indigo, size: 20),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Progress Report", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))),
+                        Text("Trends from last $_selectedDays days", style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                      ],
+                    ),
+                  ),
+                  Icon(_isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: Colors.grey),
+                ],
               ),
             ),
           ),
 
-          // --- 2. Async Graph Builder ---
-          historyAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(32.0),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (e, s) => Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text('Error loading chart: $e', style: const TextStyle(color: Colors.red)),
-            ),
-            data: (groupedLogs) {
-              // --- 3. Data Processing ---
-              final Map<String, double> stepData = {};
-              final Map<String, double> hydrationData = {};
-              final Map<String, double> sleepData = {};
-              final Map<String, double> calorieData = {};
+          // 2. EXPANDABLE CONTENT
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              children: [
+                const Divider(height: 1, indent: 20, endIndent: 20),
 
-              // Create entries for all days in the range, even if empty
-              for (int i = _selectedDays - 1; i >= 0; i--) {
-                final date = DateTime.now().subtract(Duration(days: i));
-                final dayKey = DateTime(date.year, date.month, date.day);
-                final dayLabel = DateFormat('d/M').format(date); // "10/11"
-
-                final log = groupedLogs[dayKey]?.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
-
-                stepData[dayLabel] = log?.stepCount?.toDouble() ?? 0;
-                hydrationData[dayLabel] = log?.hydrationLiters ?? 0;
-                sleepData[dayLabel] = log?.totalSleepDurationHours ?? 0;
-                calorieData[dayLabel] = log?.caloriesBurned?.toDouble() ?? 0;
-              }
-
-              if (stepData.isEmpty) {
-                return const Center(child: Text('No data for this period.'));
-              }
-
-              // --- 4. Graph Display ---
-              return Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    _buildChartContainer(context, 'Steps & Calories Burned', _buildLineChart(context, stepData, calorieData)),
-                    const SizedBox(height: 20),
-                    _buildChartContainer(context, 'Sleep Duration & Hydration', _buildLineChart(context, sleepData, hydrationData, isSleep: true)),
-                  ],
+                // Filter Bar
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<int>(
+                      segments: _dayOptions.map((days) => ButtonSegment<int>(
+                        value: days,
+                        label: Text('$days D', style: const TextStyle(fontSize: 12)),
+                      )).toList(),
+                      selected: {_selectedDays},
+                      onSelectionChanged: (Set<int> newSelection) => setState(() => _selectedDays = newSelection.first),
+                      style: ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        backgroundColor: MaterialStateProperty.resolveWith((states) {
+                          if (states.contains(MaterialState.selected)) return Colors.indigo.shade50;
+                          return Colors.white;
+                        }),
+                        foregroundColor: MaterialStateProperty.resolveWith((states) {
+                          if (states.contains(MaterialState.selected)) return Colors.indigo;
+                          return Colors.grey;
+                        }),
+                        side: MaterialStateProperty.all(BorderSide(color: Colors.grey.shade200)),
+                      ),
+                    ),
+                  ),
                 ),
-              );
-            },
+
+                // CHARTS
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      // Activity Chart
+                      dailyLogHistoryAsync.when(
+                        loading: () => const Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()),
+                        error: (_,__) => const Text("Could not load activity data"),
+                        data: (groupedLogs) => _buildActivityCharts(groupedLogs, context),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Vitals Chart
+                      vitalsHistoryAsync.when(
+                        loading: () => const SizedBox.shrink(),
+                        error: (_,__) => const SizedBox.shrink(),
+                        data: (vitalsList) => _buildVitalsCharts(vitalsList, context),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+            crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 300),
           ),
         ],
       ),
     );
   }
 
-  // --- Graph Builder Helpers ---
+  Widget _buildActivityCharts(Map<DateTime, List<dynamic>> groupedLogs, BuildContext context) {
+    final Map<String, double> stepData = {};
+    final Map<String, double> sleepData = {};
 
-  Widget _buildChartContainer(BuildContext context, String title, Widget chart) {
+    final sortedDates = groupedLogs.keys.toList()..sort();
+    for (var date in sortedDates) {
+      final dayLabel = DateFormat('d/M').format(date);
+      final log = groupedLogs[date]?.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
+      stepData[dayLabel] = (log?.stepCount ?? 0).toDouble();
+      sleepData[dayLabel] = (log?.totalSleepDurationHours ?? 0).toDouble();
+    }
+
+    if (stepData.isEmpty) return const Text("No activity logged yet.", style: TextStyle(color: Colors.grey));
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        SizedBox(height: 200, child: chart),
+        _buildChartSection("Steps Walked", stepData, Colors.orange),
+        const SizedBox(height: 20),
+        _buildChartSection("Sleep (Hours)", sleepData, Colors.purple),
       ],
     );
   }
 
-  // 🎯 THIS IS THE CORRECTED METHOD
-  Widget _buildLineChart(BuildContext context, Map<String, double> data1, Map<String, double> data2, {bool isSleep = false}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final List<FlSpot> spots1 = [];
-    final List<FlSpot> spots2 = [];
+  Widget _buildVitalsCharts(List<dynamic> vitalsList, BuildContext context) {
+    final Map<String, double> weightData = {};
+    final startDate = DateTime.now().subtract(Duration(days: _selectedDays));
+    final filtered = vitalsList.where((v) => !v.date.isBefore(startDate)).toList()..sort((a, b) => a.date.compareTo(b.date));
 
-    int index = 0;
-    for (var entry in data1.entries) {
-      spots1.add(FlSpot(index.toDouble(), entry.value));
-      index++;
+    for (final v in filtered) {
+      final dayLabel = DateFormat('d/M').format(v.date);
+      if (v.weightKg > 0) weightData[dayLabel] = v.weightKg;
     }
 
-    index = 0;
-    for (var entry in data2.entries) {
-      spots2.add(FlSpot(index.toDouble(), entry.value));
-      index++;
+    if (weightData.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        const Divider(height: 30),
+        _buildChartSection("Weight Trend (kg)", weightData, Colors.indigo),
+      ],
+    );
+  }
+
+  Widget _buildChartSection(String title, Map<String, double> data, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+        const SizedBox(height: 16),
+        SizedBox(height: 160, child: _buildLineChart(data, color)),
+      ],
+    );
+  }
+
+  Widget _buildLineChart(Map<String, double> data, Color color) {
+    final List<FlSpot> spots = [];
+    final allKeys = data.keys.toList();
+
+    for (int i = 0; i < allKeys.length; i++) {
+      spots.add(FlSpot(i.toDouble(), data[allKeys[i]]!));
     }
 
     return LineChart(
       LineChartData(
-        gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (val) => FlLine(color: Colors.grey.shade200, strokeWidth: 1)),
+        gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            getDrawingHorizontalLine: (_) => FlLine(color: Colors.grey.shade100, strokeWidth: 1)
+        ),
         titlesData: FlTitlesData(
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 30,
-              interval: 1,
-              // 🎯 CRITICAL FIX: Remove SideTitleWidget wrapper
-              getTitlesWidget: (value, meta) {
-                final index = value.toInt();
-                if (index < 0 || index >= data1.keys.length) return const SizedBox();
-
-                // Show labels every few days to avoid clutter
-                if (_selectedDays > 10 && index % 3 != 0) return const SizedBox();
-
-                // 🎯 Just return the Text widget directly
-                return Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text(data1.keys.elementAt(index), style: const TextStyle(fontSize: 10)),
-                );
-              },
+          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, interval: 1, getTitlesWidget: (val, meta) {
+            final index = val.toInt();
+            if (index < 0 || index >= allKeys.length) return const SizedBox();
+            if (_selectedDays > 10 && index % 3 != 0) return const SizedBox(); // Skip labels
+            return SideTitleWidget(meta: meta, space: 8, child: Text(allKeys[index], style: const TextStyle(fontSize: 10, color: Colors.grey)));
+          })),
+          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)), // Hide Y axis
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(show: false), // No border
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            color: color,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: true),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [color.withOpacity(0.2), color.withOpacity(0.0)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
             ),
           ),
-          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
-          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        borderData: FlBorderData(show: true, border: Border.all(color: Colors.grey.shade300)),
-        lineBarsData: [
-          // Line 1 (e.g., Steps or Sleep)
-          LineChartBarData(
-            spots: spots1,
-            isCurved: true,
-            color: colorScheme.primary, // Emerald
-            barWidth: 4,
-            isStrokeCapRound: true,
-            dotData: FlDotData(show: false),
-            belowBarData: BarAreaData(show: true, color: colorScheme.primary.withOpacity(0.2)),
-          ),
-          // Line 2 (e.g., Calories or Hydration)
-          LineChartBarData(
-            spots: spots2,
-            isCurved: true,
-            color: isSleep ? colorScheme.secondary : Colors.red, // Sapphire or Red
-            barWidth: 4,
-            isStrokeCapRound: true,
-            dotData: FlDotData(show: false),
-            belowBarData: BarAreaData(show: true, color: (isSleep ? colorScheme.secondary : Colors.red).withOpacity(0.2)),
-          ),
         ],
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (_) => Colors.blueGrey.shade800,
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((spot) => LineTooltipItem("${spot.y}", const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))).toList();
+              }
+          ),
+        ),
       ),
     );
   }

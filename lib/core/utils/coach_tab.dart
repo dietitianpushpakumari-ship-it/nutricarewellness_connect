@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/booking_sheet.dart';
 import 'package:nutricare_connect/core/utils/package_browser_screen.dart';
 import 'package:nutricare_connect/core/utils/package_payment_status_card.dart';
 import 'package:nutricare_connect/core/utils/dietitian_business_card.dart'; // 🎯 1. Import Digital Card
@@ -109,7 +110,7 @@ class CoachTab extends ConsumerWidget {
                   ),
                   _buildCompactActionCard(
                     context, "Book Session", Icons.calendar_month, Colors.teal,
-                        () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Booking flow coming soon"))),
+() => Navigator.push(context,MaterialPageRoute(builder: (_) => BookingSheet(clientId : client.id, clientName: client.name ?? 'Client', freeSessionsRemaining: client.freeSessionsRemaining!)                                                                                           )),
                   ),
                   _buildCompactActionCard(
                     context, "Payments", Icons.payment, Colors.green,
@@ -188,8 +189,8 @@ class CoachTab extends ConsumerWidget {
         children: [
           _buildSocialBtn(FontAwesomeIcons.globe, "Web", Colors.blueGrey, "https://yourwebsite.com"),
           _buildSocialBtn(FontAwesomeIcons.instagram, "Insta", Colors.pink, "https://instagram.com"),
-          _buildSocialBtn(FontAwesomeIcons.facebook, "Facebook", Colors.blue, "https://facebook.com"),
-          _buildSocialBtn(FontAwesomeIcons.youtube, "YouTube", Colors.red, "https://youtube.com"),
+          _buildSocialBtn(FontAwesomeIcons.facebook, "Facebook", Colors.blue, "https://www.facebook.com/NutricareWellness.rkl"),
+          _buildSocialBtn(FontAwesomeIcons.youtube, "YouTube", Colors.red, "https://www.youtube.com/@NutricareWellness-t2s"),
         ],
       ),
     );

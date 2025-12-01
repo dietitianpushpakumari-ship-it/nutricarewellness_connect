@@ -13,8 +13,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:logger/logger.dart';
 import 'package:nutricare_connect/core/utils/client_goal_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/reminder_config_model.dart';
 
 // --- CONCEPTUAL MODELS ---
@@ -63,6 +61,7 @@ class ClientModel {
   final String? email;
   final DateTime? dob;
   final ClientGoalModel goals;
+  final int? freeSessionsRemaining;
 
   ClientModel({
     required this.id,
@@ -85,6 +84,7 @@ class ClientModel {
     this.email,
     this.dob,
     this.goals = const ClientGoalModel(),
+    this.freeSessionsRemaining = 1,
   });
 
   factory ClientModel.fromMap(Map<String, dynamic> data) {
@@ -115,6 +115,7 @@ class ClientModel {
       goals: data['goals'] != null
           ? ClientGoalModel.fromMap(Map<String, dynamic>.from(data['goals']))
           : ClientGoalModel.defaultGoals(),
+      freeSessionsRemaining: data['freeSessionsRemaining'] ?? 0,
     );
   }
 
@@ -147,6 +148,7 @@ class ClientModel {
       goals: data['goals'] != null
           ? ClientGoalModel.fromMap(Map<String, dynamic>.from(data['goals']))
           : ClientGoalModel.defaultGoals(),
+      freeSessionsRemaining: data['freeSessionsRemaining'] ?? 0,
     );
   }
 
@@ -172,6 +174,7 @@ class ClientModel {
       'geoLocation': geoLocation,
       'photoUrl': photoUrl,
       'goals': goals.toMap(),
+      'freeSessionsRemaining': freeSessionsRemaining ?? 0,
     };
   }
 
@@ -194,7 +197,7 @@ class ClientModel {
     bool? hasJoinedSocials,
     String? email,
     DateTime? dob,
-    ClientGoalModel? goals,
+    ClientGoalModel? goals,int? freeSessionsRemaining,
 
   }) {
     return ClientModel(
@@ -218,6 +221,7 @@ class ClientModel {
       geoLocation: geoLocation ?? this.geoLocation,
       photoUrl: photoUrl ?? this.photoUrl,
       goals: goals ?? this.goals,
+      freeSessionsRemaining: freeSessionsRemaining ?? this.freeSessionsRemaining,
     );
   }
 }

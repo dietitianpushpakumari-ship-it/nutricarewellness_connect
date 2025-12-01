@@ -236,196 +236,10 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   }
 }
 
-class _AddOnsScreen extends ConsumerWidget {
-  final ClientModel client;
-
-  const _AddOnsScreen({required this.client});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ListView(
-      padding: const EdgeInsets.all(16.0),
-      children: [
-        // Lab Reports / Vitals History
-        _buildFeatureCard(
-          context,
-          'Lab Reports & History',
-          'View past vital records and lab reports.',
-          Icons.document_scanner,
-          Colors.red,
-          () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => LabReportListScreen(client: client),
-            ),
-          ),
-        ),
-
-        // Calorie Counter / Steps (Placeholder for external tracking)
-        _buildFeatureCard(
-          context,
-          'Steps & Calorie Count',
-          'Link your fitness tracker or log activities manually.',
-          Icons.directions_run,
-          Colors.orange,
-          () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Activity tracking setup required.')),
-          ),
-        ),
-
-        // Medication / Reminders
-        _buildFeatureCard(
-          context,
-          'Medication / Supplement Reminders',
-          'Set alerts for your prescribed medication schedule.',
-          Icons.alarm,
-          Colors.teal,
-          () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Medication reminder feature coming soon.'),
-            ),
-          ),
-        ),
-
-        // Breathing Exercises (Placeholder)
-        _buildFeatureCard(
-          context,
-          'Breathing Exercises',
-          'Quick 5-minute stress reduction sessions.',
-          Icons.self_improvement,
-          Colors.purple,
-          () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Breathing exercise module coming soon.'),
-            ),
-          ),
-        ),
-
-        // Scan & Find Age (Placeholder)
-        _buildFeatureCard(
-          context,
-          'Scan & Find Age (Add-on)',
-          'Use the camera to scan objects (e.g., food label or face).',
-          Icons.camera_alt,
-          Colors.pink,
-          () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Scan feature integration required.')),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeatureCard(
-    BuildContext context,
-    String title,
-    String subtitle,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: ListTile(
-        leading: Icon(icon, color: color, size: 30),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
-      ),
-    );
-  }
-}
 
 // =================================================================
 // --- TAB 3: CONTENT FEED (Notifications, Recipes, Offers) ---
 // =================================================================
-
-class _FeedScreen extends ConsumerWidget {
-  const _FeedScreen();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ListView(
-      padding: const EdgeInsets.all(16.0),
-      children: [
-        Text(
-          'Daily Content & Exclusive Offers',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const Divider(),
-
-        _buildContentTile(
-          context,
-          'Video: Daily Yoga Routine',
-          FontAwesomeIcons.youtube,
-          Colors.red,
-          url: 'https://youtube.com/yogavideo',
-        ),
-        _buildContentTile(
-          context,
-          'Recipe: Low Carb Breakfast',
-          Icons.local_dining,
-          Colors.green,
-          url: 'https://nutricare.com/recipe',
-        ),
-        _buildContentTile(
-          context,
-          'Tip: Hydration Secrets',
-          Icons.lightbulb,
-          Colors.amber,
-          url: 'https://nutricare.com/tip',
-        ),
-        _buildContentTile(
-          context,
-          'Ad: New Coaching Offer',
-          Icons.campaign,
-          Colors.blue,
-          url: 'https://nutricare.com/offer',
-        ),
-        _buildContentTile(
-          context,
-          'Client Story: Success',
-          Icons.star,
-          Colors.purple,
-          url: 'https://nutricare.com/story',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContentTile(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color, {
-    String? url,
-  }) {
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Icon(icon, color: color, size: 24),
-        title: Text(title),
-        trailing: const Icon(Icons.chevron_right, size: 16),
-        onTap: () {
-          if (url != null) _launchUrl(url, context);
-        },
-      ),
-    );
-  }
-
-  Future<void> _launchUrl(String url, BuildContext context) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not open $url')));
-    }
-  }
-}
 // ... (inside client_dashboard_main_screen.dart)
 
 // 🎯 REBUILT: Progress Report Card (with Vitals)
@@ -475,6 +289,43 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
               ),
             ),
           ),
+
+          vitalsHistoryAsync.when(
+              loading: () => const SizedBox.shrink(),
+              error: (e, s) => const SizedBox.shrink(),
+              data: (vitalsList) {
+                final Map<String, double> weightData = {};
+                final Map<String, double> fbsData = {};
+
+                // Filter & Sort
+                final startDate = DateTime.now().subtract(Duration(days: _selectedDays));
+                final filtered = vitalsList.where((v) => !v.date.isBefore(startDate)).toList()
+                  ..sort((a, b) => a.date.compareTo(b.date));
+
+                for (final v in filtered) {
+                  final dayLabel = DateFormat('d/M').format(v.date);
+                  if (v.weightKg > 0) weightData[dayLabel] = v.weightKg;
+                  if (v.labResults.containsKey('fbs')) {
+                    final val = double.tryParse(v.labResults['fbs']!);
+                    if (val != null) fbsData[dayLabel] = val;
+                  }
+                }
+
+                if (weightData.isEmpty && fbsData.isEmpty) return const SizedBox.shrink();
+
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(children: [
+                    const Divider(),
+                    if (weightData.isNotEmpty)
+                      _buildChartContainer(context, 'Weight (kg)', _buildLineChart(context, weightData, {}, )),
+                    if (fbsData.isNotEmpty)
+                      _buildChartContainer(context, 'Fasting Sugar (mg/dL)', _buildLineChart(context, fbsData, {},)),
+                  ]),
+                );
+              }
+          ),
+
 
           // --- 2. Daily Logs Graph (Steps, Cals, etc.) ---
           dailyLogHistoryAsync.when(

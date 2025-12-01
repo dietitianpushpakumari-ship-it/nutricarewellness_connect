@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:nutricare_connect/core/clinical_master_service.dart';
+import 'package:nutricare_connect/core/meeting_Service.dart';
 import 'package:nutricare_connect/core/utils/geeta_repository.dart';
 import 'package:nutricare_connect/core/utils/geeta_shloka_model.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_dashboard_main_screen.dart';
@@ -12,7 +13,6 @@ import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_
 import 'package:nutricare_connect/features/dietplan/dATA/repositories/diet_repositories.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/admin_profile_service.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/guideline_service.dart';
-import 'package:nutricare_connect/features/dietplan/dATA/services/meeting_service.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/package_service.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/vitals_service.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
