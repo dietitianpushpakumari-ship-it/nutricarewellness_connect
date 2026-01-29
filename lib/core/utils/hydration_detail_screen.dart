@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/core/wave_clipper.dart';
+import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
+import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/wave_clipper.dart'; // Ensure path is correct
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 
@@ -28,7 +29,7 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
   bool _isSaving = false;
   final double _goalLiters = 3.0;
 
-  // 🎯 1. Local State for smooth animation
+  // Local State for smooth animation
   late double _displayIntake;
 
   @override
@@ -53,9 +54,13 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
     setState(() => _isSaving = true);
 
     try {
-      // 🎯 2. Calculate & Update Local State Instantly
+      // 1. Optimistic Update (Instant UI Feedback)
       final newTotal = (_displayIntake + amountToAdd).clamp(0.0, 10.0);
       setState(() => _displayIntake = newTotal);
+
+      // 2. Get Correct Date (Back-date support)
+      // 🎯 FIX: Use the date currently selected in the Plan Screen
+      final targetDate = widget.notifier.state.selectedDate;
 
       final logToSave = widget.dailyLog ?? ClientLogModel(
         id: '',
@@ -63,20 +68,21 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
         dietPlanId: widget.activePlan.id,
         mealName: 'DAILY_WELLNESS_CHECK',
         actualFoodEaten: ['Daily Wellness Data'],
-        date: widget.notifier.state.selectedDate,
+        date: targetDate, // 🎯 KEY FIX
       );
 
       final updatedLog = logToSave.copyWith(hydrationLiters: newTotal);
 
-      // 🎯 3. Save silently (Don't await if you want super fast UI, but safer to await)
+      // 3. Save to Firestore
       await widget.notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
 
-      // 🎯 4. DO NOT POP. Keep sheet open.
+      // 4. Force Refresh Parent Data (so Plan Screen updates too)
+      await widget.notifier.loadInitialData(targetDate);
 
     } catch (e) {
       // Revert on error
       setState(() => _displayIntake = widget.currentIntake);
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error updating water: $e")));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -84,7 +90,6 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
 
   @override
   Widget build(BuildContext context) {
-    // Use local state for smooth animation
     final double progress = (_displayIntake / _goalLiters).clamp(0.0, 1.0);
     final int percent = (progress * 100).toInt();
 
@@ -98,25 +103,25 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         child: Column(
           children: [
-            // 1. Header Row with Close Button
+            // 1. Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const SizedBox(width: 40), // Spacer for balance
+                const SizedBox(width: 40),
                 Container(
                   width: 40, height: 4,
                   decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.grey),
-                  onPressed: () => Navigator.pop(context), // Manual Close
+                  onPressed: () => Navigator.pop(context),
                 )
               ],
             ),
             const SizedBox(height: 20),
 
-            // 2. Header Stats
-            Text("Current Hydration", style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+            // 2. Stats
+            Text(context.tr("current_hydration"), style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -135,14 +140,14 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
 
             const Spacer(),
 
-            // 3. THE BIG WATER TANK VISUAL
+            // 3. WATER TANK VISUAL
             SizedBox(
               height: 300,
               width: 180,
               child: Stack(
                 alignment: Alignment.bottomCenter,
                 children: [
-                  // A. Container Border (The Glass)
+                  // Border
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.blue.shade50.withOpacity(0.3),
@@ -153,7 +158,7 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
                       borderRadius: BorderRadius.circular(28),
                       child: Stack(
                         children: [
-                          // B. The Animated Wave
+                          // Wave Animation
                           AnimatedBuilder(
                             animation: _waveController,
                             builder: (context, child) {
@@ -171,8 +176,7 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
                               );
                             },
                           ),
-
-                          // C. Measurement Lines
+                          // Measurement Lines
                           Positioned(
                             right: 0, top: 0, bottom: 0, width: 20,
                             child: Column(
@@ -189,8 +193,7 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
                       ),
                     ),
                   ),
-
-                  // D. Percent Overlay
+                  // Percent Text
                   Positioned(
                     bottom: 130,
                     child: Text(
@@ -208,8 +211,8 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
 
             const Spacer(),
 
-            // 4. Quick Add Controls
-            const Text("Tap to Add Water", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            // 4. Controls
+            Text(context.tr("tap_to_add_water"), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -220,11 +223,10 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
               ],
             ),
 
-            // Reset
             const SizedBox(height: 20),
             TextButton(
-              onPressed: _isSaving ? null : () => _updateWater(-_displayIntake),
-              child: const Text("Reset to 0", style: TextStyle(color: Colors.red, fontSize: 12)),
+              onPressed: _isSaving ? null : () => _updateWater(-_displayIntake), // Reset
+              child: Text(context.tr("reset_to_zero"), style: const TextStyle(color: Colors.red, fontSize: 12)),
             ),
           ],
         ),
@@ -236,7 +238,7 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
     return Column(
       children: [
         ElevatedButton(
-          onPressed: () => _updateWater(amount), // 🎯 Instant tap, no loader blocking
+          onPressed: () => _updateWater(amount),
           style: ElevatedButton.styleFrom(
             shape: const CircleBorder(),
             padding: const EdgeInsets.all(20),

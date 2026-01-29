@@ -12,8 +12,6 @@ class BreathingDetailSheet extends ConsumerStatefulWidget {
   final DietPlanNotifier notifier;
   final ClientDietPlanModel activePlan;
   final ClientLogModel? dailyLog;
-
-  // 🎯 1. Accept the Configuration
   final BreathingConfig config;
 
   const BreathingDetailSheet({
@@ -21,7 +19,7 @@ class BreathingDetailSheet extends ConsumerStatefulWidget {
     required this.notifier,
     required this.activePlan,
     required this.dailyLog,
-    this.config = BreathingConfig.box, // Default preset
+    this.config = BreathingConfig.box,
   });
 
   @override
@@ -42,7 +40,7 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
   void initState() {
     super.initState();
 
-    // 🎯 2. Calculate Total Cycle Duration (e.g., 4+4+4+4 = 16s)
+    // 1. Calculate Total Cycle Duration
     final int cycleDuration = widget.config.inhale + widget.config.hold1 + widget.config.exhale + widget.config.hold2;
 
     _controller = AnimationController(
@@ -50,8 +48,7 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
       duration: Duration(seconds: cycleDuration),
     );
 
-    // 🎯 3. Build Dynamic Animation Weights
-    // We convert the seconds (4s) into a percentage of the total cycle (25%)
+    // 2. Build Dynamic Animation
     final double total = cycleDuration.toDouble();
     final double weightInhale = (widget.config.inhale / total) * 100;
     final double weightHold1 = (widget.config.hold1 / total) * 100;
@@ -60,47 +57,25 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
 
     List<TweenSequenceItem<double>> items = [];
 
-    // Phase 1: Inhale (Expand)
-    if (weightInhale > 0) {
-      items.add(TweenSequenceItem(tween: Tween(begin: 0.5, end: 1.0).chain(CurveTween(curve: Curves.easeOut)), weight: weightInhale));
-    }
-    // Phase 2: Hold (Stay Big)
-    if (weightHold1 > 0) {
-      items.add(TweenSequenceItem(tween: ConstantTween(1.0), weight: weightHold1));
-    }
-    // Phase 3: Exhale (Shrink)
-    if (weightExhale > 0) {
-      items.add(TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.5).chain(CurveTween(curve: Curves.easeIn)), weight: weightExhale));
-    }
-    // Phase 4: Hold (Stay Small)
-    if (weightHold2 > 0) {
-      items.add(TweenSequenceItem(tween: ConstantTween(0.5), weight: weightHold2));
-    }
+    if (weightInhale > 0) items.add(TweenSequenceItem(tween: Tween(begin: 0.5, end: 1.0).chain(CurveTween(curve: Curves.easeOut)), weight: weightInhale));
+    if (weightHold1 > 0) items.add(TweenSequenceItem(tween: ConstantTween(1.0), weight: weightHold1));
+    if (weightExhale > 0) items.add(TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.5).chain(CurveTween(curve: Curves.easeIn)), weight: weightExhale));
+    if (weightHold2 > 0) items.add(TweenSequenceItem(tween: ConstantTween(0.5), weight: weightHold2));
 
     _sizeAnimation = TweenSequence<double>(items).animate(_controller);
 
-    // 🎯 4. Dynamic Text Listener
+    // 3. Dynamic Text Listener
     _controller.addListener(() {
-      final val = _controller.value; // 0.0 to 1.0
-
-      // We need to map the 0.0-1.0 progress back to our specific time windows
-      double currentPos = 0.0;
-      String newPhase = "";
-
-      // Thresholds (e.g., 0.25, 0.50, 0.75)
+      final val = _controller.value;
       final tInhale = widget.config.inhale / total;
       final tHold1 = tInhale + (widget.config.hold1 / total);
       final tExhale = tHold1 + (widget.config.exhale / total);
 
-      if (val <= tInhale) {
-        newPhase = "Inhale...";
-      } else if (val <= tHold1) {
-        newPhase = "Hold...";
-      } else if (val <= tExhale) {
-        newPhase = "Exhale...";
-      } else {
-        newPhase = "Hold...";
-      }
+      String newPhase = "";
+      if (val <= tInhale) newPhase = "Inhale...";
+      else if (val <= tHold1) newPhase = "Hold...";
+      else if (val <= tExhale) newPhase = "Exhale...";
+      else newPhase = "Hold...";
 
       if (newPhase != _phaseText && _isRunning) {
         HapticFeedback.lightImpact();
@@ -143,29 +118,37 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
     final minutes = (_elapsedSeconds / 60).ceil();
     if (minutes == 0) return;
 
-    final logToSave = widget.dailyLog ?? ClientLogModel(
-      id: '',
-      clientId: widget.activePlan.clientId,
-      dietPlanId: widget.activePlan.id,
-      mealName: 'DAILY_WELLNESS_CHECK',
-      actualFoodEaten: ['Daily Wellness Data'],
-      date: widget.notifier.state.selectedDate,
-    );
+    try {
+      final logToSave = widget.dailyLog ?? ClientLogModel(
+        id: '',
+        clientId: widget.activePlan.clientId,
+        dietPlanId: widget.activePlan.id,
+        mealName: 'DAILY_WELLNESS_CHECK',
+        actualFoodEaten: ['Daily Wellness Data'],
+        date: widget.notifier.state.selectedDate,
+      );
 
-    final updatedLog = logToSave.copyWith(
-      breathingMinutes: (logToSave.breathingMinutes ?? 0) + minutes,
-    );
+      final updatedLog = logToSave.copyWith(
+        breathingMinutes: (logToSave.breathingMinutes ?? 0) + minutes,
+      );
 
-    await widget.notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
+      // 1. Save to Firestore
+      await widget.notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Session Saved!"), backgroundColor: Colors.teal));
+      // 🎯 2. FIX: FORCE REFRESH OF PARENT DATA
+      // This ensures the Home Screen updates its "Mind" stats immediately
+      await widget.notifier.loadInitialData(widget.notifier.state.selectedDate);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Session Saved!"), backgroundColor: Colors.teal));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error saving: $e")));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 🎯 Use Config Color
     final Color themeColor = widget.config.color;
 
     return SafeArea(
@@ -177,7 +160,6 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
         ),
         child: Stack(
           children: [
-            // Background Gradient
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -190,23 +172,22 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                 ),
               ),
             ),
-      
+
             Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  // Handle
                   Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
                   const SizedBox(height: 40),
-      
-                  // 🎯 Dynamic Title & Description
+
+                  // Title (assuming BreathingConfig has 'name' or 'title' property)
                   Text(widget.config.title, style: TextStyle(color: themeColor.withOpacity(0.9), fontSize: 24, fontWeight: FontWeight.bold)),
                   Text(widget.config.description, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
                   const SizedBox(height: 20),
                   Text(_timerText, style: TextStyle(color: themeColor, fontSize: 18, fontFamily: 'monospace')),
-      
+
                   const Spacer(),
-      
+
                   // Animation
                   SizedBox(
                     height: 300,
@@ -217,25 +198,16 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                         return Stack(
                           alignment: Alignment.center,
                           children: [
-                            // Outer Glow
                             Container(
                               width: 300 * _sizeAnimation.value,
                               height: 300 * _sizeAnimation.value,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: themeColor.withOpacity(0.1),
-                              ),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: themeColor.withOpacity(0.1)),
                             ),
-                            // Middle Ring
                             Container(
                               width: 260 * _sizeAnimation.value,
                               height: 260 * _sizeAnimation.value,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: themeColor.withOpacity(0.2),
-                              ),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: themeColor.withOpacity(0.2)),
                             ),
-                            // Core Circle
                             Container(
                               width: 220 * _sizeAnimation.value,
                               height: 220 * _sizeAnimation.value,
@@ -246,9 +218,7 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                                   end: Alignment.bottomRight,
                                   colors: [themeColor.withOpacity(0.6), themeColor],
                                 ),
-                                boxShadow: [
-                                  BoxShadow(color: themeColor.withOpacity(0.4), blurRadius: 20, spreadRadius: 5)
-                                ],
+                                boxShadow: [BoxShadow(color: themeColor.withOpacity(0.4), blurRadius: 20, spreadRadius: 5)],
                               ),
                               child: Center(
                                 child: Text(
@@ -262,10 +232,9 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                       },
                     ),
                   ),
-      
+
                   const Spacer(),
-      
-                  // Control Button
+
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -278,10 +247,7 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                         side: _isRunning ? const BorderSide(color: Colors.red) : null,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
-                      child: Text(
-                          _isRunning ? "Stop Session" : "Start Breathing",
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-                      ),
+                      child: Text(_isRunning ? "Stop Session" : "Start Breathing", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     ),
                   ),
                   const SizedBox(height: 20),

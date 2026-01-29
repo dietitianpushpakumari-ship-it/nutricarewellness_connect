@@ -44,14 +44,4 @@ class ClinicalInterpreter {
     return HealthStatus.high; // Diabetic
   }
 
-  // --- 5. Trend Analysis ---
-  static String analyzeTrend(double current, double previous, String metric, {bool lowerIsBetter = true}) {
-    double diff = current - previous;
-    if (diff.abs() < 0.5) return "Stable";
-
-    bool isImprovement = lowerIsBetter ? (diff < 0) : (diff > 0);
-    String arrow = diff > 0 ? "⬆" : "⬇";
-
-    return "$arrow ${diff.abs().toStringAsFixed(1)} ($isImprovement)";
-  }
 }

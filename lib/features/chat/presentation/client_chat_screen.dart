@@ -10,7 +10,7 @@ import 'package:nutricare_connect/core/utils/image_compressor.dart';
 import 'package:nutricare_connect/core/utils/pdf_compressor.dart';
 import 'package:nutricare_connect/features/chat/data/services/chat_service.dart';
 import 'package:nutricare_connect/features/chat/presentation/chat_audio_player.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/auth_provider.dart';
+import 'package:nutricare_connect/features/auth/auth_provider.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/global_user_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/chat_message_model.dart';
 import 'package:path_provider/path_provider.dart';

@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/core/utils/analytics_detail_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:collection/collection.dart';
@@ -40,12 +41,12 @@ class CompactTrendCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Weekly\nPulse", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, height: 1.2)),
+                   Text("${context.tr("dashboard_weekly_pulse")}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, height: 1.2)),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(4)),
-                    child: const Text("View Report", style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                    child:  Text("${context.tr("dashboard_view_report")}", style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),

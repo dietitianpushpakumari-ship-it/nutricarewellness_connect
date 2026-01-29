@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/core/utils/tts_service.dart';
+import 'package:nutricare_connect/core/services/tts_service.dart';
+import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/core/utils/virtual_trainer_painter.dart';
 import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
 import 'package:nutricare_connect/core/utils/workout_config.dart';
@@ -10,7 +11,7 @@ import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
 import 'package:nutricare_connect/main.dart';
-import 'package:nutricare_connect/services/client_service.dart';
+import 'package:nutricare_connect/features/auth/client_service.dart';
 import 'package:wakelock_plus/wakelock_plus.dart'; // For ttsService
 import 'package:collection/collection.dart';
 

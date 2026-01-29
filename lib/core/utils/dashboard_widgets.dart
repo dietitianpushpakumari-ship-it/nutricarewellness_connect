@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/wave_clipper.dart';
 
 // 🎨 PREMIUM DESIGN CONSTANTS
@@ -93,9 +94,9 @@ class MiniHydrationCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text("Hydrate", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF00695C))),
+                           Text("${context.tr("dashboard_hydrate")}", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF00695C))),
                           const SizedBox(height: 2),
-                          Text("Goal: ${goalLiters}L", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                          Text("${context.tr("dashboard_goal")}: ${goalLiters}L", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                         ],
                       )
                           : Column(
@@ -198,7 +199,7 @@ class MiniStepCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 FittedBox(child: Text("$steps", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.black87))),
-                const Text("Steps", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w500)),
+                 Text("${context.tr("dashboard_steps")}", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w500)),
               ],
             ),
           ],
@@ -235,11 +236,11 @@ class MiniSleepCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Row(
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.bedtime_rounded, color: Color(0xFF9FA8DA), size: 18),
-                Text("Sleep", style: TextStyle(color: Color(0xFF9FA8DA), fontSize: 10, fontWeight: FontWeight.w600)),
+                const Icon(Icons.bedtime_rounded, color: Color(0xFF9FA8DA), size: 18),
+                Text("${context.tr("dashboard_sleep")}", style: const TextStyle(color: Color(0xFF9FA8DA), fontSize: 10, fontWeight: FontWeight.w600)),
               ],
             ),
 
@@ -266,7 +267,7 @@ class MiniSleepCard extends StatelessWidget {
                 ),
               )
             else
-              const Expanded(child: Center(child: Text("Log\nRest", textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)))),
+               Expanded(child: Center(child: Text("${context.tr("dashboard_log_rest")}", textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w600)))),
           ],
         ),
       ),
@@ -315,7 +316,7 @@ class MiniBreathingCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   FittedBox(child: Text("$minutesLogged", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.teal.shade800, height: 1.0))),
-                  Text("min mindful", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.teal.shade600)),
+                  Text("${context.tr("dashboard_min_mindful")}", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.teal.shade600)),
                 ],
               )
             else
@@ -323,9 +324,9 @@ class MiniBreathingCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text("Take a\nBreath", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.teal.shade800, height: 1.1)),
+                  Text("${context.tr("dashboard_take_a_breath")}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.teal.shade800, height: 1.1)),
                   const SizedBox(height: 4),
-                  Text("Start Now", style: TextStyle(fontSize: 10, color: Colors.teal.shade600, fontWeight: FontWeight.bold)),
+                  Text("${context.tr("dashboard_start_now")}", style: TextStyle(fontSize: 10, color: Colors.teal.shade600, fontWeight: FontWeight.bold)),
                 ],
               ),
           ],

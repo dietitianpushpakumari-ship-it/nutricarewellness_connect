@@ -1,14 +1,13 @@
 {
   "project_info": {
-    "project_number": "119840373203",
-    "firebase_url": "https://nwgoaltracker-default-rtdb.asia-southeast1.firebasedatabase.app",
-    "project_id": "nwgoaltracker",
-    "storage_bucket": "nwgoaltracker.firebasestorage.app"
+    "project_number": "867334529574",
+    "project_id": "nutricarewellness-live",
+    "storage_bucket": "nutricarewellness-live.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:119840373203:android:15fd2d7703a0c862985726",
+        "mobilesdk_app_id": "1:867334529574:android:5d3451932f2b1d44913ce7",
         "android_client_info": {
           "package_name": "com.example.nutricare_client_management"
         }
@@ -16,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCELEvqFdN6v-z4lD2UyY7dGJDa3X49tZo"
+          "current_key": "AIzaSyAO2H_8_J8Ba1hmJ2SZIMvFo1oxeql1RRo"
         }
       ],
       "services": {
@@ -27,26 +26,7 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:119840373203:android:1955459d549f7c00985726",
-        "android_client_info": {
-          "package_name": "com.example.nutricare_goal_tracker_admin"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyCELEvqFdN6v-z4lD2UyY7dGJDa3X49tZo"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:119840373203:android:2428ceee929e3609985726",
+        "mobilesdk_app_id": "1:867334529574:android:9b0a800b555af4fa913ce7",
         "android_client_info": {
           "package_name": "com.nutricarewellness.nutricare_connect"
         }
@@ -54,7 +34,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCELEvqFdN6v-z4lD2UyY7dGJDa3X49tZo"
+          "current_key": "AIzaSyAO2H_8_J8Ba1hmJ2SZIMvFo1oxeql1RRo"
         }
       ],
       "services": {

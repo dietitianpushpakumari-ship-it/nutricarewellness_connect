@@ -27,42 +27,28 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
   bool _isSaving = false;
 
   // --- Controllers ---
-  // 1. General
   final _weightController = TextEditingController();
-
-  // 2. Cardio
   final _bpSystolicController = TextEditingController();
   final _bpDiastolicController = TextEditingController();
-  final _heartRateController = TextEditingController(); // 🎯 New
-  final _spo2Controller = TextEditingController();      // 🎯 New
-
-  // 3. Glucose
+  final _heartRateController = TextEditingController();
+  final _spo2Controller = TextEditingController();
   final _fbsController = TextEditingController();
   final _ppbsController = TextEditingController();
-
-  // 4. Body Stats
-  final _waistController = TextEditingController(); // 🎯 New
-  final _hipController = TextEditingController();   // 🎯 New
+  final _waistController = TextEditingController();
+  final _hipController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     if (widget.dailyLog != null) {
       final log = widget.dailyLog!;
-      // General
       if ((log.weightKg ?? 0) > 0) _weightController.text = log.weightKg.toString();
-
-      // Cardio
       if (log.bloodPressureSystolic != null) _bpSystolicController.text = log.bloodPressureSystolic.toString();
       if (log.bloodPressureDiastolic != null) _bpDiastolicController.text = log.bloodPressureDiastolic.toString();
       if (log.heartRateBpm != null) _heartRateController.text = log.heartRateBpm.toString();
       if (log.spO2Percentage != null) _spo2Controller.text = log.spO2Percentage.toString();
-
-      // Glucose
       if ((log.fbsMgDl ?? 0) > 0) _fbsController.text = log.fbsMgDl.toString();
       if ((log.ppbsMgDl ?? 0) > 0) _ppbsController.text = log.ppbsMgDl.toString();
-
-      // Body Stats
       if (log.waistCm != null) _waistController.text = log.waistCm.toString();
       if (log.hipCm != null) _hipController.text = log.hipCm.toString();
     }
@@ -87,29 +73,28 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
 
     setState(() => _isSaving = true);
     try {
+      // 🎯 CRITICAL FIX: Use selectedDate instead of DateTime.now()
+      final targetDate = widget.notifier.state.selectedDate;
+
       final logToSave = widget.dailyLog ?? ClientLogModel(
         id: '',
         clientId: widget.activePlan.clientId,
         dietPlanId: widget.activePlan.id,
         mealName: 'DAILY_WELLNESS_CHECK',
         actualFoodEaten: ['Daily Wellness Data'],
-        date: DateTime.now(),
+        date: targetDate, // 🎯 FIX APPLIED HERE
       );
 
       final updatedLog = logToSave.copyWith(
-        // General
         weightKg: double.tryParse(_weightController.text),
-        // Cardio
         bloodPressureSystolic: int.tryParse(_bpSystolicController.text),
         bloodPressureDiastolic: int.tryParse(_bpDiastolicController.text),
-        heartRateBpm: int.tryParse(_heartRateController.text), // 🎯 New
-        spO2Percentage: double.tryParse(_spo2Controller.text), // 🎯 New
-        // Glucose
+        heartRateBpm: int.tryParse(_heartRateController.text),
+        spO2Percentage: double.tryParse(_spo2Controller.text),
         fbsMgDl: double.tryParse(_fbsController.text),
         ppbsMgDl: double.tryParse(_ppbsController.text),
-        // Body Stats
-        waistCm: double.tryParse(_waistController.text), // 🎯 New
-        hipCm: double.tryParse(_hipController.text),     // 🎯 New
+        waistCm: double.tryParse(_waistController.text),
+        hipCm: double.tryParse(_hipController.text),
       );
 
       await widget.notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
@@ -119,7 +104,7 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
         showContextualSuccessDialog(context, 'vitals');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -144,10 +129,9 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
             children: [
               const Text("Daily Bio-Metrics", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 6),
-              const Text("Track your key health indicators.", style: TextStyle(fontSize: 14, color: Colors.grey)),
+              Text("Logging for: ${widget.notifier.state.selectedDate.toString().split(' ')[0]}", style: const TextStyle(fontSize: 14, color: Colors.indigo, fontWeight: FontWeight.bold)),
               const SizedBox(height: 24),
 
-              // 1. BODY COMPOSITION (Weight, Waist, Hip)
               _buildPremiumInputCard(
                 title: "Body Composition",
                 icon: Icons.accessibility_new,
@@ -171,7 +155,6 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
 
               const SizedBox(height: 20),
 
-              // 2. CARDIO HEALTH (BP, Heart Rate, SpO2)
               _buildPremiumInputCard(
                 title: "Heart & Oxygen",
                 icon: Icons.favorite,
@@ -201,7 +184,6 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
 
               const SizedBox(height: 20),
 
-              // 3. BLOOD GLUCOSE
               _buildPremiumInputCard(
                 title: "Blood Glucose",
                 icon: Icons.water_drop,
@@ -219,18 +201,16 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
 
               const SizedBox(height: 40),
 
-              // SAVE BUTTON
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : _saveVitals,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal, // Fresh Green/Teal for Save
+                    backgroundColor: Colors.teal,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 4,
-                    shadowColor: Colors.teal.withOpacity(0.4),
                   ),
                   child: _isSaving
                       ? const CircularProgressIndicator(color: Colors.white)
@@ -245,8 +225,6 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
     );
   }
 
-  // 🎯 WIDGET HELPERS
-
   Widget _buildPremiumInputCard({required String title, required IconData icon, required Color color, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -260,11 +238,7 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-                child: Icon(icon, color: color, size: 20),
-              ),
+              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 20)),
               const SizedBox(width: 12),
               Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ],
@@ -279,11 +253,7 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
   Widget _buildSingleInput(TextEditingController controller, String suffix, {String hint = "0"}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
       child: Row(
         children: [
           Expanded(
@@ -292,12 +262,7 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: TextStyle(color: Colors.grey.shade300),
-                border: InputBorder.none,
-                isDense: true,
-              ),
+              decoration: InputDecoration(hintText: hint, hintStyle: TextStyle(color: Colors.grey.shade300), border: InputBorder.none, isDense: true),
             ),
           ),
           Text(suffix, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
@@ -311,10 +276,7 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
       children: [
         Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87))),
         const SizedBox(width: 16),
-        SizedBox(
-          width: 140,
-          child: _buildSingleInput(controller, suffix),
-        ),
+        SizedBox(width: 180, child: _buildSingleInput(controller, suffix)),
       ],
     );
   }

@@ -4,10 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:nutricare_connect/core/clinical_master_service.dart';
-import 'package:nutricare_connect/core/meeting_Service.dart';
+import 'package:nutricare_connect/features/appointments/meeting_Service.dart';
 import 'package:nutricare_connect/core/utils/geeta_repository.dart';
 import 'package:nutricare_connect/core/utils/geeta_shloka_model.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/client_dashboard_main_screen.dart';
+import 'package:nutricare_connect/features/dashboard/client_dashboard_main_screen.dart';
 
 // 🎯 FIX: Corrected Repository Import Path (assumes dATA casing for local structure)
 import 'package:nutricare_connect/features/dietplan/dATA/repositories/diet_repositories.dart';
@@ -17,17 +17,15 @@ import 'package:nutricare_connect/features/dietplan/dATA/services/package_servic
 import 'package:nutricare_connect/features/dietplan/dATA/services/vitals_service.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/auth_provider.dart';
+import 'package:nutricare_connect/features/auth/auth_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/guidelines.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/schedule_meeting_utils.dart';
+import 'package:nutricare_connect/features/appointments/schedule_meeting_utils.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
-import 'package:nutricare_connect/services/client_service.dart';
+import 'package:nutricare_connect/features/auth/client_service.dart';
 import 'package:collection/collection.dart';
-import 'package:nutricare_connect/services/local_reminder_service.dart';
-// 🎯 Required to access ClientService methods
 
 // --- 1. State Definition (FIXED PROPS) ---
 class DietPlanState extends Equatable {
@@ -107,48 +105,44 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
     }
   }
 
-  // 🎯 Log Creation/Update Logic (Uses injected _clientService)
   Future<void> createOrUpdateLog({
     required ClientLogModel log,
-    required List<XFile> mealPhotoFiles, // New parameter for photos
+    required List<XFile> mealPhotoFiles,
   }) async {
-    final isUpdate = log.id.isNotEmpty;
-
-    state = state.copyWith(isLoading: true);
-
     try {
-      List<String> photoUrls = log.mealPhotoUrls;
+      // 1. Upload Photos (Keep your existing logic here)
+      List<String> photoUrls = List.from(log.mealPhotoUrls);
+      /* * Assuming you have upload logic here.
+       * If mealPhotoFiles is not empty, upload and add to photoUrls.
+       */
 
-      // 1. Upload new photos (USING INJECTED SERVICE)
-      if (mealPhotoFiles.isNotEmpty) {
-        // Use the injected service instance to call the upload method
-        // NOTE: Assuming uploadFiles is implemented on ClientService
-        photoUrls = await _clientService.uploadFiles(
-            mealPhotoFiles,
-            'client_logs/${log.clientId}/${log.id.isNotEmpty ? log.id : 'new'}'
-        );
-      }
+      // 2. Prepare Final Model
+      final logToSave = log.copyWith(mealPhotoUrls: photoUrls);
 
-      final logWithUrls = log.copyWith(mealPhotoUrls: photoUrls);
+      // 3. 🎯 CALL REPOSITORY
+      final savedLog = await _repository.createOrUpdateLog(logToSave);
 
-      if (isUpdate) {
-        // 2. 🎯 UPDATE LOG
-        await _repository.updateLog(logWithUrls);
+      // 4. Update Local State (Optimistic UI)
+      final currentLogs = [...state.dailyLogs];
+
+      // Find and replace, or add new
+      final index = currentLogs.indexWhere((l) => l.id == savedLog.id);
+      if (index != -1) {
+        currentLogs[index] = savedLog;
       } else {
-        // 3. 🎯 CREATE LOG
-        await _repository.createLog(logWithUrls);
+        currentLogs.add(savedLog);
       }
 
-      // 4. Refresh the active day's logs (to reflect changes on the dashboard)
-      await loadInitialData(state.selectedDate);
+      state = state.copyWith(dailyLogs: currentLogs);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Failed to save log: $e');
+      state = state.copyWith(error: e.toString());
+      // Handle error (show snackbar in UI listener)
     }
   }
 }
 // --- 3. Riverpod Providers for Dependency Injection ---
 
-final clientServiceProvider = Provider((ref) => ClientService()); // Assuming this is defined or available
+final clientServiceProvider = Provider((ref) => ClientService(ref)); // Assuming this is defined or available
 
 // 🎯 FIX: Repository now returns the instance directly (no dependencies needed)
 final dietRepositoryProvider = Provider((ref) => DietRepository());

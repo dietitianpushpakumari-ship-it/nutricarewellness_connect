@@ -1,10 +1,11 @@
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
-import 'package:nutricare_connect/services/client_service.dart';
+import 'package:nutricare_connect/features/auth/client_service.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
 
 class DietPdfService {

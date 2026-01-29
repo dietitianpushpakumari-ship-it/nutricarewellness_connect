@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/core/utils/daily_log_logging_screen.dart';
 import 'package:nutricare_connect/core/utils/master_data_provider.dart';
 import 'package:nutricare_connect/core/utils/wellness_tool_model.dart';
@@ -18,8 +19,7 @@ import 'package:collection/collection.dart';
 import 'package:nutricare_connect/core/utils/breathing_detail_screen.dart';
 import 'package:nutricare_connect/core/utils/mindfullness_config.dart';
 import 'package:nutricare_connect/core/utils/sleep_details_screen.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/meal_log_entry_dialog.dart';
-import 'package:nutricare_connect/core/utils/meal_detail_sheet.dart';
+import 'package:nutricare_connect/features/diet_plan/meal_detail_sheet.dart';
 import 'package:nutricare_connect/core/utils/hydration_detail_screen.dart';
 import 'package:nutricare_connect/core/utils/wellness_tool_registry.dart';
 
@@ -94,7 +94,7 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
       setState(() {
         // Mock for now to ensure UI builds
         if (_contentNudges.isEmpty) {
-          _contentNudges.add(_NudgeCardData(title: "Daily Tip", subtitle: "Stay hydrated!", icon: Icons.water_drop, color: Colors.blue, onTap: (){}, btnLabel: "Read"));
+          _contentNudges.add(_NudgeCardData(title: "${context.tr("daily_tips")}", subtitle: "${context.tr("stay_hydrated")}!", icon: Icons.water_drop, color: Colors.blue, onTap: (){}, btnLabel: "Read"));
         }
         _isLoadingContent = false;
       });
@@ -153,15 +153,15 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
 
       if (dueMed != null) {
         actionNudges.add(_NudgeCardData(
-          title: "Medication Reminder",
-          subtitle: "Time to take ${dueMed.medicineName} (${dueMed.timing})",
+          title: context.tr("medication_reminder"),
+          subtitle: "${context.tr("time_to_take")} ${dueMed.medicineName} (${dueMed.timing})",
           icon: Icons.medication,
           color: Colors.pink,
-          btnLabel: "Taken",
+          btnLabel:context.tr("taken"),
           isUrgent: true, // Wiggle it!
           onTap: () {
             // Logic to mark as taken (e.g. local snackbar or log)
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Marked as Taken!"), backgroundColor: Colors.green));
+            ScaffoldMessenger.of(context).showSnackBar( SnackBar(content: Text("${context.tr("marked_as_taken")}!"), backgroundColor: Colors.green));
           },
         ));
       }
@@ -189,11 +189,11 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
       if (overdueMeals.isNotEmpty) {
         final first = overdueMeals.first;
         actionNudges.add(_NudgeCardData(
-          title: "Meal Time!",
-          subtitle: "Have you had your ${first.mealName}?",
+          title: "${context.tr("meal_time")}!",
+          subtitle: "${context.tr("have_you_had_your")} ${first.mealName}?",
           icon: Icons.restaurant,
           color: Colors.red,
-          btnLabel: "Log",
+          btnLabel: "${context.tr("log")}",
           isUrgent: true,
           onTap: () => _launchMealLogger(context, first, plan),
         ));
@@ -204,11 +204,11 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
     if ((dailyLog?.hydrationLiters ?? 0) < (plan.dailyWaterGoal * 0.8) && DateTime.now().hour > 18) { // Only nudge in evening if behind
       final double remaining = plan.dailyWaterGoal - (dailyLog?.hydrationLiters ?? 0);
       actionNudges.add(_NudgeCardData(
-        title: "Hydration Check",
-        subtitle: "${remaining.toStringAsFixed(1)}L left. Drink up!",
+        title: "${context.tr("hydration_check")}",
+        subtitle: "${remaining.toStringAsFixed(1)}L ${context.tr("left")}. ${context.tr("hydration_check")}!",
         icon: Icons.water_drop,
         color: Colors.blue,
-        btnLabel: "Add",
+        btnLabel: "${context.tr("add")}",
         onTap: () => _launchHydrationSheet(context, state, dailyLog, dailyLog?.hydrationLiters ?? 0),
       ));
     }
@@ -230,13 +230,13 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
                 children: [
                   Icon(Icons.tips_and_updates, size: 18, color: Colors.amber.shade800),
                   const SizedBox(width: 6),
-                  const Text("DAILY FOCUS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.grey, letterSpacing: 1.2)),
+                  Text("${context.tr("daily_focus")}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.grey, letterSpacing: 1.2)),
                 ],
               ),
               TextButton.icon(
                 onPressed: () => _openDailyGoals(context),
                 icon: const Icon(Icons.checklist_rtl, size: 16, color: Colors.indigo),
-                label: const Text("Goals", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.indigo)),
+                label: Text("${context.tr("goals")}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.indigo)),
                 style: TextButton.styleFrom(padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
               ),
             ],

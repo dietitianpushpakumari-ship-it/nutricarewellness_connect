@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/core/utils/smart_dialogs.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
@@ -23,6 +24,7 @@ class SleepDetailSheet extends ConsumerStatefulWidget {
 }
 
 class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
+  // Default times if nothing saved
   TimeOfDay _sleepTime = const TimeOfDay(hour: 22, minute: 30);
   TimeOfDay _wakeTime = const TimeOfDay(hour: 6, minute: 30);
 
@@ -32,25 +34,32 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
   int _energyRating = 3;
   int _moodRating = 3;
 
-  // 🎯 NEW: Journal Controller
   final TextEditingController _notesController = TextEditingController();
-
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    _initializeData();
+  }
+
+  void _initializeData() {
     if (widget.dailyLog != null) {
       final log = widget.dailyLog!;
-      if (log.sleepTime != null) _sleepTime = TimeOfDay.fromDateTime(log.sleepTime!);
-      if (log.wakeTime != null) _wakeTime = TimeOfDay.fromDateTime(log.wakeTime!);
 
+      // 🎯 FIX: Convert to Local Time to ensure correct TimeOfDay
+      if (log.sleepTime != null) {
+        _sleepTime = TimeOfDay.fromDateTime(log.sleepTime!.toLocal());
+      }
+      if (log.wakeTime != null) {
+        _wakeTime = TimeOfDay.fromDateTime(log.wakeTime!.toLocal());
+      }
+
+      // Load other metrics if they exist, otherwise keep defaults
       _sleepQuality = log.sleepQualityRating ?? 3;
       _interruptions = log.sleepInterruptions ?? 0;
       _energyRating = log.energyLevelRating ?? 3;
       _moodRating = log.moodLevelRating ?? 3;
-
-      // 🎯 Load existing notes
       _notesController.text = log.notesAndFeelings ?? '';
     }
   }
@@ -63,10 +72,13 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
 
   // --- Logic ---
   Duration _calculateDuration() {
-    final now = DateTime.now();
-    DateTime sleepDt = DateTime(now.year, now.month, now.day, _sleepTime.hour, _sleepTime.minute);
-    DateTime wakeDt = DateTime(now.year, now.month, now.day, _wakeTime.hour, _wakeTime.minute);
+    // 🎯 FIX: Use the selected date, not 'now'
+    final date = widget.notifier.state.selectedDate;
 
+    DateTime sleepDt = DateTime(date.year, date.month, date.day, _sleepTime.hour, _sleepTime.minute);
+    DateTime wakeDt = DateTime(date.year, date.month, date.day, _wakeTime.hour, _wakeTime.minute);
+
+    // If wake time is before sleep time, assume wake is next day
     if (wakeDt.isBefore(sleepDt)) {
       wakeDt = wakeDt.add(const Duration(days: 1));
     }
@@ -80,17 +92,24 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
       final duration = _calculateDuration();
       final double totalHours = duration.inMinutes / 60.0;
 
+      // Simple Score Logic
       int baseScore = (totalHours >= 7 ? 50 : 30) - (_interruptions * 5);
       int qualityScore = _sleepQuality * 4;
       int wellnessScore = (_energyRating * 3) + (_moodRating * 3);
-
       int totalScore = (baseScore + qualityScore + wellnessScore).clamp(0, 100);
 
       final date = widget.notifier.state.selectedDate;
+
+      // Construct DateTimes for saving
       DateTime sleepDt = DateTime(date.year, date.month, date.day, _sleepTime.hour, _sleepTime.minute);
       DateTime wakeDt = DateTime(date.year, date.month, date.day, _wakeTime.hour, _wakeTime.minute);
-      if (wakeDt.isBefore(sleepDt)) wakeDt = wakeDt.add(const Duration(days: 1));
 
+      // Adjust date if sleep crossed midnight
+      if (wakeDt.isBefore(sleepDt)) {
+        wakeDt = wakeDt.add(const Duration(days: 1));
+      }
+
+      // Create/Update Log
       final logToSave = widget.dailyLog ?? ClientLogModel(
         id: '',
         clientId: widget.activePlan.clientId,
@@ -109,18 +128,23 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
         sleepScore: totalScore,
         energyLevelRating: _energyRating,
         moodLevelRating: _moodRating,
-        // 🎯 Save Notes
         notesAndFeelings: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
       );
 
+      // 1. Save to Firestore
       await widget.notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
+
+      // 🎯 2. FIX: Force Refresh of the Diet Plan Provider
+      // This ensures the HomeScreen widgets (like the Sleep Card) update instantly.
+      // We assume 'widget.activePlan.clientId' is the client ID.
+      await widget.notifier.loadInitialData(date);
 
       if (mounted) {
         Navigator.pop(context);
         showContextualSuccessDialog(context, 'sleep');
       }
     } catch (e) {
-      // Handle error
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -145,7 +169,6 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
 
-    // Theme Colors
     const bgDark = Color(0xFF1A2138);
     const cardDark = Color(0xFF2E3A59);
     const accentColor = Color(0xFF8DAEF2);
@@ -168,7 +191,7 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
                 child: Column(
                   children: [
                     // 1. Header Summary
-                    const Text("Sleep Duration", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    Text(context.tr("lbl_sleep_duration"), style: const TextStyle(color: Colors.white70, fontSize: 14)),
                     const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -187,9 +210,9 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
                     // 2. Time Pickers
                     Row(
                       children: [
-                        Expanded(child: _buildTimeCard("Bedtime", _sleepTime, Icons.bedtime, () => _pickTime(true), cardDark, accentColor)),
+                        Expanded(child: _buildTimeCard(context.tr("lbl_bedtime"), _sleepTime, Icons.bedtime, () => _pickTime(true), cardDark, accentColor)),
                         const SizedBox(width: 16),
-                        Expanded(child: _buildTimeCard("Wake Up", _wakeTime, Icons.wb_sunny, () => _pickTime(false), cardDark, Colors.orange.shade300)),
+                        Expanded(child: _buildTimeCard(context.tr("lbl_wake_up"), _wakeTime, Icons.wb_sunny, () => _pickTime(false), cardDark, Colors.orange.shade300)),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -197,29 +220,22 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
                     // 3. Quality & Interruptions
                     Container(
                       padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: cardDark,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
+                      decoration: BoxDecoration(color: cardDark, borderRadius: BorderRadius.circular(20)),
                       child: Column(
                         children: [
-                          // Sleep Quality
                           _buildRatingRow(
-                              label: "Sleep Quality",
+                              label: context.tr("lbl_sleep_quality"),
                               icon: Icons.star,
                               color: Colors.amber,
                               value: _sleepQuality,
                               onChanged: (v) => setState(() => _sleepQuality = v),
                               isDark: true
                           ),
-
                           const Divider(color: Colors.white10, height: 30),
-
-                          // Interruptions
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text("Interruptions", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                              Text(context.tr("lbl_interruption"), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                               Container(
                                 decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(30)),
                                 child: Row(
@@ -235,46 +251,28 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 24),
 
-                    // 4. ENERGY, MOOD & JOURNAL (Light Theme Card)
+                    // 4. Energy & Mood (Light Card)
                     Container(
                       padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text("Energy & Mood", style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
+                          Text(context.tr("lbl_energy_and_mood"), style: const TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
                           const Divider(),
-
-                          _buildRatingRow(
-                              label: "Energy", icon: Icons.bolt, color: Colors.orange,
-                              value: _energyRating, onChanged: (v) => setState(() => _energyRating = v), isDark: false
-                          ),
-
-                          _buildRatingRow(
-                              label: "Mood", icon: Icons.sentiment_very_satisfied, color: Colors.green,
-                              value: _moodRating, onChanged: (v) => setState(() => _moodRating = v), isDark: false
-                          ),
-
+                          _buildRatingRow(label: "  ${context.tr("lbl_energy")}", icon: Icons.bolt, color: Colors.orange, value: _energyRating, onChanged: (v) => setState(() => _energyRating = v), isDark: false),
+                          _buildRatingRow(label: "  ${context.tr("lbl_mood")}", icon: Icons.sentiment_very_satisfied, color: Colors.green, value: _moodRating, onChanged: (v) => setState(() => _moodRating = v), isDark: false),
                           const SizedBox(height: 20),
-
-                          // 🎯 JOURNAL FIELD
-                          const Text("Journal & Reflections", style: TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.w600)),
+                          Text(context.tr("lbl_journal"), style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
                           TextField(
                             controller: _notesController,
                             maxLines: 3,
-                            style: const TextStyle(fontSize: 14, color: Colors.black87),
                             decoration: InputDecoration(
-                              hintText: "Any stress, cravings, or wins today?",
-                              hintStyle: TextStyle(color: Colors.grey.shade400),
-                              filled: true,
-                              fillColor: Colors.grey.shade50,
+                              hintText: context.tr("hint_any_stress"),
+                              filled: true, fillColor: Colors.grey.shade50,
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                               contentPadding: const EdgeInsets.all(12),
                             ),
@@ -295,15 +293,8 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : _saveSleepLog,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: bgDark,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
-                  child: _isSaving
-                      ? const CircularProgressIndicator(color: bgDark)
-                      : const Text("Save Daily Check-in", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(backgroundColor: accentColor, foregroundColor: bgDark, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                  child: _isSaving ? const CircularProgressIndicator(color: bgDark) : Text(context.tr("sleep_btn_save"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
@@ -318,11 +309,7 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
-        ),
+        decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
         child: Column(
           children: [
             Icon(icon, color: iconColor, size: 28),
@@ -336,10 +323,7 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
     );
   }
 
-  Widget _buildRatingRow({
-    required String label, required IconData icon, required Color color,
-    required int value, required ValueChanged<int> onChanged, bool isDark = false,
-  }) {
+  Widget _buildRatingRow({required String label, required IconData icon, required Color color, required int value, required ValueChanged<int> onChanged, bool isDark = false}) {
     final textColor = isDark ? Colors.white : Colors.black87;
     final activeBg = isDark ? color.withOpacity(0.2) : color.withOpacity(0.1);
     final inactiveBg = isDark ? Colors.white10 : Colors.grey.shade100;
@@ -349,15 +333,7 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: textColor, fontSize: 16)),
-              const Spacer(),
-              Text("$value/5", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.grey)),
-            ],
-          ),
+          Row(children: [Icon(icon, color: color, size: 20), const SizedBox(width: 8), Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: textColor, fontSize: 16)), const Spacer(), Text("$value/5", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.grey))]),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -369,15 +345,8 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? activeBg : inactiveBg,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isSelected ? icon : _getOutlineIcon(icon),
-                    color: isSelected ? color : (isDark ? Colors.white38 : Colors.grey.shade400),
-                    size: 28,
-                  ),
+                  decoration: BoxDecoration(color: isSelected ? activeBg : inactiveBg, shape: BoxShape.circle),
+                  child: Icon(isSelected ? icon : _getOutlineIcon(icon), color: isSelected ? color : (isDark ? Colors.white38 : Colors.grey.shade400), size: 28),
                 ),
               );
             }),

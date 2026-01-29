@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/core/utils/diet_pdf_service.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
-import 'package:nutricare_connect/services/client_service.dart';
+import 'package:nutricare_connect/features/auth/client_service.dart';
 import 'package:printing/printing.dart';
 
 class DietPlanViewerScreen extends ConsumerWidget {

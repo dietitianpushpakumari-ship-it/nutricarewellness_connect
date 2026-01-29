@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/core/utils/wellness_reccomender_service.dart';
 import 'package:nutricare_connect/core/utils/wellness_tool_model.dart';
+import 'package:nutricare_connect/features/content/quiz_swipe_screen.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/services/client_service.dart';
+import 'package:nutricare_connect/features/auth/client_service.dart';
 import 'package:collection/collection.dart';
 
 // 🎯 LOGIC IMPORTS
@@ -33,8 +35,8 @@ import 'package:nutricare_connect/core/utils/isochronic_tapping.dart';
 import 'package:nutricare_connect/core/utils/sleep_mixer_sheet.dart';
 import 'package:nutricare_connect/core/utils/co2_tollerence_sheet.dart';
 import 'package:nutricare_connect/core/utils/sleep_debt_bank.dart';
-import 'package:nutricare_connect/core/utils/quiz_swipe_screen.dart';
-import 'package:nutricare_connect/core/utils/geeta_library_screen.dart';
+
+import 'package:nutricare_connect/features/content/geeta_library_screen.dart';
 
 class WellnessHubScreen extends ConsumerWidget {
   final ClientModel client;

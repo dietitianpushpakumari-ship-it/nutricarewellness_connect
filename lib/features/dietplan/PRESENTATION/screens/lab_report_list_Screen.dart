@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/vitals_service.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
-import 'package:nutricare_connect/services/client_service.dart';
+import 'package:nutricare_connect/features/auth/client_service.dart';
 
 // 🎯 ADJUST IMPORTS
 

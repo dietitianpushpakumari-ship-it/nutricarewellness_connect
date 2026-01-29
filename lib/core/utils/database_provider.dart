@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:nutricare_connect/firebase_options_guest.dart';
 
 // 🎯 TODO: Run the flutterfire configure command for your guest project
 // and import the generated file here.
@@ -22,12 +23,11 @@ final firebaseAppProvider = FutureProvider<FirebaseApp>((ref) async {
     } catch (e) {
       // If not initialized, initialize it now.
       // 🎯 UNCOMMENT THIS BLOCK AFTER GENERATING firebase_options_guest.dart
-      /*
       return await Firebase.initializeApp(
         name: 'guest',
         options: DefaultFirebaseOptionsGuest.currentPlatform,
       );
-      */
+
 
       throw Exception(
           "Guest Config Missing! You must generate firebase_options_guest.dart first."

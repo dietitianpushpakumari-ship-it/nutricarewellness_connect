@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/schedule_meeting_utils.dart';
+import 'package:nutricare_connect/features/appointments/schedule_meeting_utils.dart';
 
 class FollowUpBanner extends ConsumerWidget {
   final String clientId;
@@ -40,7 +41,7 @@ class FollowUpBanner extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Next Follow-up", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    Text("${context.tr("next_follow_up")}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     Text(
                       DateFormat('MMM d, h:mm a').format(nextMeeting.startTime),
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.indigo),
