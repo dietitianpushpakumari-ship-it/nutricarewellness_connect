@@ -40,10 +40,16 @@ class ClientModel {
   final String? whatsappNumber;
   final ClientReminderConfig? reminderConfig;
   final String? address;
-  final Map<String, double>? geoLocation; // {lat: 0.0, lng: 0.0}
+  final Map<String, double>? geoLocation;
   final String? photoUrl;
   final bool hasJoinedSocials;
   final String? email;
+
+  // 🎯 AUTH FIELDS
+  final String? authEmail;
+  final String? authUid; // 🎯 ADDED THIS FIELD
+  final String tenantId;
+
   final DateTime? dob;
   final ClientGoalModel goals;
   final int? freeSessionsRemaining;
@@ -62,12 +68,18 @@ class ClientModel {
     this.age,
     this.whatsappNumber,
     required this.gender,
-    required this.reminderConfig,
+    this.reminderConfig,
     this.address,
     this.geoLocation,
     this.photoUrl,
     this.hasJoinedSocials = false,
     this.email,
+
+    // 🎯 Auth Params
+    this.authEmail,
+    this.authUid, // 🎯 Added to constructor
+    this.tenantId = 'guest',
+
     this.dob,
     this.goals = const ClientGoalModel(),
     this.freeSessionsRemaining = 1,
@@ -88,16 +100,22 @@ class ClientModel {
       age: data['age'] ?? 0,
       whatsappNumber: data['whatsappNumber'] ?? '',
       gender: data['gender'] ?? '',
-      // 🎯 FIX: Robust Map Casting
       reminderConfig: data['reminderConfig'] != null
           ? ClientReminderConfig.fromMap(Map<String, dynamic>.from(data['reminderConfig']))
           : ClientReminderConfig.defaultConfig(),
       address: data['address'] as String?,
       email: data['email'] ?? '',
+
+      // 🎯 READ AUTH FIELDS
+      authEmail: data['authEmail'],
+      authUid: data['authUid'], // 🎯 Read from Map
+      tenantId: data['tenantId'] ?? 'guest',
+
       dob: (data['dob'] as Timestamp?)?.toDate() ?? DateTime.now(),
       hasJoinedSocials: data['hasJoinedSocials'] ?? false,
-      // 🎯 FIX: Robust Map Casting
-      geoLocation: (data['geoLocation'] as Map?)?.cast<String, double>(),
+      geoLocation: data['geoLocation'] != null
+          ? Map<String, double>.from(data['geoLocation'].map((key, value) => MapEntry(key.toString(), (value as num).toDouble())))
+          : null,
       photoUrl: data['photoUrl'],
       goals: data['goals'] != null
           ? ClientGoalModel.fromMap(Map<String, dynamic>.from(data['goals']))
@@ -107,7 +125,7 @@ class ClientModel {
   }
 
   factory ClientModel.fromFirestore(DocumentSnapshot doc) {
-    Map data = doc.data() as Map<String, dynamic>;
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return ClientModel(
       id: doc.id,
       mobile: data['mobile'] ?? '',
@@ -121,18 +139,25 @@ class ClientModel {
       age: data['age'] ?? 0,
       whatsappNumber: data['whatsappNumber'] ?? '',
       gender: data['gender'] ?? '',
-      // 🎯 FIX: Robust Map Casting for Firestore data
       reminderConfig: data['reminderConfig'] != null
           ? ClientReminderConfig.fromMap(Map<String, dynamic>.from(data['reminderConfig']))
           : ClientReminderConfig.defaultConfig(),
       address: data['address'] as String?,
       email: data['email'] ?? '',
+
+      // 🎯 READ AUTH FIELDS
+      authEmail: data['authEmail'],
+      authUid: data['authUid'], // 🎯 Read from Firestore
+      tenantId: data['tenantId'] ?? 'guest',
+
       dob: (data['dob'] as Timestamp?)?.toDate() ?? DateTime.now(),
       hasJoinedSocials: data['hasJoinedSocials'] ?? false,
-      // 🎯 FIX: Robust Map Casting
-      geoLocation: (data['geoLocation'] as Map?)?.cast<String, double>(),
+      geoLocation: data['geoLocation'] != null
+          ? Map<String, double>.from(data['geoLocation'].map((key, value) => MapEntry(key.toString(), (value as num).toDouble())))
+          : null,
       photoUrl: data['photoUrl'],
-      goals: data['goals'] != null ? ClientGoalModel.fromMap(Map<String, dynamic>.from(data['goals']))
+      goals: data['goals'] != null
+          ? ClientGoalModel.fromMap(Map<String, dynamic>.from(data['goals']))
           : ClientGoalModel.defaultGoals(),
       freeSessionsRemaining: data['freeSessionsRemaining'] ?? 0,
     );
@@ -155,6 +180,12 @@ class ClientModel {
       'reminderConfig': reminderConfig?.toMap(),
       'address': address,
       'email': email,
+
+      // 🎯 SAVE AUTH FIELDS
+      'authEmail': authEmail,
+      'authUid': authUid, // 🎯 Save to DB
+      'tenantId': tenantId,
+
       'dob': dob,
       'hasJoinedSocials': hasJoinedSocials,
       'geoLocation': geoLocation,
@@ -177,14 +208,21 @@ class ClientModel {
     String? whatsappNumber,
     String? status,
     bool? isSoftDeleted,
-    ClientReminderConfig? reminderConfig, String? address,
-    Map<String, double>? geoLocation,// {lat: 0.0, lng: 0.0}
+    ClientReminderConfig? reminderConfig,
+    String? address,
+    Map<String, double>? geoLocation,
     String? photoUrl,
     bool? hasJoinedSocials,
     String? email,
-    DateTime? dob,
-    ClientGoalModel? goals,int? freeSessionsRemaining,
 
+    // 🎯 Auth Params
+    String? authEmail,
+    String? authUid,
+    String? tenantId,
+
+    DateTime? dob,
+    ClientGoalModel? goals,
+    int? freeSessionsRemaining,
   }) {
     return ClientModel(
       id: id ?? this.id,
@@ -202,6 +240,12 @@ class ClientModel {
       reminderConfig: reminderConfig ?? this.reminderConfig,
       address: address ?? this.address,
       email: email ?? this.email,
+
+      // 🎯 Copy Auth Params
+      authEmail: authEmail ?? this.authEmail,
+      authUid: authUid ?? this.authUid,
+      tenantId: tenantId ?? this.tenantId,
+
       dob: dob ?? this.dob,
       hasJoinedSocials: hasJoinedSocials ?? this.hasJoinedSocials,
       geoLocation: geoLocation ?? this.geoLocation,

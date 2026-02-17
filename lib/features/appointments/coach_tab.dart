@@ -9,7 +9,7 @@ import 'package:nutricare_connect/core/utils/package_browser_screen.dart';
 import 'package:nutricare_connect/core/utils/package_payment_status_card.dart';
 import 'package:nutricare_connect/core/utils/dietitian_business_card.dart'; // 🎯 1. Import Digital Card
 import 'package:nutricare_connect/features/chat/presentation/client_chat_screen.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
 import 'package:nutricare_connect/features/appointments/schedule_meeting_utils.dart';
 import 'package:nutricare_connect/features/auth/client_service.dart';

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/package_service.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/payment_model.dart';
 import 'package:collection/collection.dart';

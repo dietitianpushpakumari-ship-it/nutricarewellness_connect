@@ -1,7 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
+import 'package:nutricare_connect/new/models/vitals_model.dart';
 
 class VitalsTrendChart extends StatefulWidget {
   final List<VitalsModel> history;

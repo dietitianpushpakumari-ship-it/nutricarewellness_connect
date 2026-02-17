@@ -2,7 +2,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:nutricare_connect/firebase_options_guest.dart';
 
 // 🎯 TODO: Run the flutterfire configure command for your guest project

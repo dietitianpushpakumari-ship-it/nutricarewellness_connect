@@ -6,10 +6,9 @@ import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/core/utils/virtual_trainer_painter.dart';
 import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
 import 'package:nutricare_connect/core/utils/workout_config.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
 import 'package:nutricare_connect/main.dart';
 import 'package:nutricare_connect/features/auth/client_service.dart';
 import 'package:wakelock_plus/wakelock_plus.dart'; // For ttsService
@@ -119,7 +118,7 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
     final int minutes = (totalDurationSec / 60).ceil();
     final int calories = minutes * 5; // Approx 5 kcal/min
 
-    final dailyLog = state.dailyLogs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
+    final dailyLog = IterableExtension(state.dailyLogs).firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
 
     final logToSave = dailyLog ?? ClientLogModel(
       id: '',

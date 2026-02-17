@@ -1,81 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/lab_vitals_data.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
+import 'package:nutricare_connect/new/models/vitals_model.dart';
 
 class LabReportDetailScreen extends StatelessWidget {
   final VitalsModel record;
 
+  // Access static data directly
   final Map<String, LabTest> allLabTests = LabVitalsData.allLabTests;
   final Map<String, List<String>> labTestGroups = LabVitalsData.labTestGroups;
 
   LabReportDetailScreen({super.key, required this.record});
 
-  // --- Color Coding Logic (Adapted from Admin App for Client View) ---
-  Color _getLabValueColor(
-    String key,
-    String resultValue, {
-    required String value,
-    required bool isMale,
-  }) {
-    final test = allLabTests[key];
-    if (test == null || value.isEmpty || test.referenceRange.isEmpty) {
+  // --- Color Coding Logic (Fixed to accept Double) ---
+  Color _getLabValueColor(double resultValue, String referenceRange, {bool isMale = true}) {
+    if (referenceRange.isEmpty) {
       return Colors.black87;
     }
 
     try {
-      final numValue = num.tryParse(value);
-      if (numValue == null) return Colors.black87;
+      final numValue = resultValue; // No parsing needed, it's already a double
 
-      // 1. Clean and parse the reference range string
-      String reference = test.referenceRange;
+      // 1. Clean the reference range string
+      String reference = referenceRange;
       if (reference.contains('(M)') || reference.contains('(F)')) {
         reference = reference.split(isMale ? '(M)' : '(F)').first.trim();
       }
+      // Remove any text in parentheses (e.g. units or comments)
       reference = reference.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
 
-      // 2. Check and compare based on the cleaned reference string format
-
-      // Standard Range: X - Y (e.g., "70 - 100")
+      // 2. Range Logic: X - Y (e.g., "70 - 100")
       if (reference.contains('-')) {
         final parts = reference.split('-').map((s) => s.trim()).toList();
         if (parts.length == 2) {
           final min = num.tryParse(parts[0]);
           final max = num.tryParse(parts[1]);
-          if (min != null &&
-              max != null &&
-              (numValue < min || numValue > max)) {
-            return Colors.red.shade700; // Out of range
+          if (min != null && max != null) {
+            if (numValue < min || numValue > max) {
+              return Colors.red.shade700; // Out of range
+            } else {
+              return Colors.green.shade700; // In range
+            }
           }
         }
       }
-      // Maximum Limit: < X
-      else if (reference.trim().startsWith('<')) {
-        final maxStr = reference.substring(reference.indexOf('<') + 1).trim();
+      // 3. Max Limit: < X
+      else if (reference.startsWith('<')) {
+        final maxStr = reference.substring(1).trim();
         final max = num.tryParse(maxStr);
-        if (max != null && numValue >= max) {
-          return Colors.red.shade700; // Too high
+        if (max != null) {
+          return (numValue >= max) ? Colors.red.shade700 : Colors.green.shade700;
         }
       }
-      // Minimum Limit: > Y
-      else if (reference.trim().startsWith('>')) {
-        final minStr = reference.substring(reference.indexOf('>') + 1).trim();
+      // 4. Min Limit: > Y
+      else if (reference.startsWith('>')) {
+        final minStr = reference.substring(1).trim();
         final min = num.tryParse(minStr);
-        if (min != null && numValue <= min) {
-          return Colors.red.shade700; // Too low
+        if (min != null) {
+          return (numValue <= min) ? Colors.red.shade700 : Colors.green.shade700;
         }
       }
 
-      return Colors.green.shade700; // In range
+      return Colors.black87; // Could not parse logic
     } catch (e) {
-      return Colors.black87; // Parsing error
+      return Colors.black87;
     }
   }
 
-  // --- UI Builders ---
-  Widget _buildLabTestTable() {
-    // Determine gender for reference range check
-    // NOTE: ClientModel is not available here, so we assume a default gender or simplify the check.
+  // --- UI Builder ---
+  Widget _buildLabTestTable(BuildContext context) {
+    // Note: Assuming Gender is handled elsewhere or default to Male for reference logic
     const bool isMale = true;
 
     return Column(
@@ -84,18 +78,15 @@ class LabReportDetailScreen extends StatelessWidget {
         final category = entry.key;
         final testKeys = entry.value;
 
-        final testsWithResults = testKeys
-            .where(
-              (key) =>
-                  record.labResults.containsKey(key) &&
-                  record.labResults[key]!.isNotEmpty,
-            )
-            .toList();
+        // 🎯 FIX 1: Removed .isNotEmpty check on double value
+        final testsWithResults = testKeys.where((key) {
+          return record.labResults.containsKey(key) && record.labResults[key] != null;
+        }).toList();
 
         if (testsWithResults.isEmpty) return const SizedBox.shrink();
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
+          padding: const EdgeInsets.only(bottom: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -104,47 +95,47 @@ class LabReportDetailScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.indigo.shade700,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
               const Divider(thickness: 2),
 
-              // Table Rows
+              // Data Table
               Table(
                 columnWidths: const {
                   0: FlexColumnWidth(3),
-                  1: FlexColumnWidth(1.5),
+                  1: FlexColumnWidth(2),
                   2: FlexColumnWidth(2.5),
                 },
+                border: TableBorder(horizontalInside: BorderSide(color: Colors.grey.shade300)),
                 children: [
-                  // Header Row
+                  // Header
                   TableRow(
-                    decoration: BoxDecoration(color: Colors.grey.shade200),
+                    decoration: BoxDecoration(color: Colors.grey.shade100),
                     children: [
                       _buildTableCell('Test Name', isHeader: true),
                       _buildTableCell('Result', isHeader: true),
-                      _buildTableCell('Reference Range', isHeader: true),
+                      _buildTableCell('Ref. Range', isHeader: true),
                     ],
                   ),
-                  // Data Rows
+                  // Rows
                   ...testsWithResults.map((key) {
+                    // Safety check: key might be in group but not in allLabTests definition
+                    if (!allLabTests.containsKey(key)) return const TableRow(children: [SizedBox(), SizedBox(), SizedBox()]);
+
                     final test = allLabTests[key]!;
-                    final resultValue = record.labResults[key]!;
-                    final color = _getLabValueColor(
-                      key,
-                      resultValue,
-                      value: test.referenceRange,
-                      isMale: isMale,
-                    );
+
+                    // 🎯 FIX 2: Value is double, no casting needed
+                    final double resultValue = record.labResults[key]!;
+
+                    // 🎯 FIX 3: Pass double directly to helper
+                    final color = _getLabValueColor(resultValue, test.referenceRange, isMale: isMale);
 
                     return TableRow(
                       children: [
-                        _buildTableCell(test.displayName, isHeader: false),
-                        _buildTableCell(
-                          '$resultValue ${test.unit}',
-                          color: color,
-                        ),
-                        _buildTableCell(test.referenceRange, isReference: true),
+                        _buildTableCell(test.displayName),
+                        _buildTableCell('$resultValue ${test.unit}', color: color, isBold: true),
+                        _buildTableCell(test.referenceRange, color: Colors.grey.shade600),
                       ],
                     );
                   }).toList(),
@@ -157,38 +148,28 @@ class LabReportDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTableCell(
-    String text, {
-    bool isHeader = false,
-    bool isReference = false,
-    Color color = Colors.black,
-  }) {
+  Widget _buildTableCell(String text, {bool isHeader = false, bool isBold = false, Color color = Colors.black87}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
       child: Text(
         text,
         style: TextStyle(
           fontSize: 13,
-          fontWeight: isHeader ? FontWeight.w800 : FontWeight.normal,
-          color: color,
+          fontWeight: isHeader || isBold ? FontWeight.bold : FontWeight.normal,
+          color: isHeader ? Colors.black : color,
         ),
       ),
     );
   }
 
-  Widget _buildMetricRow(String label, String value) {
+  Widget _buildMetricRow(BuildContext context, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          SizedBox(
-            width: 150,
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Text(value),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.grey)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         ],
       ),
     );
@@ -198,75 +179,63 @@ class LabReportDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Vitals Report - ${DateFormat.yMMMd().format(record.date)}',
-        ),
-        backgroundColor: Theme.of(context).colorScheme.secondary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        title: Text('Lab Report - ${DateFormat('dd MMM yyyy').format(record.date)}'),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        scrolledUnderElevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- Section 1: Core Metrics ---
-            Text(
-              'Client Metrics',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const Divider(),
-            _buildMetricRow(
-              'Height',
-              '${record.heightCm.toStringAsFixed(1)} cm',
-            ),
-            _buildMetricRow(
-              'Weight',
-              '${record.weightKg.toStringAsFixed(1)} kg',
-            ),
-            _buildMetricRow('BMI', record.bmi.toStringAsFixed(1)),
-            _buildMetricRow(
-              'Body Fat %',
-              '${record.bodyFatPercentage.toStringAsFixed(1)} %',
+            // --- Metrics Card ---
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
+              ),
+              child: Column(
+                children: [
+                  _buildMetricRow(context, 'Height', '${record.heightCm} cm'),
+                  _buildMetricRow(context, 'Weight', '${record.weightKg} kg'),
+                  _buildMetricRow(context, 'BMI', record.bmi.toStringAsFixed(1)),
+                  if(record.bodyFatPercentage > 0)
+                    _buildMetricRow(context, 'Body Fat', '${record.bodyFatPercentage}%'),
+                ],
+              ),
             ),
 
             const SizedBox(height: 30),
 
-            // --- Section 2: Lab Results ---
-            Text(
-              'Lab Results (${record.labResults.length})',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const Divider(),
+            // --- Lab Results ---
+            Text('Clinical Analysis', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 16),
 
             if (record.labResults.isEmpty)
-              const Text(
-                'No lab results recorded for this entry.',
-                style: TextStyle(fontStyle: FontStyle.italic),
+              Container(
+                padding: const EdgeInsets.all(20),
+                width: double.infinity,
+                decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+                child: const Text('No lab data available for this date.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
               )
             else
-              _buildLabTestTable(),
+              _buildLabTestTable(context),
 
-            const SizedBox(height: 30),
-
-            // --- Section 3: Notes and Documents ---
-            Text(
-              'Clinical Notes',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const Divider(),
-            Text(
-              record.notes ?? 'No notes provided.',
-              style: TextStyle(color: Colors.grey.shade700),
-            ),
-
-            if (record.labReportUrls.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 16.0),
-                child: Text(
-                  'Lab Report Files: ${record.labReportUrls.length} attached.',
-                  style: TextStyle(color: Colors.blue.shade700),
-                ),
-              ),
+            // --- Notes ---
+            if (record.clinicalNotes != null && record.clinicalNotes!.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Text('Doctor\'s Notes', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.shade100)),
+                child: Text(record.clinicalNotes as String, style: TextStyle(color: Colors.brown.shade800)),
+              )
+            ]
           ],
         ),
       ),

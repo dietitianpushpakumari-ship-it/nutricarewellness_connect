@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/core/utils/smart_dialogs.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 
 class SleepDetailSheet extends ConsumerStatefulWidget {

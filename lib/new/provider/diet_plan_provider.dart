@@ -1,51 +1,66 @@
-// lib/features/diet_plan/presentation/providers/diet_plan_provider.dart
+// lib/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart
+
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equatable/equatable.dart';
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:collection/collection.dart';
+
+// 🎯 Domain & Data Layers
 import 'package:nutricare_connect/core/clinical_master_service.dart';
 import 'package:nutricare_connect/features/appointments/meeting_Service.dart';
 import 'package:nutricare_connect/core/utils/geeta_repository.dart';
 import 'package:nutricare_connect/core/utils/geeta_shloka_model.dart';
-import 'package:nutricare_connect/features/dashboard/client_dashboard_main_screen.dart';
-
-// 🎯 FIX: Corrected Repository Import Path (assumes dATA casing for local structure)
-import 'package:nutricare_connect/features/dietplan/dATA/repositories/diet_repositories.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/admin_profile_service.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/guideline_service.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/package_service.dart';
 import 'package:nutricare_connect/features/dietplan/dATA/services/vitals_service.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
+import 'package:nutricare_connect/new/models/client_diet_plan_model.dart'; // Ensure this exists
 import 'package:nutricare_connect/features/auth/auth_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/diet_plan_item_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/guidelines.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart';
 import 'package:nutricare_connect/features/appointments/schedule_meeting_utils.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
+import 'package:nutricare_connect/new/models/vitals_model.dart'; // Ensure this exists
 import 'package:nutricare_connect/features/auth/client_service.dart';
-import 'package:collection/collection.dart';
+import 'package:nutricare_connect/features/appointments/appointment_model.dart'; // For MeetingModel
+import '../repositories/diet_repositories.dart';
 
-// --- 1. State Definition (FIXED PROPS) ---
+// =========================================================================
+// --- 1. State Definition (Updated for Vitals & Tenant) ---
+// =========================================================================
+
 class DietPlanState extends Equatable {
   final ClientDietPlanModel? activePlan;
+  final VitalsModel? clinicalVitals; // 🎯 Added: Holds Medications/Guidelines
   final List<ClientLogModel> dailyLogs;
   final bool isLoading;
   final String? error;
   final DateTime selectedDate;
   final int version;
 
-
-  DietPlanState({
-    this.activePlan, this.dailyLogs = const [], this.isLoading = true, this.error, required this.selectedDate, this.version = 0,
+  const DietPlanState({
+    this.activePlan,
+    this.clinicalVitals,
+    this.dailyLogs = const [],
+    this.isLoading = true,
+    this.error,
+    required this.selectedDate,
+    this.version = 0,
   });
 
   DietPlanState copyWith({
-    ClientDietPlanModel? activePlan, List<ClientLogModel>? dailyLogs, bool? isLoading, Object? error = const Object(), DateTime? selectedDate,int? version,
+    ClientDietPlanModel? activePlan,
+    VitalsModel? clinicalVitals,
+    List<ClientLogModel>? dailyLogs,
+    bool? isLoading,
+    Object? error = const Object(),
+    DateTime? selectedDate,
+    int? version,
   }) {
     return DietPlanState(
       activePlan: activePlan ?? this.activePlan,
+      clinicalVitals: clinicalVitals ?? this.clinicalVitals,
       dailyLogs: dailyLogs ?? this.dailyLogs,
       isLoading: isLoading ?? this.isLoading,
       error: error is String ? error : (error == null ? null : this.error),
@@ -54,9 +69,13 @@ class DietPlanState extends Equatable {
     );
   }
 
+  // Helper to easily get the wellness log for the day
+  ClientLogModel? get wellnessLog => dailyLogs.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
+
   @override
   List<Object?> get props => [
     activePlan,
+    clinicalVitals,
     dailyLogs,
     isLoading,
     error,
@@ -67,28 +86,62 @@ class DietPlanState extends Equatable {
   ];
 }
 
-// --- 2. Notifier (ViewModel/Controller) ---
+// =========================================================================
+// --- 2. Notifier (ViewModel/Controller) with Tenant Logic ---
+// =========================================================================
+
 class DietPlanNotifier extends StateNotifier<DietPlanState> {
   final DietRepository _repository;
-  final String _currentClientId;
-  final ClientService _clientService; // 🎯 CRITICAL FIX: Add and store the service instance
+  final Ref _ref;
+  final String _clientId;
 
-  // 🎯 MODIFIED CONSTRUCTOR: Accepts ClientService
-  DietPlanNotifier(this._repository, this._currentClientId, this._clientService)
+  DietPlanNotifier(this._repository, this._ref, this._clientId)
       : super(DietPlanState(selectedDate: DateTime.now())) {
     loadInitialData(state.selectedDate);
   }
-
   Future<void> loadInitialData(DateTime date) async {
     state = state.copyWith(isLoading: true, error: null);
 
+    // 🔒 1. GET TENANT CONTEXT
+    final clientProfile = _ref.read(authNotifierProvider).clientProfile;
+    final tenantId = clientProfile?.tenantId;
+
+    if (clientProfile == null || tenantId == null || tenantId.isEmpty) {
+      state = state.copyWith(isLoading: false, error: "Access Denied: Missing Clinic Context");
+      return;
+    }
+
     try {
-      final plan = state.activePlan ??
-          await _repository.getActivePlan(_currentClientId);
-      final logs = await _repository.getLogsForDate(_currentClientId, date);
+      ClientDietPlanModel? plan;
+      VitalsModel? vitals;
+
+      // 🎯 2. TRY FETCHING SESSION-BASED DATA
+      final session = await _repository.getLatestSession(_clientId, tenantId);
+
+      if (session != null) {
+        // 識 CASE A: Session Found - Use Linked Data
+        if (session.linkedDietPlanId != null) {
+          plan = await _repository.getPlanById(session.linkedDietPlanId!);
+        }
+        if (session.linkedVitalsId != null) {
+          vitals = await _repository.getVitalsById(session.linkedVitalsId!);
+        }
+      }
+
+      // 識 CASE B: Fallback (If session missing OR linked data missing)
+      if (plan == null) {
+        plan = await _repository.getActivePlan(_clientId, tenantId);
+      }
+      if (vitals == null) {
+        vitals = await _repository.getLatestVitals(_clientId);
+      }
+
+      // 🎯 3. FETCH DAILY LOGS (Client-Specific)
+      final logs = await _repository.getLogsForDate(_clientId, date);
 
       state = state.copyWith(
         activePlan: plan,
+        clinicalVitals: vitals,
         dailyLogs: logs,
         isLoading: false,
         selectedDate: date,
@@ -98,9 +151,10 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
-
   void selectDate(DateTime newDate) {
-    if (newDate.day != state.selectedDate.day) {
+    if (newDate.day != state.selectedDate.day ||
+        newDate.month != state.selectedDate.month ||
+        newDate.year != state.selectedDate.year) {
       loadInitialData(newDate);
     }
   }
@@ -110,23 +164,19 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
     required List<XFile> mealPhotoFiles,
   }) async {
     try {
-      // 1. Upload Photos (Keep your existing logic here)
+      // 1. (Optional) Upload Photo Logic would go here
       List<String> photoUrls = List.from(log.mealPhotoUrls);
-      /* * Assuming you have upload logic here.
-       * If mealPhotoFiles is not empty, upload and add to photoUrls.
-       */
 
       // 2. Prepare Final Model
       final logToSave = log.copyWith(mealPhotoUrls: photoUrls);
 
-      // 3. 🎯 CALL REPOSITORY
+      // 3. Call Repository
       final savedLog = await _repository.createOrUpdateLog(logToSave);
 
       // 4. Update Local State (Optimistic UI)
       final currentLogs = [...state.dailyLogs];
-
-      // Find and replace, or add new
       final index = currentLogs.indexWhere((l) => l.id == savedLog.id);
+
       if (index != -1) {
         currentLogs[index] = savedLog;
       } else {
@@ -136,76 +186,71 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
       state = state.copyWith(dailyLogs: currentLogs);
     } catch (e) {
       state = state.copyWith(error: e.toString());
-      // Handle error (show snackbar in UI listener)
     }
   }
 }
-// --- 3. Riverpod Providers for Dependency Injection ---
 
-final clientServiceProvider = Provider((ref) => ClientService(ref)); // Assuming this is defined or available
+// =========================================================================
+// --- 3. RIVERPOD PROVIDERS ---
+// =========================================================================
 
-// 🎯 FIX: Repository now returns the instance directly (no dependencies needed)
 final dietRepositoryProvider = Provider((ref) => DietRepository());
+final clientServiceProvider = Provider((ref) => ClientService(ref));
 final vitalsServiceProvider = Provider((ref) => VitalsService());
-
-// 🎯 CRITICAL FIX: Pass the ClientService instance to the Notifier
-final dietPlanNotifierProvider = StateNotifierProvider.family<DietPlanNotifier, DietPlanState, String>((ref, clientId) {
-  // Uses the stored ref to inject both Repository and ClientService
-  return DietPlanNotifier(
-    //
-      ref.watch(dietRepositoryProvider),
-      clientId,
-      ref.watch(clientServiceProvider) // Inject ClientService dependency,
-  );
-});
-
-final clientLogHistoryProvider = FutureProvider.family<List<ClientLogModel>, String>((ref, clientId) async {
-  final repository = ref.watch(dietRepositoryProvider);
-  return repository.fetchAllClientLogs(clientId);
-});
-
 final geetaRepositoryProvider = Provider((ref) => GeetaRepository());
+final clinicalMasterServiceProvider = Provider<ClinicalMasterService>((ref) => ClinicalMasterService());
 
-// 🎯 This FutureProvider will trigger the "Check Cache -> Fetch" logic once
-final geetaLibraryProvider = FutureProvider<List<GeetaShloka>>((ref) async {
-  final repo = ref.watch(geetaRepositoryProvider);
-  return repo.getAllShlokas();
+// 🎯 MAIN NOTIFIER PROVIDER
+final dietPlanNotifierProvider = StateNotifierProvider.family<DietPlanNotifier, DietPlanState, String>((ref, clientId) {
+  final repository = ref.watch(dietRepositoryProvider);
+  // Pass 'ref' to access AuthProvider inside the notifier
+  return DietPlanNotifier(repository, ref, clientId);
 });
-final activeDietPlanProvider = Provider<DietPlanState>((ref) {
-  final clientId = ref.watch(currentClientIdProvider);
 
-  if (clientId == null) {
+// 🎯 GLOBAL ACTIVE STATE PROVIDER (Auto-Selects current user)
+final activeDietPlanProvider = Provider<DietPlanState>((ref) {
+  final authState = ref.watch(authNotifierProvider);
+  final clientId = authState.clientProfile?.id;
+
+  if (clientId == null || clientId.isEmpty) {
     return DietPlanState(isLoading: false, selectedDate: DateTime.now(), activePlan: null);
   }
 
   return ref.watch(dietPlanNotifierProvider(clientId));
 });
 
+// --- DATA FETCHING PROVIDERS ---
 
-final latestVitalsFutureProvider = FutureProvider.family<VitalsModel?, String>((ref, clientId) async {
-  final service = VitalsService();
-  final vitalsList = await service.getClientVitals(clientId); // Assuming getClientVitals returns a sorted list
-  return vitalsList.firstWhereOrNull((v) => true); // Get the latest (first) record
+final clientLogHistoryProvider = FutureProvider.family<List<ClientLogModel>, String>((ref, clientId) async {
+  final repository = ref.watch(dietRepositoryProvider);
+  return repository.fetchAllClientLogs(clientId);
 });
+
+final geetaLibraryProvider = FutureProvider<List<GeetaShloka>>((ref) async {
+  final repo = ref.watch(geetaRepositoryProvider);
+  return repo.getAllShlokas();
+});
+
+// 🎯 Updated to use VitalsService which likely returns List<VitalsModel>
+final latestVitalsFutureProvider = FutureProvider.family<VitalsModel?, String>((ref, clientId) async {
+  final service = ref.watch(vitalsServiceProvider);
+  final vitalsList = await service.getClientVitals(clientId);
+  return vitalsList.isNotEmpty ? vitalsList.first : null;
+});
+
 final upcomingMeetingsProvider = FutureProvider.family<List<MeetingModel>, String>((ref, clientId) async {
   final service = MeetingService();
-  // Fetch meetings based on the clientId
-  return service.getClientMeetings(clientId);
+  return service.getClientMeetings(clientId); // Ensure MeetingService returns List<MeetingModel>
 });
 
 final enrolledPackageProvider = FutureProvider.family<List<MeetingModel>, String>((ref, clientId) async {
   final service = MeetingService();
-  // Fetch meetings based on the clientId
   return service.getClientMeetings(clientId);
 });
 
 final dietitianProfileProvider = FutureProvider<AdminProfileModel?>((ref) async {
   final service = AdminProfileService();
-  // Call the service to fetch the single Admin Profile
-  final adminProfile = await service.fetchAdminProfile();
-
-  // Return the fetched profile (which is AdminProfileModel?)
-  return adminProfile;
+  return await service.fetchAdminProfile();
 });
 
 final guidelineProvider = FutureProvider.family<List<Guideline>, List<String>>((ref, guidelineIds) async {
@@ -216,7 +261,6 @@ final guidelineProvider = FutureProvider.family<List<Guideline>, List<String>>((
 final assignedPackageProvider = FutureProvider.family<List<PackageAssignmentModel>,String>((ref, clientId) async {
   final service = PackageService();
   return await service.getPackageAssignments(clientId);
-
 });
 
 final weeklyLogHistoryProvider = FutureProvider.family<Map<DateTime, List<ClientLogModel>>, String>((ref, clientId) async {
@@ -224,33 +268,25 @@ final weeklyLogHistoryProvider = FutureProvider.family<Map<DateTime, List<Client
   final endDate = DateTime.now();
   final startDate = endDate.subtract(const Duration(days: 7));
 
-  // NOTE: Assuming repository has a fetchLogsBetweenDates method or we use the existing fetchAll and filter locally
   final allLogs = await repository.fetchAllClientLogs(clientId);
 
-  // 1. Filter logs to the last 7 days
   final recentLogs = allLogs.where((log) =>
-      log.date.isAfter(startDate.subtract(const Duration(hours: 1))) // Account for time zone differences
+      log.date.isAfter(startDate.subtract(const Duration(hours: 1)))
   ).toList();
 
-  // 2. Group the logs by date (removing time component)
   final Map<DateTime, List<ClientLogModel>> groupedLogs = {};
 
   for (final log in recentLogs) {
     final day = DateTime(log.date.year, log.date.month, log.date.day);
     groupedLogs.putIfAbsent(day, () => []).add(log);
   }
-
-  // Return grouped data
   return groupedLogs;
 });
 
 // 🎯 Provider to control the step sensor toggle
 final stepSensorEnabledProvider = StateProvider<bool>((ref) => true);
 
-
-// --- Add these to diet_plan_provider.dart ---
-
-// 🎯 NEW: Provider for Weekly Activity Score
+// 🎯 Weekly Activity Score
 final weeklyActivityScoreProvider = Provider.family<int, String>((ref, clientId) {
   final historyAsync = ref.watch(weeklyLogHistoryProvider(clientId));
 
@@ -259,7 +295,7 @@ final weeklyActivityScoreProvider = Provider.family<int, String>((ref, clientId)
       int score = 0;
       groupedLogs.forEach((date, logs) {
         final wellnessLog = logs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
-        score += wellnessLog?.activityScore ?? 0; // Sum up the daily scores
+        score += wellnessLog?.activityScore ?? 0;
       });
       return score;
     },
@@ -268,20 +304,23 @@ final weeklyActivityScoreProvider = Provider.family<int, String>((ref, clientId)
   );
 });
 
-// 🎯 NEW: Provider for Daily Movement Streak
+// 🎯 Daily Movement Streak
 final dailyActivityStreakProvider = Provider.family<int, String>((ref, clientId) {
   final historyAsync = ref.watch(weeklyLogHistoryProvider(clientId));
 
   return historyAsync.when(
     data: (groupedLogs) {
       int streak = 0;
-      final sortedDates = groupedLogs.keys.toList()..sort((a, b) => b.compareTo(a)); // Newest first
+      final sortedDates = groupedLogs.keys.toList()..sort((a, b) => b.compareTo(a));
       DateTime dayToCheck = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
 
+      // Check Today
       final todayLog = groupedLogs[dayToCheck]?.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
       if (todayLog?.activityScore != null && todayLog!.activityScore! > 0) {
         streak++;
+        dayToCheck = dayToCheck.subtract(const Duration(days: 1));
       } else {
+        // Even if no activity today, check yesterday to keep streak alive
         dayToCheck = dayToCheck.subtract(const Duration(days: 1));
       }
 
@@ -292,7 +331,7 @@ final dailyActivityStreakProvider = Provider.family<int, String>((ref, clientId)
           streak++;
           dayToCheck = dayToCheck.subtract(const Duration(days: 1));
         } else {
-          break; // Streak is broken
+          break;
         }
       }
       return streak;
@@ -302,23 +341,18 @@ final dailyActivityStreakProvider = Provider.family<int, String>((ref, clientId)
   );
 });
 
-
+// 🎯 Historical Logs
 final historicalLogProvider = FutureProvider.family<Map<DateTime, List<ClientLogModel>>, ({String clientId, int days})>((ref, params) async {
-
-  // In a real app, you would optimize this query.
-  // For now, we fetch all and filter.
   final repository = ref.watch(dietRepositoryProvider);
   final allLogs = await repository.fetchAllClientLogs(params.clientId);
 
   final endDate = DateTime.now();
   final startDate = endDate.subtract(Duration(days: params.days));
 
-  // 1. Filter logs to the selected range
   final recentLogs = allLogs.where((log) =>
   !log.date.isBefore(startDate) && log.date.isBefore(endDate.add(const Duration(days: 1)))
   ).toList();
 
-  // 2. Group the logs by date
   final Map<DateTime, List<ClientLogModel>> groupedLogs = {};
   for (final log in recentLogs) {
     final day = DateTime(log.date.year, log.date.month, log.date.day);
@@ -328,12 +362,8 @@ final historicalLogProvider = FutureProvider.family<Map<DateTime, List<ClientLog
   return groupedLogs;
 });
 
-
-// 🎯 NEW: PROVIDER FOR VITALS HISTORY (for the graph)
+// 🎯 Vitals History
 final vitalsHistoryProvider = FutureProvider.family<List<VitalsModel>, String>((ref, clientId) async {
   final service = ref.watch(vitalsServiceProvider);
-  return service.getClientVitals(clientId);
-});
-final clinicalMasterServiceProvider = Provider<ClinicalMasterService>((ref) {
-  return ClinicalMasterService();
+  return service.getClientVitals(clientId); // Assumes VitalsService returns List<VitalsModel>
 });

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/app_theme.dart';
+import 'package:nutricare_connect/new/core/app_theme.dart';
 import 'package:nutricare_connect/features/auth/client_auth_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

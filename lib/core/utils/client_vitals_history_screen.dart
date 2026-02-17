@@ -6,8 +6,8 @@ import 'package:nutricare_connect/core/utils/smart_vitals_card.dart';
 import 'package:nutricare_connect/core/utils/vitals_trend_chart.dart';
 import 'package:nutricare_connect/core/vital_details_Screen.dart';
 import 'package:nutricare_connect/core/vitals_comprasion_screen.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
+import 'package:nutricare_connect/new/models/vitals_model.dart';
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
 
 class ClientVitalsHistoryScreen extends ConsumerWidget {
   final String clientId;

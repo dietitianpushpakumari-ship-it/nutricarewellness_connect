@@ -1,20 +1,22 @@
+import 'dart:ui'; // 🎯 NEW: Required for the Glassmorphic BackdropFilter
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
+import 'package:nutricare_connect/new/core/theme_provider.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:collection/collection.dart';
 
 // 🎯 CORE WIDGETS & SCREENS
-import 'package:nutricare_connect/core/utils/dashboard_widgets.dart';
+import 'package:nutricare_connect/new/dashboard/dashboard_widgets.dart';
 import 'package:nutricare_connect/core/utils/followup_banner.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/smart_nudge_bar.dart'; // Smart Nudge
+import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/smart_nudge_bar.dart';
 import 'package:nutricare_connect/features/profile/profile_Screen.dart';
 import 'package:nutricare_connect/core/utils/rating_dialog.dart';
 import 'package:nutricare_connect/core/utils/rating_service.dart';
-import 'package:nutricare_connect/core/utils/comapct_trend_grid.dart'; // Compact Trend
+import 'package:nutricare_connect/new/dashboard/comapct_trend_grid.dart';
 
 // 🎯 DETAIL SHEETS
 import 'package:nutricare_connect/core/utils/hydration_detail_screen.dart';
@@ -25,8 +27,8 @@ import 'package:nutricare_connect/core/utils/mindfullness_config.dart';
 import 'package:nutricare_connect/core/utils/analytics_detail_screen.dart';
 
 // 🎯 PROVIDERS & ENTITIES
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_diet_plan_model.dart';
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/features/auth/client_service.dart';
 
@@ -48,9 +50,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   bool _sensorActive = false;
   DateTime _lastSaveTime = DateTime.now().subtract(const Duration(hours: 7));
   final List<double> _milestones = [0.25, 0.50, 0.75, 1.0];
-
-  // 🎯 Controller for Highlights Carousel
-  final PageController _highlightsController = PageController(viewportFraction: 0.92);
 
   @override
   void initState() {
@@ -83,7 +82,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _waveController.dispose();
-    _highlightsController.dispose();
     super.dispose();
   }
 
@@ -206,12 +204,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+        decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(30))),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-             Text("${context.tr("lbl_choose_mode")}", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text("${context.tr("lbl_choose_mode")}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             _buildPresetTile(ctx, "${context.tr("focus_and_clarity")}", "${context.tr("lbl_box_breathing")}", Icons.crop_square, Colors.teal, () => _launchBreathingSheet(context, notifier, activePlan, dailyLog, BreathingConfig.box)),
             _buildPresetTile(ctx, "${context.tr("sleep_and_anxiety")}", " ${context.tr("lbl_relax_breath")}", Icons.nightlight_round, Colors.indigo, () => _launchBreathingSheet(context, notifier, activePlan, dailyLog, BreathingConfig.relax)),
@@ -252,7 +250,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final updatedLog = logToSave.copyWith(hydrationLiters: newTotal);
       await notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('+250ml Added!'), duration: Duration(milliseconds: 800), backgroundColor: Colors.blue));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('+250ml Added!'), duration: const Duration(milliseconds: 800), backgroundColor: Theme.of(context).colorScheme.primary));
       }
     } catch (e) {}
   }
@@ -279,167 +277,195 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final int sleepScore = dailyLog?.sleepScore ?? 0;
     final int breathMin = dailyLog?.breathingMinutes ?? 0;
 
-    double waterScore = (waterIntake / waterGoal).clamp(0.0, 1.0) * 100;
-    double stepScore = (displaySteps / stepGoal).clamp(0.0, 1.0) * 100;
-    double sleepCalc = (sleepHours / (state.activePlan?.dailySleepGoal ?? 7.0)).clamp(0.0, 1.0) * 100;
-    int dailyScore = ((waterScore + stepScore + sleepCalc) / 3).round();
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Stack(
+        children: [
+          // ========================================================
+          // 🎯 THE ULTRA-PREMIUM GLASSMORPHIC BACKGROUND
+          // ========================================================
 
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8F9FE),
-        body: Stack(
-          children: [
-            // 🎯 1. SUBTLE BACKGROUND GLOW (Fixed Decoration)
-            Positioned(
-              top: -100, right: -100,
-              child: Container(
-                width: 300, height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  // 🎯 FIX: Replaced 'blurRadius' property with 'boxShadow'
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.teal.withOpacity(0.15),
-                      blurRadius: 80,
-                      spreadRadius: 20,
-                    ),
-                  ],
-                ),
+          // Orb 1: Top Right Glow
+          Positioned(
+            top: -150, right: -100,
+            child: Container(
+              width: 400, height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
               ),
             ),
+          ),
 
-            CustomScrollView(
-              slivers: [
-                // 2. PREMIUM HEADER
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 30, 24, 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                                DateFormat('EEEE, d MMMM').format(DateTime.now()),
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade500, letterSpacing: 0.5)
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                                "${ context.tr("dash_hello")},${widget.client.name?.split(' ').first ?? 'Friend'}",
-                              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A), letterSpacing: -0.5),
-                            ),
-                          ],
-                        ),
+          // Orb 2: Bottom Left Secondary Glow
+          Positioned(
+            bottom: 100, left: -150,
+            child: Container(
+              width: 350, height: 350,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Theme.of(context).colorScheme.secondary.withOpacity(0.2),
+              ),
+            ),
+          ),
 
-                        // Profile Avatar
-                        GestureDetector(
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
-                          child: Container(
-                            padding: const EdgeInsets.all(3),
+          // 🎯 The Magic Blur Layer: This turns the sharp orbs into a smooth mesh gradient
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          // ========================================================
+
+          CustomScrollView(
+            slivers: [
+              // 2. PREMIUM HEADER
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 30, 24, 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              DateFormat('EEEE, d MMMM').format(DateTime.now()),
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6), letterSpacing: 0.5)
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "${ context.tr("dash_hello")}, ${widget.client.name?.split(' ').first ?? 'Friend'}",
+                            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.onSurface, letterSpacing: -0.5),
+                          ),
+                        ],
+                      ),
+
+                      // 🎯 Direct Toggle Button + Profile Avatar with Glassy Borders
+                      Row(
+                        children: [
+                          // Theme Toggle Button
+                          Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.teal.withOpacity(0.3), width: 2),
+                              color: Theme.of(context).colorScheme.surface, // Glassy translucent fill
+                              border: Border.all(color: Colors.white.withOpacity(0.3)), // Delicate glass rim
                             ),
-                            child: CircleAvatar(
-                              radius: 22,
-                              backgroundColor: Colors.teal.shade50,
-                              backgroundImage: widget.client.photoUrl != null ? NetworkImage(widget.client.photoUrl!) : null,
-                              child: widget.client.photoUrl == null
-                                  ? Text(widget.client.name?[0] ?? 'U', style: TextStyle(color: Colors.teal.shade800, fontWeight: FontWeight.bold))
-                                  : null,
+                            child: IconButton(
+                              icon: Icon(Icons.brightness_6_outlined, color: Theme.of(context).colorScheme.primary),
+                              onPressed: () {
+                                ref.read(themeProvider.notifier).toggleTheme();
+                              },
+                              tooltip: 'Switch Theme',
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // 🎯 REMOVED: DailyCompletionBanner (Consolidated into Nudge Bar)
-
-                // 3. FOLLOW UP (Appointments)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: FollowUpBanner(clientId: widget.client.id),
-                  ),
-                ),
-
-                // 4. SMART NUDGES (Focus Rail)
-                SliverToBoxAdapter(
-                  child: SmartNudgeBar(clientId: widget.client.id),
-                ),
-
-                // 5. BENTO GRID (Compact)
-                SliverPadding(
-                  padding: const EdgeInsets.all(16),
-                  sliver: SliverGrid.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 1.4,
-                    children: [
-                      MiniHydrationCard(
-                        currentLiters: waterIntake,
-                        goalLiters: waterGoal,
-                        waveAnimation: _waveController,
-                        onTap: () {
-                          if (state.activePlan == null) return;
-                          showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => HydrationDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyLog, currentIntake: waterIntake));
-                        },
-                        onQuickAdd: () {
-                          if (state.activePlan == null) return;
-                          _quickAddWater(notifier, state.activePlan!, dailyLog, waterIntake);
-                        },
-                      ),
-                      MiniStepCard(
-                        steps: displaySteps,
-                        goal: stepGoal,
-                        onTap: () {
-                          if (state.activePlan == null) return;
-                          showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MovementDetailSheet.withSteps(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyLog, currentSteps: displaySteps));
-                        },
-                      ),
-                      MiniSleepCard(
-                        hours: sleepHours,
-                        score: sleepScore,
-                        onTap: () {
-                          if (state.activePlan == null) return;
-                          showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => SleepDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyLog));
-                        },
-                      ),
-                      MiniBreathingCard(
-                        minutesLogged: breathMin,
-                        onTap: () {
-                          if (state.activePlan == null) return;
-                          _showBreathingMenu(context, notifier, state.activePlan!, dailyLog);
-                        },
+                          const SizedBox(width: 12),
+                          // Profile Avatar
+                          GestureDetector(
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white.withOpacity(0.4), width: 2), // Glassy rim
+                              ),
+                              child: CircleAvatar(
+                                radius: 22,
+                                backgroundColor: Theme.of(context).colorScheme.surface,
+                                backgroundImage: widget.client.photoUrl != null ? NetworkImage(widget.client.photoUrl!) : null,
+                                child: widget.client.photoUrl == null
+                                    ? Text(widget.client.name?[0] ?? 'U', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold))
+                                    : null,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
+              ),
 
-                // 🎯 6. COMPACT INSIGHTS & TRENDS
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    child: Column(
-                      children: [
-                        // A. Weekly Pulse (Slim)
-                        CompactTrendCard(clientId: widget.client.id),
+              // 3. FOLLOW UP (Appointments)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: FollowUpBanner(clientId: widget.client.id),
+                ),
+              ),
 
-                        const SizedBox(height: 16),
+              // 4. SMART NUDGES (Focus Rail)
+              SliverToBoxAdapter(
+                child: SmartNudgeBar(clientId: widget.client.id),
+              ),
 
-                      ],
+              // 5. BENTO GRID (Compact)
+              SliverPadding(
+                padding: const EdgeInsets.all(16),
+                sliver: SliverGrid.count(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 1.4,
+                  children: [
+                    MiniHydrationCard(
+                      currentLiters: waterIntake,
+                      goalLiters: waterGoal,
+                      waveAnimation: _waveController,
+                      onTap: () {
+                        if (state.activePlan == null) return;
+                        showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => HydrationDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyLog, currentIntake: waterIntake));
+                      },
+                      onQuickAdd: () {
+                        if (state.activePlan == null) return;
+                        _quickAddWater(notifier, state.activePlan!, dailyLog, waterIntake);
+                      },
                     ),
+                    MiniStepCard(
+                      steps: displaySteps,
+                      goal: stepGoal,
+                      onTap: () {
+                        if (state.activePlan == null) return;
+                        showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MovementDetailSheet.withSteps(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyLog, currentSteps: displaySteps));
+                      },
+                    ),
+                    MiniSleepCard(
+                      hours: sleepHours,
+                      score: sleepScore,
+                      onTap: () {
+                        if (state.activePlan == null) return;
+                        showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => SleepDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyLog));
+                      },
+                    ),
+                    MiniBreathingCard(
+                      minutesLogged: breathMin,
+                      onTap: () {
+                        if (state.activePlan == null) return;
+                        _showBreathingMenu(context, notifier, state.activePlan!, dailyLog);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              // 🎯 6. COMPACT INSIGHTS & TRENDS
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Column(
+                    children: [
+                      // A. Weekly Pulse (Slim)
+                      CompactTrendCard(clientId: widget.client.id),
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

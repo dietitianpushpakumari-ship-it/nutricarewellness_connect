@@ -1,7 +1,7 @@
 // lib/services/vitals_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
+import 'package:nutricare_connect/new/models/vitals_model.dart';
 // Ensure this models exists
 
 // Assuming you have a logger instance initialized globally or in your services file

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart'; // Ensure Vitals are accessible if needed, else use Log fields
 
 class WellnessInsight {
   final String title;

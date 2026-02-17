@@ -21,7 +21,7 @@ import 'package:nutricare_connect/core/utils/workout_entry_dialog.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/lab_report_list_Screen.dart';
 
 // 🎯 PROVIDERS & MODELS
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart';
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 
 class ActivityTrackerScreen extends ConsumerStatefulWidget {

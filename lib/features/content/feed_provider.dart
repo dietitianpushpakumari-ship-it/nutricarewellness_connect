@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:nutricare_connect/core/utils/feed_item_model.dart';
 import 'package:nutricare_connect/core/utils/feed_repository.dart';
 

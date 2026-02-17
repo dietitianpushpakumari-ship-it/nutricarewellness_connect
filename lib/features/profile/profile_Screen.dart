@@ -11,7 +11,7 @@ import 'package:nutricare_connect/core/utils/client_model.dart';
 
 // 🎯 Core Imports
 import 'package:nutricare_connect/features/auth/auth_provider.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart' hide clientServiceProvider;
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart' hide clientServiceProvider;
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/global_user_provider.dart';
 import 'package:nutricare_connect/features/auth/client_auth_screen.dart';
 import 'package:nutricare_connect/features/profile/client_reminder_setting_screen.dart';

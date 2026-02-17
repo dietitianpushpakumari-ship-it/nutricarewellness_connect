@@ -1,10 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/vitals_model.dart';
-
-import 'clinical_model.dart';
-// 🎯 Ensure this import points to where PrescribedMedication is defined
+import 'package:nutricare_connect/new/models/vitals_model.dart';
+// Ensure this points to where PrescribedMedicine is defined (usually inside vitals_model.dart or prescription_model.dart)
+import 'package:nutricare_connect/new/models/prescription_model.dart';
 
 class VitalsDetailScreen extends StatelessWidget {
   final VitalsModel record;
@@ -102,9 +101,8 @@ class VitalsDetailScreen extends StatelessWidget {
                           _buildSectionHeader("Lab Report Data", Icons.science),
                           _buildDetailCard(
                             record.labResults.entries.map((e) {
-                              // Format keys (e.g., 'fbs' -> 'FBS')
                               String key = e.key.toUpperCase();
-                              return _buildRow(key, e.value);
+                              return _buildRow(key, e.value.toString());
                             }).toList(),
                           ),
                         ],
@@ -123,24 +121,30 @@ class VitalsDetailScreen extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildTagGroup("Diagnosis", record.diagnosis, Colors.red),
+                              // Diagnose from Map
+                              if(record.nutritionDiagnoses != null)
+                                _buildTagGroup("Diagnosis", record.nutritionDiagnoses!.values.toList(), Colors.red),
                               const Divider(height: 24),
-                              _buildTagGroup("Medical History", record.medicalHistory, Colors.blueGrey),
+
+                              // Medical History from Map
+                              _buildTagGroup("Medical History", record.medicalHistory.values.toList(), Colors.blueGrey),
                               const Divider(height: 24),
-                              _buildTagGroup("Complaints",
-                                  record.complaints?.split(',') ?? [],
-                                  Colors.orange
-                              ),
-                              if (record.foodAllergies != null && record.foodAllergies!.isNotEmpty) ...[
+
+                              // Complaints from Map
+                              if(record.clinicalComplaints != null)
+                                _buildTagGroup("Complaints", record.clinicalComplaints!.values.toList(), Colors.orange),
+
+                              // Allergies from List
+                              if (record.foodAllergies.isNotEmpty) ...[
                                 const Divider(height: 24),
-                                _buildTagGroup("Allergies", record.foodAllergies!.split(','), Colors.pink),
+                                _buildTagGroup("Allergies", record.foodAllergies, Colors.pink),
                               ]
                             ],
                           ),
                         ),
 
-                        // SECTION 5: MEDICATIONS
-                        if (record.prescribedMedications.isNotEmpty || (record.existingMedication != null && record.existingMedication!.isNotEmpty)) ...[
+                        // SECTION 5: MEDICATIONS (Using List<PrescribedMedicine>)
+                        if (record.medications.isNotEmpty) ...[
                           _buildSectionHeader("Medications", Icons.medication),
                           Container(
                             padding: const EdgeInsets.all(20),
@@ -153,30 +157,38 @@ class VitalsDetailScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Structured Meds
-                                ...record.prescribedMedications.map((m) {
-                                  // 🎯 FIX: Safe Access using ?. and ??
-                                  final name = m?.medicineName ?? "Unknown";
-                                  final freq = m?.frequency ?? "-";
-                                  final time = m?.timing ?? "-";
+                                ...record.medications.map((m) {
+                                  final name = m.name;
+                                  final freq = m.frequency;
+                                  final dur = m.duration;
+                                  final instr = m.instruction;
 
                                   return Padding(
-                                    padding: const EdgeInsets.only(bottom: 8.0),
+                                    padding: const EdgeInsets.only(bottom: 12.0),
                                     child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                        Text("$freq ($time)", style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                              Text(instr, style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
+                                            ],
+                                          ),
+                                        ),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            Text(freq, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.indigo.shade700)),
+                                            Text(dur, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                          ],
+                                        ),
                                       ],
                                     ),
                                   );
                                 }),
-                                // Legacy/Text Meds
-                                if (record.existingMedication != null && record.existingMedication!.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8.0),
-                                    child: Text(record.existingMedication!, style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
-                                  )
                               ],
                             ),
                           ),
@@ -238,44 +250,7 @@ class VitalsDetailScreen extends StatelessWidget {
       ),
     );
   }
-  Future<void> _toggleMedReminder(BuildContext context, PrescribedMedication med) async {
-    if (!med.isReminderEnabled) {
-      // Enable: Pick Time
-      final time = await showTimePicker(
-          context: context,
-          initialTime: TimeOfDay.now()
-      );
-      if (time != null) {
-        final timeStr = "${time.hour}:${time.minute.toString().padLeft(2, '0')}";
-        _updateMedication(context, med, true, timeStr);
-      }
-    } else {
-      // Disable
-      _updateMedication(context, med, false, null);
-    }
-  }
 
-  Future<void> _updateMedication(BuildContext context, PrescribedMedication oldMed, bool enabled, String? time) async {
-    // 1. Update the specific med in the list
-    final updatedMed = oldMed.copyWith(isReminderEnabled: enabled, reminderTime: time);
-
-    final newList = record.prescribedMedications.map((m) {
-      return m.medicineName == oldMed.medicineName ? updatedMed : m;
-    }).toList();
-
-    // 2. Create updated Vitals Record
-    // Note: VitalsModel needs a copyWith to do this cleanly.
-    // If VitalsModel doesn't have copyWith, we have to reconstruct it manually or add it.
-    // Assuming copyWith exists or similar logic:
-    /* final updatedRecord = record.copyWith(prescribedMedications: newList);
-    await VitalsService().saveVitals(updatedRecord);
-
-    // 3. Schedule Notification
-    await LocalReminderService().scheduleMedicationReminders(newList);
-    */
-
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Reminder Updated")));
-  }
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 4),
