@@ -23,7 +23,7 @@ class ClientDietPlanModel {
   final double dailySleepGoal;       // Hours (e.g., 7.5)
   final int dailyStepGoal;           // Steps (e.g., 8000)
   final int dailyMindfulnessMinutes; // Minutes (e.g., 15)
-  final List<String> assignedHabitIds; // IDs from Habit Master
+  final List<String> assignedHabits; // IDs from Habit Master
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
   final Timestamp? assignedDate;
@@ -54,7 +54,7 @@ class ClientDietPlanModel {
     this.dailySleepGoal = 7.0,
     this.dailyStepGoal = 5000,
     this.dailyMindfulnessMinutes = 10,
-    this.assignedHabitIds = const [],
+    this.assignedHabits = const [],
     this.createdAt,
     this.updatedAt,
     this.assignedDate,
@@ -123,7 +123,7 @@ class ClientDietPlanModel {
       'dailyStepGoal': dailyStepGoal,
       'targetWeightKg': targetWeightKg,
       'dailyMindfulnessMinutes': dailyMindfulnessMinutes,
-      'assignedHabitIds': assignedHabitIds,
+      'assignedHabits': assignedHabits,
       'sessionId': sessionId,
       'targetCalories': targetCalories,
       'dietType': dietType
@@ -172,7 +172,7 @@ class ClientDietPlanModel {
       dailySleepGoal: (data['dailySleepGoal'] as num?)?.toDouble() ?? 7.0,
       dailyStepGoal: (data['dailyStepGoal'] as num?)?.toInt() ?? 5000,
       dailyMindfulnessMinutes: (data['dailyMindfulnessMinutes'] as num?)?.toInt() ?? 10,
-      assignedHabitIds: List<String>.from(data['assignedHabitIds'] ?? []),
+      assignedHabits: List<String>.from(data['assignedHabits'] ?? []),
       sessionId: data['sessionId'],
       targetCalories: (data['targetCalories'] as num?)?.toDouble(),
       dietType: data['dietType'],
@@ -240,7 +240,7 @@ class ClientDietPlanModel {
     Timestamp? createdAt,
     Timestamp? updatedAt,
     List<MasterDayPlanModel>? days,
-    List<String>? assignedHabitIds,
+    List<String>? assignedHabits,
     double? targetWeightKg,
     double? dailyWaterGoal,
     double? dailySleepGoal,
@@ -269,7 +269,7 @@ class ClientDietPlanModel {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       days: days ?? this.days,
-      assignedHabitIds: assignedHabitIds ?? this.assignedHabitIds,
+      assignedHabits: assignedHabits ?? this.assignedHabits,
       targetWeightKg: targetWeightKg ?? this.targetWeightKg,
       dailyWaterGoal: dailyWaterGoal ?? this.dailyWaterGoal,
       dailySleepGoal: dailySleepGoal ?? this.dailySleepGoal,

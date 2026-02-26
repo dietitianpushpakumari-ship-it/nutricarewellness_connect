@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
-import 'package:nutricare_connect/features/auth/client_service.dart';
+import 'package:nutricare_connect/new/service/client_service.dart';
 import 'package:nutricare_connect/features/auth/auth_provider.dart';
 
 // 1. The StateNotifier class to manage the ClientModel

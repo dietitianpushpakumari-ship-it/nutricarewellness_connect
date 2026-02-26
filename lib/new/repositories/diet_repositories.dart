@@ -1,24 +1,23 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
 import 'package:nutricare_connect/new/models/consultation_session_model.dart';
 import 'package:nutricare_connect/new/models/vitals_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-// Ensure this model exists in your project. If not, create it (code provided below).
 
 class DietRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ---------------------------------------------------------------------------
-  // 🎯 1. RELATIONAL FETCHING (Session -> Plan & Vitals)
+  // 🎯 1. RELATIONAL FETCHING (STRICT TENANT ENFORCEMENT)
   // ---------------------------------------------------------------------------
 
-  /// Fetches the latest consultation session for a specific client and tenant.
   Future<ConsultationSessionModel?> getLatestSession(String clientId, String tenantId) async {
     try {
       final query = await _db.collection('patient_consultation_sessions')
           .where('clientId', isEqualTo: clientId)
-          .where('tenantId', isEqualTo: tenantId) // 白 Strict Tenant Check
-          .orderBy('sessionDate', descending: true) // Get newest first
+          .where('tenantId', isEqualTo: tenantId) // 🔒 Enforced
+          .orderBy('sessionDate', descending: true)
           .limit(1)
           .get();
 
@@ -29,12 +28,13 @@ class DietRepository {
       return null;
     }
   }
+
   Future<ClientDietPlanModel?> getActivePlan(String clientId, String tenantId) async {
     try {
       final query = await _db.collection('patient_mealPlan')
           .where('clientId', isEqualTo: clientId)
-          .where('tenantId', isEqualTo: tenantId)
-          .where('isActive', isEqualTo: true) // Direct Active Check
+          .where('tenantId', isEqualTo: tenantId) // 🔒 Enforced
+          .where('isActive', isEqualTo: true)
           .orderBy('createdAt', descending: true)
           .limit(1)
           .get();
@@ -47,11 +47,11 @@ class DietRepository {
     }
   }
 
-  // 識 NEW: Fallback - Fetch Latest Vitals directly
-  Future<VitalsModel?> getLatestVitals(String clientId) async {
+  Future<VitalsModel?> getLatestVitals(String clientId, String tenantId) async {
     try {
       final query = await _db.collection('patient_vitals')
           .where('clientId', isEqualTo: clientId)
+          .where('tenantId', isEqualTo: tenantId) // 🔒 STRICT ENFORCEMENT ADDED
           .orderBy('date', descending: true)
           .limit(1)
           .get();
@@ -63,11 +63,13 @@ class DietRepository {
       return null;
     }
   }
-  /// Fetches the Diet Plan by ID (linked from session)
-  Future<ClientDietPlanModel?> getPlanById(String planId) async {
+
+  Future<ClientDietPlanModel?> getPlanById(String planId, String tenantId) async {
     try {
       final doc = await _db.collection('patient_mealPlan').doc(planId).get();
-      if (!doc.exists) return null;
+      // 🔒 STRICT ENFORCEMENT: Reject if the document belongs to another clinic
+      if (!doc.exists || doc.data()?['tenantId'] != tenantId) return null;
+
       return ClientDietPlanModel.fromFirestore(doc);
     } catch (e) {
       print("Error fetching plan $planId: $e");
@@ -75,11 +77,12 @@ class DietRepository {
     }
   }
 
-  /// Fetches Vitals/Clinical Data by ID (linked from session)
-  Future<VitalsModel?> getVitalsById(String vitalsId) async {
+  Future<VitalsModel?> getVitalsById(String vitalsId, String tenantId) async {
     try {
       final doc = await _db.collection('patient_vitals').doc(vitalsId).get();
-      if (!doc.exists) return null;
+      // 🔒 STRICT ENFORCEMENT: Reject if the document belongs to another clinic
+      if (!doc.exists || doc.data()?['tenantId'] != tenantId) return null;
+
       return VitalsModel.fromFirestore(doc);
     } catch (e) {
       print("Error fetching vitals $vitalsId: $e");
@@ -88,39 +91,39 @@ class DietRepository {
   }
 
   // ---------------------------------------------------------------------------
-  // 🎯 2. LOGGING LOGIC (Client Scoped)
+  // 🎯 2. ATOMIC LOGGING LOGIC (STRICT TENANT ENFORCEMENT)
   // ---------------------------------------------------------------------------
 
-  /// Fetches logs for a specific date (used by Daily View)
-  Future<List<ClientLogModel>> getLogsForDate(String clientId, DateTime date) async {
-    final startOfDay = DateTime(date.year, date.month, date.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
+  Future<ClientLogModel?> getDailyRecord(String clientId, DateTime date, String tenantId) async {
+    final dateId = DateFormat('yyyy-MM-dd').format(date);
 
     try {
-      final snapshot = await _db
+      final doc = await _db
           .collection('clients')
           .doc(clientId)
-          .collection('logs')
-          .where('date', isGreaterThanOrEqualTo: startOfDay)
-          .where('date', isLessThan: endOfDay)
+          .collection('daily_logs')
+          .doc(dateId)
           .get();
 
-      return snapshot.docs
-          .map((doc) => ClientLogModel.fromMap(doc.data(), doc.id))
-          .toList();
+      if (!doc.exists || doc.data() == null) return null;
+
+      // 🔒 STRICT ENFORCEMENT: Ensure the fetched log matches the clinic context
+      if (doc.data()!['tenantId'] != tenantId) return null;
+
+      return ClientLogModel.fromMap(doc.data()!, doc.id);
     } catch (e) {
-      print("Error fetching logs for date: $e");
-      return [];
+      print("Error fetching daily record: $e");
+      return null;
     }
   }
 
-  /// 🎯 FIXED: This was missing! Fetches ALL logs for history/trends.
-  Future<List<ClientLogModel>> fetchAllClientLogs(String clientId) async {
+  Future<List<ClientLogModel>> fetchAllClientLogs(String clientId, String tenantId) async {
     try {
       final snapshot = await _db
           .collection('clients')
           .doc(clientId)
-          .collection('logs')
+          .collection('daily_logs')
+          .where('tenantId', isEqualTo: tenantId) // 🔒 STRICT ENFORCEMENT ADDED
           .orderBy('date', descending: true)
           .get();
 
@@ -133,24 +136,31 @@ class DietRepository {
     }
   }
 
-  /// Creates or Updates a Log entry
-  Future<ClientLogModel> createOrUpdateLog(ClientLogModel log) async {
+  Future<void> saveAtomicDailyRecord({
+    required String clientId,
+    required String tenantId, // 🔒 ALREADY STRICT
+    required String dateId,
+    required Map<String, dynamic> data,
+  }) async {
     try {
-      final collectionRef = _db.collection('clients').doc(log.clientId).collection('logs');
+      final docRef = _db
+          .collection('clients')
+          .doc(clientId)
+          .collection('daily_logs')
+          .doc(dateId);
 
-      // If ID exists, update; otherwise, create new
-      final docRef = log.id.isNotEmpty
-          ? collectionRef.doc(log.id)
-          : collectionRef.doc(); // Auto-ID
+      // Inject security & tracking metadata directly at the data layer
+      data['tenantId'] = tenantId;
+      data['clientId'] = clientId;
+      data['dateId'] = dateId;
+      data['lastUpdated'] = FieldValue.serverTimestamp();
 
-      final logWithId = log.copyWith(id: docRef.id);
+      data['date'] ??= Timestamp.fromDate(DateTime.parse(dateId));
 
-      // Use set with merge to be safe
-      await docRef.set(logWithId.toMap(), SetOptions(merge: true));
+      await docRef.set(data, SetOptions(merge: true));
 
-      return logWithId;
     } catch (e) {
-      throw Exception("Failed to save log: $e");
+      throw Exception("Failed to atomic update daily record: $e");
     }
   }
 }

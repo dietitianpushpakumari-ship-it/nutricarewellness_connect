@@ -1,36 +1,35 @@
-import 'dart:ui'; // 🎯 NEW: Required for the Glassmorphic BackdropFilter
+import 'dart:ui';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/new/core/theme_provider.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:collection/collection.dart';
 
-// 🎯 CORE WIDGETS & SCREENS
+// 🎯 WIDGETS
 import 'package:nutricare_connect/new/dashboard/dashboard_widgets.dart';
 import 'package:nutricare_connect/core/utils/followup_banner.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/smart_nudge_bar.dart';
-import 'package:nutricare_connect/features/profile/profile_Screen.dart';
+import 'package:nutricare_connect/new/home/smart_nudge_bar.dart';
+import 'package:nutricare_connect/new/dashboard/profile_Screen.dart';
 import 'package:nutricare_connect/core/utils/rating_dialog.dart';
 import 'package:nutricare_connect/core/utils/rating_service.dart';
 import 'package:nutricare_connect/new/dashboard/comapct_trend_grid.dart';
 
 // 🎯 DETAIL SHEETS
-import 'package:nutricare_connect/core/utils/hydration_detail_screen.dart';
-import 'package:nutricare_connect/core/utils/movement_Details_sheet.dart';
-import 'package:nutricare_connect/core/utils/sleep_details_screen.dart';
-import 'package:nutricare_connect/core/utils/breathing_detail_screen.dart';
+import 'package:nutricare_connect/new/dietplan/hydration_detail_screen.dart';
+import 'package:nutricare_connect/new/dietplan/movement_Details_sheet.dart';
+import 'package:nutricare_connect/new/dietplan/sleep_details_screen.dart';
+import 'package:nutricare_connect/new/wellnesshub/breathing_detail_screen.dart';
 import 'package:nutricare_connect/core/utils/mindfullness_config.dart';
-import 'package:nutricare_connect/core/utils/analytics_detail_screen.dart';
+import 'package:nutricare_connect/new/dashboard/analytics_detail_screen.dart';
 
 // 🎯 PROVIDERS & ENTITIES
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
 import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/features/auth/client_service.dart';
+import 'package:nutricare_connect/new/service/client_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final ClientModel client;
@@ -110,7 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           _throttledAutoSync(event.steps);
         }
       }).onError((e) {
-        print("Pedometer Error: $e");
+        debugPrint("Pedometer Error: $e");
       });
     }
   }
@@ -131,16 +130,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _performSync(totalSensorSteps);
   }
 
+  // 🎯 ATOMIC SYNC: Uses updateDailyRecord map logic
   void _performSync(int totalSensorSteps, {bool forceSave = false}) {
     if (totalSensorSteps == 0) return;
 
     final state = ref.read(activeDietPlanProvider);
     if (!DateUtils.isSameDay(state.selectedDate, DateTime.now())) return;
 
-    final dailyLog = state.dailyLogs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
-    final int baseline = dailyLog?.sensorStepsBaseline ?? 0;
+    // 🎯 NEW: Read directly from dailyRecord instead of searching a list
+    final dailyRecord = state.dailyRecord;
+    final int baseline = dailyRecord?.sensorStepsBaseline ?? 0;
     final int calculatedDailySteps = (baseline == 0) ? 0 : totalSensorSteps - baseline;
-    final int savedSteps = dailyLog?.stepCount ?? 0;
+    final int savedSteps = dailyRecord?.stepCount ?? 0;
 
     if (state.activePlan != null && (baseline == 0 || calculatedDailySteps > savedSteps)) {
       _lastSaveTime = DateTime.now();
@@ -149,34 +150,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final int newBaseline = (baseline == 0) ? totalSensorSteps : baseline;
       final int newDailySteps = (baseline == 0) ? 0 : calculatedDailySteps;
 
-      final logToSave = dailyLog ?? ClientLogModel(
-        id: '',
-        clientId: state.activePlan!.clientId,
-        dietPlanId: state.activePlan!.id,
-        mealName: 'DAILY_WELLNESS_CHECK',
-        actualFoodEaten: ['Daily Wellness Data'],
-        date: DateTime.now(),
-      );
-
       final int stepGoal = state.activePlan?.dailyStepGoal ?? 8000;
       final int calories = (newDailySteps * 0.04).round();
       int score = 0;
 
       if (stepGoal > 0) score += ((newDailySteps / stepGoal) * 50).round().clamp(0, 50);
-      final int completedTasks = dailyLog?.completedMandatoryTasks.length ?? 0;
+      final int completedTasks = dailyRecord?.completedMandatoryTasks.length ?? 0;
       score += (completedTasks * 10).clamp(0, 50);
 
       _checkAndShowStepAchievement(savedSteps, newDailySteps, stepGoal);
 
-      final updatedLog = logToSave.copyWith(
-        sensorStepsBaseline: newBaseline,
-        stepCount: newDailySteps,
-        stepGoal: stepGoal,
-        caloriesBurned: calories,
-        activityScore: score,
-      );
+      // 🎯 NEW: Atomic Map Update
+      final updateData = {
+        'sensorStepsBaseline': newBaseline,
+        'stepCount': newDailySteps,
+        'stepGoal': stepGoal,
+        'caloriesBurned': calories,
+        'activityScore': score,
+      };
 
-      notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
+      notifier.updateDailyRecord(data: updateData);
     }
   }
 
@@ -194,201 +187,210 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   void _showVictoryDialog(double milestone) {
-    showDialog(context: context, builder: (_) => AlertDialog(title: const Text("Goal Reached!"), content: Text("You hit ${(milestone*100).toInt()}% of your step goal.")));
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: theme.cardColor,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: theme.dividerColor.withOpacity(0.2))
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.emoji_events_rounded, color: isDark ? Colors.amberAccent : Colors.amber, size: 24),
+              const SizedBox(width: 8),
+              Expanded(child: Text("Goal Reached!", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold))),
+            ],
+          ),
+          content: Text(
+              "You hit ${(milestone*100).toInt()}% of your step goal.",
+              style: TextStyle(color: theme.hintColor)
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Awesome!", style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold)),
+            )
+          ],
+        )
+    );
   }
 
   // --- HANDLERS ---
-  void _showBreathingMenu(BuildContext context, DietPlanNotifier notifier, ClientDietPlanModel activePlan, ClientLogModel? dailyLog) {
+
+  // 🎯 ATOMIC FIX: Passes dailyRecord to sheets instead of finding logs
+  void _showBreathingMenu(BuildContext context, DietPlanNotifier notifier, ClientDietPlanModel activePlan, ClientLogModel? dailyRecord, ThemeData theme, ColorScheme colorScheme, bool isDark) {
     showModalBottomSheet(
+      isDismissible: false,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(30))),
+        decoration: BoxDecoration(
+          color: theme.scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("${context.tr("lbl_choose_mode")}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(context.tr("lbl_choose_mode"), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
             const SizedBox(height: 20),
-            _buildPresetTile(ctx, "${context.tr("focus_and_clarity")}", "${context.tr("lbl_box_breathing")}", Icons.crop_square, Colors.teal, () => _launchBreathingSheet(context, notifier, activePlan, dailyLog, BreathingConfig.box)),
-            _buildPresetTile(ctx, "${context.tr("sleep_and_anxiety")}", " ${context.tr("lbl_relax_breath")}", Icons.nightlight_round, Colors.indigo, () => _launchBreathingSheet(context, notifier, activePlan, dailyLog, BreathingConfig.relax)),
-            _buildPresetTile(ctx, "${context.tr("lbl_energy_boost")}", "${context.tr("lbl_rapid_awakening")}", Icons.bolt, Colors.orange, () => _launchBreathingSheet(context, notifier, activePlan, dailyLog, BreathingConfig.energy)),
+            _buildPresetTile(ctx, context.tr("focus_and_clarity"), context.tr("lbl_box_breathing"), Icons.crop_square_rounded, Colors.teal, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.box), theme, colorScheme),
+            _buildPresetTile(ctx, context.tr("sleep_and_anxiety"), context.tr("lbl_relax_breath"), Icons.nightlight_round, Colors.indigo, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.relax), theme, colorScheme),
+            _buildPresetTile(ctx, context.tr("lbl_energy_boost"), context.tr("lbl_rapid_awakening"), Icons.bolt_rounded, Colors.orange, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.energy), theme, colorScheme),
           ],
         ),
       ),
     );
   }
 
-  void _launchBreathingSheet(BuildContext context, DietPlanNotifier notifier, ClientDietPlanModel plan, ClientLogModel? log, BreathingConfig config) {
+  void _launchBreathingSheet(BuildContext context, DietPlanNotifier notifier, ClientDietPlanModel plan, ClientLogModel? dailyRecord, BreathingConfig config) {
     Navigator.pop(context);
-    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => BreathingDetailSheet(notifier: notifier, activePlan: plan, dailyLog: log, config: config));
+    showModalBottomSheet(isDismissible:false,context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => BreathingDetailSheet(notifier: notifier, activePlan: plan, dailyLog: dailyRecord, config: config));
   }
 
-  Widget _buildPresetTile(BuildContext context, String title, String subtitle, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildPresetTile(BuildContext context, String title, String subtitle, IconData icon, Color color, VoidCallback onTap, ThemeData theme, ColorScheme colorScheme) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: color)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+      leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+          child: Icon(icon, color: color)
+      ),
+      title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+      subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: theme.hintColor)),
+      trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: theme.iconTheme.color?.withOpacity(0.5)),
       onTap: onTap,
     );
   }
 
-  Future<void> _quickAddWater(DietPlanNotifier notifier, dynamic activePlan, ClientLogModel? log, double current) async {
+  // 🎯 ATOMIC QUICK ADD WATER
+  Future<void> _quickAddWater(DietPlanNotifier notifier, double current) async {
     try {
       final newTotal = (current + 0.25).clamp(0.0, 10.0);
-      final logToSave = log ?? ClientLogModel(
-        id: '',
-        clientId: activePlan.clientId,
-        dietPlanId: activePlan.id,
-        mealName: 'DAILY_WELLNESS_CHECK',
-        actualFoodEaten: ['Daily Wellness Data'],
-        date: DateTime.now(),
-      );
-      final updatedLog = logToSave.copyWith(hydrationLiters: newTotal);
-      await notifier.createOrUpdateLog(log: updatedLog, mealPhotoFiles: const []);
+
+      await notifier.updateDailyRecord(data: {
+        'hydrationLiters': newTotal,
+      });
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('+250ml Added!'), duration: const Duration(milliseconds: 800), backgroundColor: Theme.of(context).colorScheme.primary));
+        final theme = Theme.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('+250ml Added!'), duration: const Duration(milliseconds: 800), backgroundColor: theme.colorScheme.primary));
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint("Failed to add water: $e");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     final state = ref.watch(activeDietPlanProvider);
     final notifier = ref.read(dietPlanNotifierProvider(widget.client.id).notifier);
 
-    final ClientLogModel? dailyLog = state.dailyLogs.firstWhereOrNull((log) => log.mealName == 'DAILY_WELLNESS_CHECK');
+    // 🎯 NEW: Single Source of Truth
+    final dailyRecord = state.dailyRecord;
 
-    // 🎯 DATA BINDING
-    final double waterIntake = dailyLog?.hydrationLiters ?? 0.0;
+    // 🎯 Read top-level properties directly from the record
+    final double waterIntake = dailyRecord?.hydrationLiters ?? 0.0;
     final double waterGoal = state.activePlan?.dailyWaterGoal ?? 3.0;
 
-    final int baseline = dailyLog?.sensorStepsBaseline ?? 0;
-    final int savedSteps = dailyLog?.stepCount ?? 0;
+    final int baseline = dailyRecord?.sensorStepsBaseline ?? 0;
+    final int savedSteps = dailyRecord?.stepCount ?? 0;
     final int displaySteps = (_sensorActive && DateUtils.isSameDay(state.selectedDate, DateTime.now()) && baseline > 0 && _liveSensorSteps >= baseline)
         ? _liveSensorSteps - baseline
         : savedSteps;
     final int stepGoal = state.activePlan?.dailyStepGoal ?? 8000;
 
-    final double sleepHours = dailyLog?.totalSleepDurationHours ?? 0.0;
-    final int sleepScore = dailyLog?.sleepScore ?? 0;
-    final int breathMin = dailyLog?.breathingMinutes ?? 0;
+    final double sleepHours = dailyRecord?.totalSleepDurationHours ?? 0.0;
+    final int sleepScore = dailyRecord?.sleepScore ?? 0;
+    final int breathMin = dailyRecord?.breathingMinutes ?? 0;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
-          // ========================================================
-          // 🎯 THE ULTRA-PREMIUM GLASSMORPHIC BACKGROUND
-          // ========================================================
-
-          // Orb 1: Top Right Glow
+          // Ambient Orbs
           Positioned(
             top: -150, right: -100,
             child: Container(
               width: 400, height: 400,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                color: colorScheme.primary.withOpacity(isDark ? 0.15 : 0.3),
               ),
             ),
           ),
-
-          // Orb 2: Bottom Left Secondary Glow
           Positioned(
             bottom: 100, left: -150,
             child: Container(
               width: 350, height: 350,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Theme.of(context).colorScheme.secondary.withOpacity(0.2),
+                color: colorScheme.secondary.withOpacity(isDark ? 0.15 : 0.2),
               ),
             ),
           ),
-
-          // 🎯 The Magic Blur Layer: This turns the sharp orbs into a smooth mesh gradient
           Positioned.fill(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
               child: Container(color: Colors.transparent),
             ),
           ),
-          // ========================================================
 
           CustomScrollView(
+            physics: const BouncingScrollPhysics(),
             slivers: [
-              // 2. PREMIUM HEADER
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 30, 24, 10),
+                  padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 20, 24, 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                              DateFormat('EEEE, d MMMM').format(DateTime.now()),
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6), letterSpacing: 0.5)
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "${ context.tr("dash_hello")}, ${widget.client.name?.split(' ').first ?? 'Friend'}",
-                            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.onSurface, letterSpacing: -0.5),
-                          ),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                                DateFormat('EEEE, d MMMM').format(DateTime.now()),
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface.withOpacity(0.6))
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "${context.tr("dash_hello")}, ${widget.client.name?.split(' ').first ?? 'Friend'}",
+                              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ],
+                        ),
                       ),
-
-                      // 🎯 Direct Toggle Button + Profile Avatar with Glassy Borders
-                      Row(
-                        children: [
-                          // Theme Toggle Button
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Theme.of(context).colorScheme.surface, // Glassy translucent fill
-                              border: Border.all(color: Colors.white.withOpacity(0.3)), // Delicate glass rim
-                            ),
-                            child: IconButton(
-                              icon: Icon(Icons.brightness_6_outlined, color: Theme.of(context).colorScheme.primary),
-                              onPressed: () {
-                                ref.read(themeProvider.notifier).toggleTheme();
-                              },
-                              tooltip: 'Switch Theme',
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Profile Avatar
-                          GestureDetector(
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white.withOpacity(0.4), width: 2), // Glassy rim
-                              ),
-                              child: CircleAvatar(
-                                radius: 22,
-                                backgroundColor: Theme.of(context).colorScheme.surface,
-                                backgroundImage: widget.client.photoUrl != null ? NetworkImage(widget.client.photoUrl!) : null,
-                                child: widget.client.photoUrl == null
-                                    ? Text(widget.client.name?[0] ?? 'U', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold))
-                                    : null,
-                              ),
-                            ),
-                          ),
-                        ],
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                          );
+                        },
+                        child: CircleAvatar(
+                          radius: 20,
+                          backgroundColor: colorScheme.primary.withOpacity(0.1),
+                          child: Icon(Icons.person_outline_rounded, color: colorScheme.primary, size: 20),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
 
-              // 3. FOLLOW UP (Appointments)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -396,73 +398,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
               ),
 
-              // 4. SMART NUDGES (Focus Rail)
               SliverToBoxAdapter(
                 child: SmartNudgeBar(clientId: widget.client.id),
               ),
 
-              // 5. BENTO GRID (Compact)
+              // 🎯 ATOMIC DATA INJECTION TO BENTO CARDS
               SliverPadding(
                 padding: const EdgeInsets.all(16),
                 sliver: SliverGrid.count(
                   crossAxisCount: 2,
                   mainAxisSpacing: 16,
                   crossAxisSpacing: 16,
-                  childAspectRatio: 1.4,
+                  childAspectRatio: 1.45,
                   children: [
                     MiniHydrationCard(
-                      currentLiters: waterIntake,
-                      goalLiters: waterGoal,
-                      waveAnimation: _waveController,
-                      onTap: () {
-                        if (state.activePlan == null) return;
-                        showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => HydrationDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyLog, currentIntake: waterIntake));
-                      },
-                      onQuickAdd: () {
-                        if (state.activePlan == null) return;
-                        _quickAddWater(notifier, state.activePlan!, dailyLog, waterIntake);
-                      },
+                      currentLiters: waterIntake, goalLiters: waterGoal, waveAnimation: _waveController,
+                      onTap: () => showModalBottomSheet(isDismissible:false,context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => HydrationDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyRecord, currentIntake: waterIntake)),
+                      onQuickAdd: () => _quickAddWater(notifier, waterIntake),
                     ),
                     MiniStepCard(
-                      steps: displaySteps,
-                      goal: stepGoal,
-                      onTap: () {
-                        if (state.activePlan == null) return;
-                        showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MovementDetailSheet.withSteps(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyLog, currentSteps: displaySteps));
-                      },
+                      steps: displaySteps, goal: stepGoal,
+                      onTap: () => showModalBottomSheet(isDismissible:false,context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MovementDetailSheet.withSteps(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyRecord, currentSteps: displaySteps)),
                     ),
                     MiniSleepCard(
-                      hours: sleepHours,
-                      score: sleepScore,
-                      onTap: () {
-                        if (state.activePlan == null) return;
-                        showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => SleepDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyLog));
-                      },
+                      hours: sleepHours, score: sleepScore,
+                      onTap: () => showModalBottomSheet(isDismissible:false,context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => SleepDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyRecord)),
                     ),
                     MiniBreathingCard(
                       minutesLogged: breathMin,
-                      onTap: () {
-                        if (state.activePlan == null) return;
-                        _showBreathingMenu(context, notifier, state.activePlan!, dailyLog);
-                      },
+                      onTap: () => _showBreathingMenu(context, notifier, state.activePlan!, dailyRecord, theme, colorScheme, isDark),
                     ),
                   ],
                 ),
               ),
 
-              // 🎯 6. COMPACT INSIGHTS & TRENDS
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Column(
-                    children: [
-                      // A. Weekly Pulse (Slim)
-                      CompactTrendCard(clientId: widget.client.id),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
+                sliver: SliverToBoxAdapter(
+                  child: CompactTrendCard(clientId: widget.client.id),
                 ),
               ),
+
+              const SliverPadding(padding: EdgeInsets.only(bottom: 160)),
             ],
           ),
         ],

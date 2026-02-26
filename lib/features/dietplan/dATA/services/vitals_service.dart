@@ -1,136 +1,168 @@
-// lib/services/vitals_service.dart
+// lib/features/dietplan/dATA/services/vitals_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
+import 'package:nutricare_connect/features/auth/auth_provider.dart';
 import 'package:nutricare_connect/new/models/vitals_model.dart';
-// Ensure this models exists
 
-// Assuming you have a logger instance initialized globally or in your services file
-final Logger _logger = Logger(/* ... */);
+final Logger _logger = Logger();
+
+final vitalsServiceProvider = Provider<VitalsService>((ref) {
+  // Watch the current client from your AuthNotifier
+  final currentClient = ref.watch(currentClientProvider);
+
+  // Extract their tenantId (fallback to empty string if not logged in)
+  final tenantId = currentClient?.tenantId ?? '';
+
+  // Return the configured service
+  return VitalsService(tenantId: tenantId);
+});
 
 class VitalsService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // 🎯 1. Hold the tenantId at the class level
+  final String tenantId;
+
+  // 🎯 2. Require it when the service is created
+  VitalsService({required this.tenantId});
+
   CollectionReference _getVitalsCollection() {
-    // Stores vitals in clients/{clientId}/vitals
-    // return _firestore.collection('clients').doc(clientId).collection('vitals');
-    return _firestore.collection('clientVitals');
+    // 🎯 Use the new collection name
+    return _firestore.collection('patient_vitals');
   }
 
   // --- CREATE/ADD NEW VITALS RECORD ---
-
   Future<void> addVitals(VitalsModel vitals) async {
-    _logger.i('Adding new vitals record for client: ${vitals.clientId}');
+    _logger.i('Adding vitals for client: ${vitals.clientId}');
     try {
-      await _getVitalsCollection().add(vitals.toMap());
+      final data = vitals.toMap();
+      data['tenantId'] = tenantId; // 🎯 Automatically applied
+
+      await _getVitalsCollection().add(data);
     } catch (e, stack) {
-      _logger.e(
-        'Error adding vitals: ${e.toString()}',
-        error: e,
-        stackTrace: stack,
-      );
+      _logger.e('Error adding vitals: $e', error: e, stackTrace: stack);
       throw Exception('Failed to add vitals record.');
     }
   }
 
   // --- READ/RETRIEVAL: GET ALL VITALS FOR HISTORY ---
-
   Future<List<VitalsModel>> getClientVitals(String clientId) async {
     try {
       final snapshot = await _getVitalsCollection()
+          .where('tenantId', isEqualTo: tenantId) // 🎯 Strictly filter by tenant
           .where('clientId', isEqualTo: clientId)
-          .orderBy('date', descending: true) // Sort by most recent first
+          .orderBy('date', descending: true)
           .get();
 
-      return snapshot.docs
-          .map((doc) => VitalsModel.fromFirestore(doc))
-          .toList();
+      return snapshot.docs.map((doc) => VitalsModel.fromFirestore(doc)).toList();
     } catch (e) {
-      _logger.e('Error fetching vitals: ${e.toString()}');
+      _logger.e('Error fetching vitals: $e');
       return [];
     }
   }
 
-  // await _clientCollection.where('assignedDietPlanIds', isEqualTo: mobile).limit(1).get();
-  Future<List<VitalsModel>> getClientMappedVitals(String clientId,
-      String planId,) async {
+  Future<List<VitalsModel>> getClientMappedVitals(String clientId, String planId) async {
     try {
       final snapshot = await _getVitalsCollection()
+          .where('tenantId', isEqualTo: tenantId) // 🎯 Strictly filter by tenant
           .where('assignedDietPlanIds', arrayContains: planId)
-          .orderBy('date', descending: true) // Sort by most recent first
+          .orderBy('date', descending: true)
           .get();
 
-      return snapshot.docs
-          .map((doc) => VitalsModel.fromFirestore(doc))
-          .toList();
+      return snapshot.docs.map((doc) => VitalsModel.fromFirestore(doc)).toList();
     } catch (e) {
-      _logger.e('Error fetching vitals: ${e.toString()}');
+      _logger.e('Error fetching vitals: $e');
       return [];
     }
   }
 
   // --- UPDATE EXISTING VITALS RECORD ---
-
   Future<void> updateVitals(VitalsModel vitals) async {
     if (vitals.id.isEmpty) {
       throw Exception('Vitals ID is required for update.');
     }
-    _logger.i(
-      'Updating vitals record ${vitals.id} for client: ${vitals.clientId}',
-    );
+    _logger.i('Updating vitals record ${vitals.id} for client: ${vitals.clientId}');
+
     try {
-      await _getVitalsCollection(
-      ).doc(vitals.id).update(vitals.toMap());
+      final docRef = _getVitalsCollection().doc(vitals.id);
+      final docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
+        throw Exception('Vitals record not found.');
+      }
+
+      // 🎯 Strict read-before-write check
+      final docData = docSnap.data() as Map<String, dynamic>;
+      if (docData['tenantId'] != tenantId) {
+        throw Exception('Unauthorized: tenantId mismatch.');
+      }
+
+      final data = vitals.toMap();
+      data['tenantId'] = tenantId; // Enforce tenant presence in update
+
+      await docRef.update(data);
     } catch (e, stack) {
-      _logger.e(
-        'Error updating vitals: ${e.toString()}',
-        error: e,
-        stackTrace: stack,
-      );
+      _logger.e('Error updating vitals: $e', error: e, stackTrace: stack);
       throw Exception('Failed to update vitals record.');
     }
   }
 
   // --- DELETE VITALS RECORD ---
-
-  Future<void> deleteVitals(String clientId, String recordId) async {
-    _logger.i('Deleting vitals record $recordId for client: $clientId');
+  Future<void> deleteVitals(String recordId) async {
+    _logger.i('Deleting vitals record $recordId');
     try {
-      await _getVitalsCollection().doc(recordId).delete();
+      final docRef = _getVitalsCollection().doc(recordId);
+      final docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
+        throw Exception('Vitals record not found.');
+      }
+
+      // 🎯 Strict read-before-delete check
+      final docData = docSnap.data() as Map<String, dynamic>;
+      if (docData['tenantId'] != tenantId) {
+        throw Exception('Unauthorized: tenantId mismatch.');
+      }
+
+      await docRef.delete();
     } catch (e, stack) {
-      _logger.e(
-        'Error deleting vitals: ${e.toString()}',
-        error: e,
-        stackTrace: stack,
-      );
+      _logger.e('Error deleting vitals: $e', error: e, stackTrace: stack);
       throw Exception('Failed to delete vitals record.');
     }
   }
 
-  Future<void> updateAssignedDietPlans(String clientId,
-      String id,
-      List<String> finalAssignedIds,) async {
+  // --- UPDATE ASSIGNED DIET PLANS ---
+  Future<void> updateAssignedDietPlans(String id, List<String> finalAssignedIds) async {
     try {
-      await _getVitalsCollection(
-      ).doc(id).update({'assignedDietPlanIds': finalAssignedIds});
+      final docRef = _getVitalsCollection().doc(id);
+      final docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
+        throw Exception('Vitals record not found.');
+      }
+
+      // 🎯 Strict read-before-write check
+      final docData = docSnap.data() as Map<String, dynamic>;
+      if (docData['tenantId'] != tenantId) {
+        throw Exception('Unauthorized: tenantId mismatch.');
+      }
+
+      await docRef.update({'assignedDietPlanIds': finalAssignedIds});
     } catch (e, stack) {
-      _logger.e(
-        'Error updating vitals: ${e.toString()}',
-        error: e,
-        stackTrace: stack,
-      );
+      _logger.e('Error updating vitals: $e', error: e, stackTrace: stack);
       throw Exception('Failed to update vitals record.');
     }
   }
 
-
-// --- GET VITALS FOR SPECIFIC DATE ---
+  // --- GET VITALS FOR SPECIFIC DATE ---
   Future<VitalsModel?> getDailyVitals(String clientId, DateTime date) async {
     try {
-      // Create a range for the whole day
       final startOfDay = DateTime(date.year, date.month, date.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
       final snapshot = await _getVitalsCollection()
+          .where('tenantId', isEqualTo: tenantId) // 🎯 Strictly filter by tenant
           .where('clientId', isEqualTo: clientId)
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('date', isLessThan: Timestamp.fromDate(endOfDay))
@@ -146,22 +178,31 @@ class VitalsService {
       return null;
     }
   }
-  // 🎯 NEW: SAVE METHOD
+
+  // --- 🎯 SMART SAVE METHOD (CREATE OR UPDATE) ---
   Future<void> saveVitals(VitalsModel vital) async {
     try {
-      // If ID exists, update. If empty, create new.
+      final data = vital.toMap();
+      data['tenantId'] = tenantId; // 🎯 Strictly enforce tenantId
+
       if (vital.id.isNotEmpty) {
-        await _getVitalsCollection(
-        )
-            .doc(vital.id)
-            .set(vital.toMap(), SetOptions(merge: true));
+        final docRef = _getVitalsCollection().doc(vital.id);
+        final docSnap = await docRef.get();
+
+        // 🎯 Strict verification if the document exists before merging
+        if (docSnap.exists) {
+          final docData = docSnap.data() as Map<String, dynamic>;
+          if (docData['tenantId'] != tenantId) {
+            throw Exception('Unauthorized: tenantId mismatch on save.');
+          }
+        }
+
+        await docRef.set(data, SetOptions(merge: true));
       } else {
-       await _getVitalsCollection(
-        ).add(vital.toMap());
+        await _getVitalsCollection().add(data);
       }
     } catch (e) {
       throw Exception("Failed to save vitals: $e");
     }
   }
-
 }

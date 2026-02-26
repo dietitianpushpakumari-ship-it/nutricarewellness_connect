@@ -1,11 +1,10 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/core/localization/localization_extension.dart';
-import 'package:nutricare_connect/core/utils/analytics_detail_screen.dart';
+import 'package:nutricare_connect/new/dashboard/analytics_detail_screen.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:collection/collection.dart';
 
 class CompactTrendCard extends ConsumerWidget {
   final String clientId;
@@ -53,14 +52,18 @@ class CompactTrendCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                      "${context.tr("dashboard_weekly_pulse")}",
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        height: 1.2,
-                        color: colorScheme.onSurface, // Adapts to light/dark
-                      )
+                  Flexible(
+                    child: Text(
+                        context.tr("dashboard_weekly_pulse"),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          height: 1.2,
+                          color: colorScheme.onSurface,
+                        )
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Container(
@@ -70,10 +73,10 @@ class CompactTrendCard extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(4)
                     ),
                     child: Text(
-                        "${context.tr("dashboard_view_report")}",
+                        context.tr("dashboard_view_report"),
                         style: TextStyle(
                             fontSize: 10,
-                            color: colorScheme.primary, // Theme primary color
+                            color: colorScheme.primary,
                             fontWeight: FontWeight.bold
                         )
                     ),
@@ -96,12 +99,14 @@ class CompactTrendCard extends ConsumerWidget {
                       barGroups: List.generate(7, (index) {
                         final date = DateTime.now().subtract(Duration(days: 6 - index));
                         final dayKey = DateTime(date.year, date.month, date.day);
-                        final log = logs[dayKey]?.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
+
+                        // 🎯 ATOMIC FIX: Read directly from the day's master record
+                        final log = logs[dayKey];
 
                         double score = 0;
                         if (log != null) {
-                          double s = ((log.stepCount ?? 0) / 6000.0).clamp(0.0, 1.0);
-                          double w = ((log.hydrationLiters ?? 0) / 2.5).clamp(0.0, 1.0);
+                          double s = ((log.stepCount) / 6000.0).clamp(0.0, 1.0);
+                          double w = ((log.hydrationLiters) / 2.5).clamp(0.0, 1.0);
                           score = (s + w) / 2 * 8;
                         }
 

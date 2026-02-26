@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:nutricare_connect/features/auth/client_service.dart';
+import 'package:nutricare_connect/new/service/client_service.dart';
 import 'package:nutricare_connect/core/utils/database_provider.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
 

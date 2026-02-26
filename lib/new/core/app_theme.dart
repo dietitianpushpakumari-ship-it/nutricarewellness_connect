@@ -68,6 +68,11 @@ class AppTheme {
       fontFamily: primaryFontFamily,
       brightness: Brightness.dark, // 🎯 Forces Dark Mode constraints globally
       scaffoldBackgroundColor: background,
+
+      // 🎯 FIX 1: GLOBALLY FIXES DROPDOWN BUTTONS
+      // Standard DropdownButtons use canvasColor for their menu background.
+      canvasColor: background,
+
       colorScheme: ColorScheme.dark(
         primary: primary,
         secondary: secondary,
@@ -79,6 +84,10 @@ class AppTheme {
       appBarTheme: _buildPremiumAppBarTheme(),
       bottomNavigationBarTheme: _buildPremiumBottomNavTheme(primary),
       iconTheme: const IconThemeData(color: Colors.white),
+      timePickerTheme: _buildPremiumTimePickerTheme(primary, background),
+
+      // 🎯 FIX 2: GLOBALLY FIXES 3-DOT POPUP MENUS
+      popupMenuTheme: _buildPremiumPopupMenuTheme(background),
     );
   }
 
@@ -124,6 +133,51 @@ class AppTheme {
       selectedItemColor: selectedColor,
       unselectedItemColor: Colors.white38,
       type: BottomNavigationBarType.fixed,
+    );
+  }
+
+  // ===========================================================================
+  // PREMIUM TIME PICKER STYLING
+  // ===========================================================================
+  static TimePickerThemeData _buildPremiumTimePickerTheme(Color primary, Color background) {
+    return TimePickerThemeData(
+      backgroundColor: background,
+      hourMinuteColor: Colors.white.withOpacity(0.08),
+      hourMinuteTextColor: Colors.white,
+      hourMinuteTextStyle: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+      dialBackgroundColor: Colors.white.withOpacity(0.05),
+      dialHandColor: primary,
+      dialTextColor: Colors.white,
+      entryModeIconColor: primary,
+      helpTextStyle: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+      cancelButtonStyle: TextButton.styleFrom(foregroundColor: Colors.white54),
+      confirmButtonStyle: TextButton.styleFrom(
+        foregroundColor: primary,
+        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24.0),
+        side: BorderSide(color: Colors.white.withOpacity(0.12), width: 1.0),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // PREMIUM POPUP & DROPDOWN MENU STYLING
+  // ===========================================================================
+  static PopupMenuThemeData _buildPremiumPopupMenuTheme(Color background) {
+
+    return PopupMenuThemeData(
+      color: background, // Solid background prevents transparency clash
+      surfaceTintColor: Colors.transparent, // Stops Material 3 from tinting it purple
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16.0),
+        side: BorderSide(
+          color: Colors.white.withOpacity(0.12), // Delicate glass rim to match cards
+          width: 1.0,
+        ),
+      ),
     );
   }
 }

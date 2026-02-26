@@ -1,43 +1,38 @@
 import 'dart:math';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/wave_clipper.dart';
 
 // 🎨 PREMIUM DESIGN CONSTANTS
 const double kCardRadius = 24.0;
 
 // 🎯 REUSABLE GLASS DECORATION HELPER
-// This ensures all cards perfectly inherit the frosted glass look from your themes
 BoxDecoration _getGlassDecoration(BuildContext context, {Color? tint}) {
   final theme = Theme.of(context);
   final isDark = theme.brightness == Brightness.dark;
 
-  // Base glass color from theme, optionally mixed with a slight tint for variety
   Color baseColor = theme.cardTheme.color ?? theme.colorScheme.surface;
   if (tint != null) {
     baseColor = Color.alphaBlend(tint.withOpacity(isDark ? 0.1 : 0.05), baseColor);
   }
 
-  // Extract border color from theme's Card shape
   Color borderColor = isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.4);
-  if (theme.cardTheme.shape is RoundedRectangleBorder) {
-    borderColor = (theme.cardTheme.shape as RoundedRectangleBorder).side.color;
-  }
 
   return BoxDecoration(
-    color: baseColor, // Translucent fill
+    color: baseColor,
     borderRadius: BorderRadius.circular(kCardRadius),
-    border: Border.all(color: borderColor, width: 1.5), // Delicate glass rim
+    border: Border.all(color: borderColor, width: 1.5),
   );
 }
 
 // =================================================================
-// 1. PREMIUM HYDRATION CARD
+// 1. PREMIUM HYDRATION CARD (WITH SMART TIME-ALERTS)
 // =================================================================
 class MiniHydrationCard extends StatelessWidget {
   final double currentLiters;
   final double goalLiters;
   final Animation<double> waveAnimation;
+  final Animation<double>? glowAnimation; // 🎯 Pulse Sync
   final VoidCallback onTap;
   final VoidCallback onQuickAdd;
 
@@ -46,6 +41,7 @@ class MiniHydrationCard extends StatelessWidget {
     required this.currentLiters,
     required this.goalLiters,
     required this.waveAnimation,
+    this.glowAnimation,
     required this.onTap,
     required this.onQuickAdd,
   });
@@ -58,20 +54,47 @@ class MiniHydrationCard extends StatelessWidget {
     final double progress = (currentLiters / (goalLiters == 0 ? 3.0 : goalLiters)).clamp(0.0, 1.0);
     final percent = (progress * 100).toInt();
 
+    // 🎯 SMART ALERT LOGIC: Check if behind schedule (8 AM - 8 PM window)
+    final now = DateTime.now();
+    bool isAlert = false;
+    if (now.hour >= 8 && now.hour <= 20) {
+      double expectedProgress = (now.hour - 8) / 12;
+      double expectedLiters = expectedProgress * goalLiters;
+      isAlert = currentLiters < (expectedLiters - 0.3); // Alert if > 300ml behind
+    }
+
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        decoration: _getGlassDecoration(context),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            // 🌊 Background Wave (Now uses theme colors & opacity for liquid glass effect)
-            if (!isEmpty)
-              Positioned.fill(
-                child: AnimatedBuilder(
-                  animation: waveAnimation,
-                  builder: (context, child) {
-                    return ClipPath(
+      child: AnimatedBuilder(
+        animation: glowAnimation ?? waveAnimation,
+        builder: (context, child) {
+          final pulseValue = glowAnimation?.value ?? 0.0;
+
+          return Container(
+            decoration: _getGlassDecoration(context).copyWith(
+              // 🎯 Pulse border and shadow only if in Alert state
+              border: Border.all(
+                color: isAlert
+                    ? colorScheme.error.withOpacity(0.4 + (pulseValue * 0.4))
+                    : colorScheme.primary.withOpacity(0.2),
+                width: isAlert ? 1.5 + (pulseValue * 0.5) : 1.5,
+              ),
+              boxShadow: isAlert ? [
+                BoxShadow(
+                  color: colorScheme.error.withOpacity(0.2 + (pulseValue * 0.2)),
+                  blurRadius: 10 + (pulseValue * 10),
+                  spreadRadius: 1,
+                  blurStyle: BlurStyle.inner, // 🎯 Trapped inside to prevent smudging
+                )
+              ] : null,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: [
+                // 🌊 Background Wave
+                if (!isEmpty)
+                  Positioned.fill(
+                    child: ClipPath(
                       clipper: WaveClipper(waveProgress: waveAnimation.value, fillProgress: progress),
                       child: Container(
                         decoration: BoxDecoration(
@@ -79,83 +102,88 @@ class MiniHydrationCard extends StatelessWidget {
                             begin: Alignment.bottomLeft,
                             end: Alignment.topRight,
                             colors: [
-                              colorScheme.secondary.withOpacity(0.6),
-                              colorScheme.primary.withOpacity(0.7)
+                              isAlert ? colorScheme.error.withOpacity(0.5) : colorScheme.secondary.withOpacity(0.6),
+                              isAlert ? colorScheme.error.withOpacity(0.7) : colorScheme.primary.withOpacity(0.7)
                             ],
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-
-            // 📝 Content
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Icon(Icons.water_drop_rounded, color: progress > 0.5 ? Colors.white : colorScheme.primary, size: 20),
-                      if (progress >= 1.0) const Icon(Icons.verified, color: Colors.white, size: 16),
-                    ],
-                  ),
-
-                  // Stats
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomLeft,
-                      child: isEmpty
-                          ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text("${context.tr("dashboard_hydrate")}", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
-                          const SizedBox(height: 2),
-                          Text("${context.tr("dashboard_goal")}: ${goalLiters}L", style: TextStyle(fontSize: 11, color: colorScheme.onSurface.withOpacity(0.5))),
-                        ],
-                      )
-                          : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FittedBox(
-                            child: Text("$percent%", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: progress > 0.5 ? Colors.white : colorScheme.onSurface, height: 1.0)),
-                          ),
-                          const SizedBox(height: 2),
-                          Text("${currentLiters.toStringAsFixed(1)}L", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: progress > 0.5 ? Colors.white.withOpacity(0.9) : colorScheme.onSurface.withOpacity(0.6))),
-                        ],
-                      ),
                     ),
                   ),
-                ],
-              ),
-            ),
 
-            // ➕ Add Button
-            Positioned(
-              bottom: 8, right: 8,
-              child: InkWell(
-                onTap: onQuickAdd,
-                borderRadius: BorderRadius.circular(30),
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: theme.brightness == Brightness.dark ? Colors.white12 : Colors.white.withOpacity(0.8),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withOpacity(0.3)),
+                // 📝 Content
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Icon(
+                              isAlert ? Icons.warning_amber_rounded : Icons.water_drop_rounded,
+                              color: progress > 0.4 ? Colors.white : (isAlert ? colorScheme.error : colorScheme.primary),
+                              size: 20
+                          ),
+                          if (isAlert)
+                          // ✅ Correct
+
+                            Text("BEHIND", style: TextStyle(color: progress > 0.4 ? Colors.white : colorScheme.error, fontSize: 9, fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.bottomLeft,
+                          child: isEmpty
+                              ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(context.tr("dashboard_hydrate"), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
+                              const SizedBox(height: 2),
+                              Text("${context.tr("dashboard_goal")}: ${goalLiters}L", style: TextStyle(fontSize: 11, color: colorScheme.onSurface.withOpacity(0.5))),
+                            ],
+                          )
+                              : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              FittedBox(
+                                child: Text("$percent%", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: progress > 0.4 ? Colors.white : colorScheme.onSurface, height: 1.0)),
+                              ),
+                              const SizedBox(height: 2),
+                              Text("${currentLiters.toStringAsFixed(1)}L", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: progress > 0.4 ? Colors.white.withOpacity(0.9) : colorScheme.onSurface.withOpacity(0.6))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Icon(Icons.add, size: 16, color: theme.brightness == Brightness.dark ? Colors.white : colorScheme.primary),
                 ),
-              ),
+
+                // ➕ Add Button
+                Positioned(
+                  bottom: 8, right: 8,
+                  child: InkWell(
+                    onTap: onQuickAdd,
+                    borderRadius: BorderRadius.circular(30),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: theme.brightness == Brightness.dark ? Colors.white12 : Colors.white.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+                      ),
+                      child: Icon(Icons.add, size: 16, color: theme.brightness == Brightness.dark ? Colors.white : (isAlert ? colorScheme.error : colorScheme.primary)),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -182,12 +210,11 @@ class MiniStepCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(12),
-        decoration: _getGlassDecoration(context), // 🎯 Glass
+        decoration: _getGlassDecoration(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Top Row
             Row(
               children: [
                 Icon(Icons.directions_run_rounded, color: colorScheme.onSurface.withOpacity(0.4), size: 18),
@@ -196,7 +223,6 @@ class MiniStepCard extends StatelessWidget {
               ],
             ),
 
-            // Centered Ring
             Expanded(
               child: Center(
                 child: FittedBox(
@@ -216,13 +242,12 @@ class MiniStepCard extends StatelessWidget {
               ),
             ),
 
-            // Bottom Stats
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 FittedBox(child: Text("$steps", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: colorScheme.onSurface))),
-                Text("${context.tr("dashboard_steps")}", style: TextStyle(fontSize: 10, color: colorScheme.onSurface.withOpacity(0.5), fontWeight: FontWeight.w500)),
+                Text(context.tr("dashboard_steps"), style: TextStyle(fontSize: 10, color: colorScheme.onSurface.withOpacity(0.5), fontWeight: FontWeight.w500)),
               ],
             ),
           ],
@@ -252,7 +277,6 @@ class MiniSleepCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(12),
-        // 🎯 Glass with a very subtle tint of the secondary color for differentiation
         decoration: _getGlassDecoration(context, tint: colorScheme.secondary),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,7 +286,7 @@ class MiniSleepCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Icon(Icons.bedtime_rounded, color: colorScheme.secondary, size: 18),
-                Text("${context.tr("dashboard_sleep")}", style: TextStyle(color: colorScheme.secondary, fontSize: 10, fontWeight: FontWeight.w600)),
+                Text(context.tr("dashboard_sleep"), style: TextStyle(color: colorScheme.secondary, fontSize: 10, fontWeight: FontWeight.w600)),
               ],
             ),
 
@@ -293,7 +317,7 @@ class MiniSleepCard extends StatelessWidget {
                 ),
               )
             else
-              Expanded(child: Center(child: Text("${context.tr("dashboard_log_rest")}", textAlign: TextAlign.center, style: TextStyle(color: colorScheme.onSurface.withOpacity(0.4), fontSize: 12, fontWeight: FontWeight.w600)))),
+              Expanded(child: Center(child: Text(context.tr("dashboard_log_rest"), textAlign: TextAlign.center, style: TextStyle(color: colorScheme.onSurface.withOpacity(0.4), fontSize: 12, fontWeight: FontWeight.w600)))),
           ],
         ),
       ),
@@ -319,7 +343,6 @@ class MiniBreathingCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(12),
-        // 🎯 Glass with a subtle tint of the primary color
         decoration: _getGlassDecoration(context, tint: colorScheme.primary),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,7 +364,7 @@ class MiniBreathingCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   FittedBox(child: Text("$minutesLogged", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface, height: 1.0))),
-                  Text("${context.tr("dashboard_min_mindful")}", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: colorScheme.primary)),
+                  Text(context.tr("dashboard_min_mindful"), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: colorScheme.primary)),
                 ],
               )
             else
@@ -349,9 +372,9 @@ class MiniBreathingCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text("${context.tr("dashboard_take_a_breath")}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: colorScheme.onSurface, height: 1.1)),
+                  Text(context.tr("dashboard_take_a_breath"), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: colorScheme.onSurface, height: 1.1)),
                   const SizedBox(height: 4),
-                  Text("${context.tr("dashboard_start_now")}", style: TextStyle(fontSize: 10, color: colorScheme.primary, fontWeight: FontWeight.bold)),
+                  Text(context.tr("dashboard_start_now"), style: TextStyle(fontSize: 10, color: colorScheme.primary, fontWeight: FontWeight.bold)),
                 ],
               ),
           ],

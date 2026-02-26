@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-// 🎯 1. Define supported animations
+// 🎯 1. Define supported animations (Expanded for clinical routines)
 enum ExerciseType {
   jumpingJack,
   squat,
@@ -9,7 +9,12 @@ enum ExerciseType {
   armCircles,
   rest,
   neckRoll,
-  shoulderShrug
+  shoulderShrug,
+  // 🎯 NEW: Added to support clinical & desk relief routines
+  pacing,
+  calfRaise,
+  seatedTwist,
+  wristStretch,
 }
 
 class WorkoutStep {
@@ -18,9 +23,12 @@ class WorkoutStep {
   final int duration;
   final IconData icon;
   final bool isRest;
-
-  // 🎯 2. Use Enum instead of String path
   final ExerciseType type;
+
+  // 🎯 NEW FEATURES ADDED HERE
+  final bool isRepBased; // If true, timer is hidden and waits for user to tap "Done"
+  final int reps;        // e.g., 20 Calf Raises
+  final bool switchSides; // If true, TTS will announce "Halfway there, switch sides!" at 50% time
 
   const WorkoutStep({
     required this.title,
@@ -28,7 +36,11 @@ class WorkoutStep {
     required this.duration,
     required this.icon,
     this.isRest = false,
-    required this.type, // Required now
+    required this.type,
+    // 🎯 Defaults set so your old configs don't break
+    this.isRepBased = false,
+    this.reps = 0,
+    this.switchSides = false,
   });
 }
 
@@ -45,7 +57,9 @@ class WorkoutConfig {
     required this.steps,
   });
 
-  // --- PRESETS (Updated to use Enum) ---
+  // ==========================================================
+  // --- PRESETS ---
+  // ==========================================================
 
   static const morningStretch = WorkoutConfig(
     title: "Morning Warmup",
@@ -54,7 +68,8 @@ class WorkoutConfig {
     steps: [
       WorkoutStep(title: "High Knees", instruction: "March in place.", duration: 30, icon: Icons.directions_run, type: ExerciseType.highKnees),
       WorkoutStep(title: "Rest", instruction: "Breathe.", duration: 10, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
-      WorkoutStep(title: "Arm Circles", instruction: "Big circles.", duration: 30, icon: Icons.refresh, type: ExerciseType.armCircles),
+      // 🎯 Example: Added switchSides to Arm Circles so it prompts to reverse direction
+      WorkoutStep(title: "Arm Circles", instruction: "Big circles.", duration: 30, icon: Icons.refresh, type: ExerciseType.armCircles, switchSides: true),
       WorkoutStep(title: "Rest", instruction: "Relax.", duration: 10, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
       WorkoutStep(title: "Shoulder Shrugs", instruction: "Lift & Drop.", duration: 30, icon: Icons.accessibility, type: ExerciseType.shoulderShrug),
     ],
@@ -69,17 +84,35 @@ class WorkoutConfig {
       WorkoutStep(title: "Rest", instruction: "Breathe.", duration: 20, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
       WorkoutStep(title: "Squats", instruction: "Sit back.", duration: 40, icon: Icons.accessibility_new, type: ExerciseType.squat),
       WorkoutStep(title: "Rest", instruction: "Relax.", duration: 20, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
-      WorkoutStep(title: "Push-Ups", instruction: "Chest to floor.", duration: 40, icon: Icons.fitness_center, type: ExerciseType.pushup),
+      // 🎯 Example: Converted Push-Ups to Rep-Based!
+      WorkoutStep(title: "Push-Ups", instruction: "Chest to floor.", duration: 0, isRepBased: true, reps: 15, icon: Icons.fitness_center, type: ExerciseType.pushup),
     ],
   );
 
+  // 🎯 CLINICAL UPGRADE: Expanded for Software Engineers
   static const deskRelief = WorkoutConfig(
-    title: "Desk Detox",
-    description: "Fix stiff neck.",
+    title: "The Coder's Reset",
+    description: "5 mins to fix posture and relieve wrist strain.",
     color: Colors.blue,
     steps: [
-      WorkoutStep(title: "Neck Rolls", instruction: "Roll gently.", duration: 30, icon: Icons.sentiment_satisfied, type: ExerciseType.neckRoll),
+      WorkoutStep(title: "Neck Rolls", instruction: "Roll gently in circles.", duration: 30, icon: Icons.sentiment_satisfied, type: ExerciseType.neckRoll, switchSides: true),
+      WorkoutStep(title: "Wrist Stretch", instruction: "Extend arm, pull fingers back.", duration: 40, icon: Icons.back_hand_rounded, type: ExerciseType.wristStretch, switchSides: true),
+      WorkoutStep(title: "Seated Twist", instruction: "Twist torso to the right.", duration: 40, icon: Icons.airline_seat_recline_normal, type: ExerciseType.seatedTwist, switchSides: true),
       WorkoutStep(title: "Shoulder Shrugs", instruction: "Release tension.", duration: 30, icon: Icons.accessibility, type: ExerciseType.shoulderShrug),
+    ],
+  );
+
+  // 🎯 NEW CLINICAL ROUTINE: Metabolic Health
+  static const glucoseBurner = WorkoutConfig(
+    title: "Post-Meal Burner",
+    description: "Light movement 15 mins after eating to manage blood sugar.",
+    color: Colors.teal,
+    steps: [
+      WorkoutStep(title: "Brisk Pacing", instruction: "Walk around the room briskly.", duration: 60, icon: Icons.directions_walk, type: ExerciseType.pacing),
+      WorkoutStep(title: "Rest", instruction: "Breathe.", duration: 15, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
+      WorkoutStep(title: "Calf Raises", instruction: "Stand on toes, hold, and lower.", duration: 0, isRepBased: true, reps: 20, icon: Icons.height, type: ExerciseType.calfRaise),
+      WorkoutStep(title: "Rest", instruction: "Breathe.", duration: 15, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
+      WorkoutStep(title: "High Knees", instruction: "March in place gently.", duration: 60, icon: Icons.directions_run, type: ExerciseType.highKnees),
     ],
   );
 }

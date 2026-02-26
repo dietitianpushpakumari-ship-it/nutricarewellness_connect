@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/features/appointments/meeting_Service.dart';
 import 'package:nutricare_connect/features/appointments/schedule_meeting_utils.dart';
-import 'package:nutricare_connect/features/auth/client_service.dart';
+import 'package:nutricare_connect/new/service/client_service.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 

@@ -4,25 +4,24 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/custom_gradient_app_bar.dart';
-import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
-import 'package:nutricare_connect/features/appointments/coach_tab.dart';
+import 'package:nutricare_connect/new/coach/coach_tab.dart';
 import 'package:nutricare_connect/features/auth/auth_provider.dart';
-import 'package:nutricare_connect/features/content/feed_tab.dart';
+import 'package:nutricare_connect/new/feed/feed_tab.dart';
 import 'package:nutricare_connect/core/utils/mantra_uploader.dart';
 import 'package:nutricare_connect/new/dashboard/modern_bottom_bar.dart';
-import 'package:nutricare_connect/features/profile/profile_Screen.dart';
+import 'package:nutricare_connect/new/dashboard/profile_Screen.dart';
 import 'package:nutricare_connect/core/utils/sync_manager.dart';
-import 'package:nutricare_connect/core/utils/wellness_hub_screen.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/activity_tracker_screen.dart';
+import 'package:nutricare_connect/new/wellnesshub/wellness_hub_screen.dart';
+import 'package:nutricare_connect/new/activityhub/activity_tracker_screen.dart';
 import 'package:nutricare_connect/new/dashboard/home_screen.dart';
-import 'package:nutricare_connect/features/diet_plan/plan_screen.dart';
+import 'package:nutricare_connect/new/dietplan/plan_screen.dart';
 import 'package:nutricare_connect/new/repositories/diet_repositories.dart';
 import 'package:collection/collection.dart';
 
 // Import necessary core files
 import '../../core/utils/geeta_uploader.dart';
-import '../../features/auth/client_service.dart';
+import '../service/client_service.dart';
 import '../models/client_diet_plan_model.dart';
 import '../../features/dietplan/domain/entities/client_log_model.dart';
 import '../provider/diet_plan_provider.dart';
@@ -137,77 +136,24 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
             localReminderService.reScheduleAllReminders(
                 client: client,
                 activePlan: next.activePlan,
-                dailyLogs: next.dailyLogs
+                dailyRecord: next.dailyRecord // 🎯 Pass the master record here
             );
           }
         });
 
-        // Only show AppBar on non-Home screens
-        final bool showAppBar = _selectedIndex != 0;
-
         return Scaffold(
           backgroundColor: theme.scaffoldBackgroundColor,
           extendBody: true,
-
-          // 🎯 FIXED: CONSISTENT APP BAR
-          appBar: showAppBar
-              ? AppBar(
-            // 1. Force Left Alignment to match page headers
-            centerTitle: false,
-
-            // 2. Remove default back button spacing issues
-            titleSpacing: 20,
-
-            // 3. Match Text Style to Page Headers
-            title: Text(
-              _getPageTitle(_selectedIndex),
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800, // Extra bold for consistency
-                fontSize: 22,
-                color: colorScheme.onSurface,
-              ),
+          body: widgetOptions[_selectedIndex],
+          bottomNavigationBar: SafeArea(
+            child: ModernBottomBar(
+              currentIndex: _selectedIndex,
+              onTap: _onItemTapped,
             ),
-
-            backgroundColor: theme.scaffoldBackgroundColor,
-            elevation: 0,
-            scrolledUnderElevation: 0, // Keep flat on scroll
-            iconTheme: IconThemeData(color: colorScheme.onSurface),
-
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.account_circle),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
-              ),
-              // Only show dev tools if needed, or keep hidden/conditional
-              IconButton(
-                onPressed: () { MantraUploader().uploadMantras(); },
-                icon: const Icon(Icons.self_improvement),
-              )
-            ],
-          )
-              : null,
-
-          body:  widgetOptions[_selectedIndex],
-
-          // 🎯 Floating Glass Bottom Bar
-          bottomNavigationBar: SafeArea(child: ModernBottomBar(
-            currentIndex: _selectedIndex,
-            onTap: _onItemTapped,
-          )),
+          ),
         );
       },
     );
-  }
-
-  String _getPageTitle(int index) {
-    switch (index) {
-      case 1: return context.tr("My Meal Plan");
-      case 2: return context.tr("Activity Hub");
-      case 3: return context.tr("Wellness Center");
-      case 4: return "Feed"; // Added Feed Title
-      case 5: return context.tr("My Coach");
-      default: return "";
-    }
   }
 }
 
@@ -227,7 +173,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
   int _selectedDays = 7;
   final List<int> _dayOptions = [7, 15, 30, 90];
 
-  // 🎯 Reusable Glass Decoration Helper
   BoxDecoration _getGlassDecoration(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -256,10 +201,9 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-      decoration: _getGlassDecoration(context), // 🎯 Apply Glass Look
-      clipBehavior: Clip.antiAlias, // Keep expansion ripple inside borders
+      decoration: _getGlassDecoration(context),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
-        // 🎯 Removes the ugly default divider lines from ExpansionTile
         data: theme.copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           iconColor: colorScheme.primary,
@@ -281,7 +225,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
               style: TextStyle(color: colorScheme.onSurface.withOpacity(0.6), fontSize: 12)
           ),
           children: [
-            // --- 1. Date Range Filter Buttons ---
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: SegmentedButton<int>(
@@ -303,7 +246,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
               ),
             ),
 
-            // --- 2. Vitals Line Chart ---
             vitalsHistoryAsync.when(
                 loading: () => const SizedBox.shrink(),
                 error: (e, s) => const SizedBox.shrink(),
@@ -319,7 +261,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
                     final dayLabel = DateFormat('d/M').format(v.date);
                     if (v.weightKg > 0) weightData[dayLabel] = v.weightKg;
 
-                    // 🎯 FIX: Direct access to map value (it is already double)
                     if (v.labResults.containsKey('fbs')) {
                       final val = v.labResults['fbs'];
                       if (val != null) fbsData[dayLabel] = val;
@@ -341,7 +282,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
                 }
             ),
 
-            // --- 3. Daily Logs Graph (Steps, Cals, etc.) ---
             dailyLogHistoryAsync.when(
               loading: () => const Padding(
                 padding: EdgeInsets.all(32.0),
@@ -361,7 +301,9 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
 
                 for (var date in sortedDates) {
                   final dayLabel = DateFormat('d/M').format(date);
-                  final log = groupedLogs[date]?.firstWhereOrNull((l) => l.mealName == 'DAILY_WELLNESS_CHECK');
+
+                  // 🎯 ATOMIC FIX: groupedLogs[date] is now just a single ClientLogModel
+                  final log = groupedLogs[date];
 
                   stepData[dayLabel] = (log?.stepCount ?? 0).toDouble();
                   calorieData[dayLabel] = (log?.caloriesBurned ?? 0).toDouble();
@@ -382,7 +324,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
               },
             ),
 
-            // --- 4. Deep Vitals Graph (Blood Sugar & Weight) ---
             vitalsHistoryAsync.when(
                 loading: () => const SizedBox.shrink(),
                 error: (e, s) => Padding(
@@ -404,9 +345,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
 
                   for (final vitals in filteredVitals) {
                     final dayLabel = DateFormat('d/M').format(vitals.date);
-
-                    // 🎯 FIX: Removing double.parse() wrappers.
-                    // labResults is Map<String, double>, so values are ALREADY doubles.
 
                     if (vitals.labResults['fbs'] != null) {
                       fbsData[dayLabel] = vitals.labResults['fbs']!;
@@ -459,8 +397,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
     );
   }
 
-  // --- Graph Builder Helpers ---
-
   Widget _buildChartContainer(BuildContext context, String title, Widget chart) {
     final theme = Theme.of(context);
     return Column(
@@ -470,7 +406,7 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
             title,
             style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface // 🎯 Adaptive Text
+                color: theme.colorScheme.onSurface
             )
         ),
         const SizedBox(height: 16),
@@ -479,7 +415,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
     );
   }
 
-  // 🎯 THEME-ADAPTIVE CHART BUILDER
   Widget _buildLineChart(BuildContext context, Map<String, double> data1, Map<String, double> data2, {bool isSleep = false, bool isSugar = false, bool isBloodPressure = false}) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -519,7 +454,7 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
     return LineChart(
       LineChartData(
         gridData: FlGridData(
-          show: true, // 🎯 Added subtle grid lines for premium look
+          show: true,
           drawVerticalLine: false,
           getDrawingHorizontalLine: (value) => FlLine(
               color: colorScheme.onSurface.withOpacity(0.05),
@@ -543,7 +478,7 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
                   space: 8,
                   child: Text(
                       allKeys[index],
-                      style: TextStyle(fontSize: 10, color: colorScheme.onSurface.withOpacity(0.6)) // 🎯 Adaptive text
+                      style: TextStyle(fontSize: 10, color: colorScheme.onSurface.withOpacity(0.6))
                   ),
                 );
               },
@@ -559,7 +494,7 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
                       space: 8,
                       child: Text(
                           value.toInt().toString(),
-                          style: TextStyle(fontSize: 10, color: colorScheme.onSurface.withOpacity(0.6)) // 🎯 Adaptive text
+                          style: TextStyle(fontSize: 10, color: colorScheme.onSurface.withOpacity(0.6))
                       ),
                     );
                   }
@@ -568,7 +503,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
-        // 🎯 Adaptive chart border
         borderData: FlBorderData(
             show: true,
             border: Border(

@@ -1,7 +1,7 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/core/localization/localization_extension.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/appointments/schedule_meeting_utils.dart';
 

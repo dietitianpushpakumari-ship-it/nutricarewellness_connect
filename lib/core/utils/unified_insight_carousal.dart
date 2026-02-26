@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/utils/wellness_tool_model.dart';
-import 'package:nutricare_connect/core/utils/wellness_tool_registry.dart';
+import 'package:nutricare_connect/new/wellnesshub/wellness_tool_registry.dart';
 import 'package:path_provider/path_provider.dart';
 
 class UnifiedInsightsCarousel extends StatefulWidget {

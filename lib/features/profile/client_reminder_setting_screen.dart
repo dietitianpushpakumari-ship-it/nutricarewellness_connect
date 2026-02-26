@@ -4,7 +4,7 @@ import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/reminder_config_model.dart';
 import 'package:nutricare_connect/main.dart';
 
-import 'package:nutricare_connect/features/auth/client_service.dart';
+import 'package:nutricare_connect/new/service/client_service.dart';
 import 'package:nutricare_connect/features/auth/auth_provider.dart' hide clientServiceProvider;
 
 class ClientReminderSettingsScreen extends ConsumerStatefulWidget {

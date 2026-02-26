@@ -45,7 +45,7 @@ class WellnessAudioService {
 
   Future<void> _playSound(String path) async {
     try {
-      // Source is 'AssetSource' which automatically looks in 'assets/'
+      // Source is 'AssetSource' which automatically looks in 'images/'
       // We pass 'audio/filename.mp3'
       await _player.play(AssetSource(path));
     } catch (e) {

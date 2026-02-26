@@ -1,16 +1,18 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/features/appointments/appointment_model.dart';
 import 'package:nutricare_connect/features/appointments/meeting_Service.dart';
 import 'package:nutricare_connect/core/package_payment_service.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
-import 'package:nutricare_connect/features/auth/client_service.dart';
+import 'package:nutricare_connect/new/service/client_service.dart';
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 
-class ClientBookingSheet extends StatefulWidget {
+class ClientBookingSheet extends ConsumerStatefulWidget {
   final ClientModel client;
   final AdminProfileModel coach;
 
@@ -21,12 +23,11 @@ class ClientBookingSheet extends StatefulWidget {
   });
 
   @override
-  State<ClientBookingSheet> createState() => _ClientBookingSheetState();
+  ConsumerState<ClientBookingSheet> createState() => _ClientBookingSheetState();
 }
 
-class _ClientBookingSheetState extends State<ClientBookingSheet> {
+class _ClientBookingSheetState extends ConsumerState<ClientBookingSheet> {
   final MeetingService _meetingService = MeetingService();
-  final PackagePaymentService _paymentService = PackagePaymentService();
 
   DateTime _selectedDate = DateTime.now();
   AppointmentSlot? _selectedSlot;
@@ -72,10 +73,21 @@ class _ClientBookingSheetState extends State<ClientBookingSheet> {
 
   Future<void> _fetchFinancialStatus() async {
     try {
-      final assignments = await _paymentService.getAllAssignmentsWithCollectedAmounts();
-      final clientData = assignments.where((a) => a.clientName == widget.client.name).toList();
+      // 🎯 FIX: Use the provider-scoped service for auto-tenantId fetching
+      final paymentService = ref.read(packagePaymentServiceProvider);
+      final assignments = await paymentService.getAllAssignmentsWithCollectedAmounts();
+
+      // Filter for this specific client
+      final clientData = assignments.where((a) => a.assignment.clientId == widget.client.id).toList();
+
       double totalDue = 0.0;
-      for (var data in clientData) totalDue += data.pendingAmount;
+      for (var data in clientData) {
+        // 🎯 FIX: Calculate pending amount from available fields
+        final booked = data.assignment.bookedAmount ?? 0.0;
+        final collected = data.collectedAmount;
+        totalDue += (booked - collected).clamp(0.0, double.infinity);
+      }
+
       if (mounted) {
         setState(() {
           _outstandingBalance = totalDue;

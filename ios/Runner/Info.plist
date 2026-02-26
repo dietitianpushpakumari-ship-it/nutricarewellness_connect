@@ -45,5 +45,17 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+      <string>fb</string>
+      <string>youtube</string>
+      <string>https</string>
+    </array>
+    <key>NSCameraUsageDescription</key>
+    <string>This app requires the front camera to track your neck Range of Motion for clinical exercises.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+        <string>NutriCare needs your location to update your physical address in your profile.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+        <string>NutriCare needs your location to update your physical address in your profile.</string>
 </dict>
 </plist>
