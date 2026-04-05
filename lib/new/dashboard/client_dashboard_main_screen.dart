@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/custom_gradient_app_bar.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
+import 'package:nutricare_connect/new/chat/client_chat_screen.dart';
 import 'package:nutricare_connect/new/coach/coach_tab.dart';
 import 'package:nutricare_connect/features/auth/auth_provider.dart';
 import 'package:nutricare_connect/new/feed/feed_tab.dart';
@@ -13,7 +16,7 @@ import 'package:nutricare_connect/new/dashboard/modern_bottom_bar.dart';
 import 'package:nutricare_connect/new/dashboard/profile_Screen.dart';
 import 'package:nutricare_connect/core/utils/sync_manager.dart';
 import 'package:nutricare_connect/new/wellnesshub/wellness_hub_screen.dart';
-import 'package:nutricare_connect/new/activityhub/activity_tracker_screen.dart';
+import 'package:nutricare_connect/new/activityhub/activity_tracker_screen.dart' hide vitalsHistoryProvider;
 import 'package:nutricare_connect/new/dashboard/home_screen.dart';
 import 'package:nutricare_connect/new/dietplan/plan_screen.dart';
 import 'package:nutricare_connect/new/repositories/diet_repositories.dart';
@@ -22,7 +25,7 @@ import 'package:collection/collection.dart';
 // Import necessary core files
 import '../../core/utils/geeta_uploader.dart';
 import '../service/client_service.dart';
-import '../models/client_diet_plan_model.dart';
+// FlatClientDietPlanModel
 import '../../features/dietplan/domain/entities/client_log_model.dart';
 import '../provider/diet_plan_provider.dart';
 import 'package:nutricare_connect/main.dart';
@@ -74,6 +77,21 @@ const List<WaterSize> standardSizes = [
 
 final activityDataProvider = StateProvider((ref) => ActivityData());
 
+final unreadChatCountProvider = StreamProvider.autoDispose<int>((ref) {
+  final clientId = ref.watch(currentClientIdProvider);
+
+  if (clientId == null || clientId.isEmpty) return Stream.value(0);
+
+  return FirebaseFirestore.instance
+      .collection('clients')
+      .doc(clientId)
+      .collection('chat')
+      .where('isSenderClient', isEqualTo: false)
+      .where('isRead', isEqualTo: false)
+      .snapshots()
+      .map((snapshot) => snapshot.docs.length);
+});
+
 class ClientDashboardScreen extends ConsumerStatefulWidget {
   final ClientModel client;
 
@@ -86,7 +104,9 @@ class ClientDashboardScreen extends ConsumerStatefulWidget {
 
 class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   int _selectedIndex = 0;
-  ClientDietPlanModel? activePlan;
+
+  // 🚀 THE FIX: Strongly typed to Flat Model
+  FlatClientDietPlanModel? activePlan;
 
   @override
   void initState() {
@@ -105,8 +125,9 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final clientAsync = ref.watch(clientProfileFutureProvider);
+    final unreadCountAsync = ref.watch(unreadChatCountProvider);
+    final int unreadCount = unreadCountAsync.value ?? 0;
 
-    // 🎯 THEME VARIABLES
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -123,12 +144,13 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
         if (client == null) return Scaffold(backgroundColor: theme.scaffoldBackgroundColor, body: const Center(child: Text('Client not found.')));
 
         final List<Widget> widgetOptions = <Widget>[
-          HomeScreen(client: client),              // 0: Home
-          PlanScreen(client: client),              // 1: Plan
-          ActivityTrackerScreen(client: client),   // 2: Move
-          WellnessHubScreen(client: client),       // 3: Wellness
-          const FeedTab(),                         // 4: Feed
-          CoachTab(client: client),                // 5: Coach
+          HomeScreen(client: client),
+          PlanScreen(client: client),
+          ActivityTrackerScreen(client: client),
+          WellnessHubScreen(client: client),
+          const FeedTab(),
+          ClientChatScreen(clientName: client.name!),
+          CoachTab(client: client),
         ];
 
         ref.listen<DietPlanState>(activeDietPlanProvider, (prev, next) {
@@ -136,7 +158,7 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
             localReminderService.reScheduleAllReminders(
                 client: client,
                 activePlan: next.activePlan,
-                dailyRecord: next.dailyRecord // 🎯 Pass the master record here
+                dailyRecord: next.dailyRecord
             );
           }
         });
@@ -149,9 +171,9 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
             child: ModernBottomBar(
               currentIndex: _selectedIndex,
               onTap: _onItemTapped,
+              unreadChatCount: unreadCount,
             ),
-          ),
-        );
+          ),);
       },
     );
   }
@@ -246,42 +268,7 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
               ),
             ),
 
-            vitalsHistoryAsync.when(
-                loading: () => const SizedBox.shrink(),
-                error: (e, s) => const SizedBox.shrink(),
-                data: (vitalsList) {
-                  final Map<String, double> weightData = {};
-                  final Map<String, double> fbsData = {};
-
-                  final startDate = DateTime.now().subtract(Duration(days: _selectedDays));
-                  final filtered = vitalsList.where((v) => !v.date.isBefore(startDate)).toList()
-                    ..sort((a, b) => a.date.compareTo(b.date));
-
-                  for (final v in filtered) {
-                    final dayLabel = DateFormat('d/M').format(v.date);
-                    if (v.weightKg > 0) weightData[dayLabel] = v.weightKg;
-
-                    if (v.labResults.containsKey('fbs')) {
-                      final val = v.labResults['fbs'];
-                      if (val != null) fbsData[dayLabel] = val;
-                    }
-                  }
-
-                  if (weightData.isEmpty && fbsData.isEmpty) return const SizedBox.shrink();
-
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(children: [
-                      Divider(color: colorScheme.onSurface.withOpacity(0.1)),
-                      if (weightData.isNotEmpty)
-                        _buildChartContainer(context, 'Weight (kg)', _buildLineChart(context, weightData, {})),
-                      if (fbsData.isNotEmpty)
-                        _buildChartContainer(context, 'Fasting Sugar (mg/dL)', _buildLineChart(context, fbsData, {})),
-                    ]),
-                  );
-                }
-            ),
-
+            // 1. DAILY LOGS CHART (Steps, Calories, Sleep, Hydration)
             dailyLogHistoryAsync.when(
               loading: () => const Padding(
                 padding: EdgeInsets.all(32.0),
@@ -301,8 +288,6 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
 
                 for (var date in sortedDates) {
                   final dayLabel = DateFormat('d/M').format(date);
-
-                  // 🎯 ATOMIC FIX: groupedLogs[date] is now just a single ClientLogModel
                   final log = groupedLogs[date];
 
                   stepData[dayLabel] = (log?.stepCount ?? 0).toDouble();
@@ -324,6 +309,7 @@ class _ProgressReportCardState extends ConsumerState<_ProgressReportCard> {
               },
             ),
 
+            // 2. CLINICAL VITALS CHART (Weight, BP, Sugar)
             vitalsHistoryAsync.when(
                 loading: () => const SizedBox.shrink(),
                 error: (e, s) => Padding(

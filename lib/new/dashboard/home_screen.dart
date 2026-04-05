@@ -1,10 +1,18 @@
 import 'dart:ui';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/PremiumKnowledgeHub.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
+import 'package:nutricare_connect/elite_nudge_hub.dart';
+import 'package:nutricare_connect/live_nudge_ticker.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
+import 'package:nutricare_connect/new/booking/client_booking_screen.dart';
+import 'package:nutricare_connect/new/booking/client_wallet_screen.dart';
 import 'package:nutricare_connect/new/core/theme_provider.dart';
+import 'package:nutricare_connect/new/service/notification_service.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -27,7 +35,6 @@ import 'package:nutricare_connect/new/dashboard/analytics_detail_screen.dart';
 
 // 🎯 PROVIDERS & ENTITIES
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/new/service/client_service.dart';
 
@@ -54,6 +61,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService().syncTokenToFirestore(
+          userId: widget.client.id,
+          collectionName: 'clients'
+      );
+    });
 
     _waveController = AnimationController(
       vsync: this,
@@ -137,31 +150,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final state = ref.read(activeDietPlanProvider);
     if (!DateUtils.isSameDay(state.selectedDate, DateTime.now())) return;
 
-    // 🎯 NEW: Read directly from dailyRecord instead of searching a list
     final dailyRecord = state.dailyRecord;
-    final int baseline = dailyRecord?.sensorStepsBaseline ?? 0;
-    final int calculatedDailySteps = (baseline == 0) ? 0 : totalSensorSteps - baseline;
-    final int savedSteps = dailyRecord?.stepCount ?? 0;
+
+    // 🛡️ Force cast to int to ensure no double/string sneaks in
+    final int baseline = (dailyRecord?.sensorStepsBaseline ?? 0).toInt();
+    final int savedSteps = (dailyRecord?.stepCount ?? 0).toInt();
+
+    final int calculatedDailySteps = (baseline == 0) ? 0 : (totalSensorSteps - baseline).toInt();
 
     if (state.activePlan != null && (baseline == 0 || calculatedDailySteps > savedSteps)) {
       _lastSaveTime = DateTime.now();
 
       final notifier = ref.read(dietPlanNotifierProvider(widget.client.id).notifier);
+
       final int newBaseline = (baseline == 0) ? totalSensorSteps : baseline;
       final int newDailySteps = (baseline == 0) ? 0 : calculatedDailySteps;
 
-      final int stepGoal = state.activePlan?.dailyStepGoal ?? 8000;
-      final int calories = (newDailySteps * 0.04).round();
-      int score = 0;
+      // 🛡️ Ensure goal is a valid int
+      final int stepGoal = (state.activePlan?.dailyStepGoal ?? 8000).toInt();
+      final int calories = (newDailySteps * 0.04).round().toInt();
 
-      if (stepGoal > 0) score += ((newDailySteps / stepGoal) * 50).round().clamp(0, 50);
-      final int completedTasks = dailyRecord?.completedMandatoryTasks.length ?? 0;
-      score += (completedTasks * 10).clamp(0, 50);
+      int score = 0;
+      if (stepGoal > 0) {
+        score = ((newDailySteps / stepGoal) * 50).round().clamp(0, 50).toInt();
+      }
+
+      final int completedTasks = (dailyRecord?.completedMandatoryTasks.length ?? 0).toInt();
+      score += (completedTasks * 10).clamp(0, 50).toInt();
 
       _checkAndShowStepAchievement(savedSteps, newDailySteps, stepGoal);
 
-      // 🎯 NEW: Atomic Map Update
-      final updateData = {
+      // 🎯 THE FIX: Explicitly typed Map to prevent 'String' leakage
+      final Map<String, dynamic> updateData = {
         'sensorStepsBaseline': newBaseline,
         'stepCount': newDailySteps,
         'stepGoal': stepGoal,
@@ -220,10 +240,106 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  // 🚀 NEW: DUAL-ACTION CONSULTATION HUB
+  Widget _buildConsultationHub(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          // 🎯 1. BOOK NEW APPOINTMENT BUTTON
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ClientBookingScreen(
+                      tenantId: widget.client.tenantId ?? 'default_tenant',
+                      initialCoachId: widget.client.coachId,
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        colorScheme.primary,
+                        colorScheme.primary.withOpacity(0.8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(color: colorScheme.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))
+                    ]
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                      child: const Icon(Icons.edit_calendar_rounded, color: Colors.white, size: 22),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text("Book\nSession", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, height: 1.2)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // 🎯 2. MY WALLET / BOOKINGS BUTTON
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                // 🚀 ROUTES DIRECTLY TO THE WALLET
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ClientWalletScreen()),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.03), blurRadius: 10, offset: const Offset(0, 4))
+                    ]
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: colorScheme.secondary.withOpacity(0.1), shape: BoxShape.circle),
+                      child: Icon(Icons.account_balance_wallet_rounded, color: colorScheme.secondary, size: 22),
+                    ),
+                    const SizedBox(height: 12),
+                    Text("My\nBookings", style: TextStyle(color: colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.w900, height: 1.2)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- HANDLERS ---
 
   // 🎯 ATOMIC FIX: Passes dailyRecord to sheets instead of finding logs
-  void _showBreathingMenu(BuildContext context, DietPlanNotifier notifier, ClientDietPlanModel activePlan, ClientLogModel? dailyRecord, ThemeData theme, ColorScheme colorScheme, bool isDark) {
+  void _showBreathingMenu(BuildContext context, DietPlanNotifier notifier, FlatClientDietPlanModel activePlan, ClientLogModel? dailyRecord, ThemeData theme, ColorScheme colorScheme, bool isDark) {
     showModalBottomSheet(
       isDismissible: false,
       context: context,
@@ -249,7 +365,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  void _launchBreathingSheet(BuildContext context, DietPlanNotifier notifier, ClientDietPlanModel plan, ClientLogModel? dailyRecord, BreathingConfig config) {
+  void _launchBreathingSheet(BuildContext context, DietPlanNotifier notifier, FlatClientDietPlanModel plan, ClientLogModel? dailyRecord, BreathingConfig config) {
     Navigator.pop(context);
     showModalBottomSheet(isDismissible:false,context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => BreathingDetailSheet(notifier: notifier, activePlan: plan, dailyLog: dailyRecord, config: config));
   }
@@ -272,7 +388,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // 🎯 ATOMIC QUICK ADD WATER
   Future<void> _quickAddWater(DietPlanNotifier notifier, double current) async {
     try {
-      final newTotal = (current + 0.25).clamp(0.0, 10.0);
+      final double newTotal = double.parse((current + 0.25).toStringAsFixed(2)).clamp(0.0, 10.0);
 
       await notifier.updateDailyRecord(data: {
         'hydrationLiters': newTotal,
@@ -306,7 +422,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final int baseline = dailyRecord?.sensorStepsBaseline ?? 0;
     final int savedSteps = dailyRecord?.stepCount ?? 0;
     final int displaySteps = (_sensorActive && DateUtils.isSameDay(state.selectedDate, DateTime.now()) && baseline > 0 && _liveSensorSteps >= baseline)
-        ? _liveSensorSteps - baseline
+        ? (_liveSensorSteps - baseline).toInt()
         : savedSteps;
     final int stepGoal = state.activePlan?.dailyStepGoal ?? 8000;
 
@@ -373,35 +489,61 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           ],
                         ),
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                          );
-                        },
-                        child: CircleAvatar(
-                          radius: 20,
-                          backgroundColor: colorScheme.primary.withOpacity(0.1),
-                          child: Icon(Icons.person_outline_rounded, color: colorScheme.primary, size: 20),
-                        ),
+                      Row(
+                        children: [
+                          // 🚀 THE FIX: Moved the Booking/Wallet action up here into a sleek button
+                          Container(
+                            decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.1), shape: BoxShape.circle),
+                            child: IconButton(
+                              icon: Icon(Icons.edit_calendar_rounded, color: colorScheme.primary, size: 20),
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => ClientBookingScreen(
+                                  tenantId: widget.client.tenantId ?? 'default_tenant',
+                                  initialCoachId: widget.client.coachId,
+                                )));
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          // 👤 PROFILE AVATAR
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                            },
+                            child: CircleAvatar(
+                              radius: 20,
+                              backgroundColor: theme.cardColor,
+                              child: Icon(Icons.person_outline_rounded, color: theme.hintColor, size: 20),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
-
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: FollowUpBanner(clientId: widget.client.id),
                 ),
               ),
-
               SliverToBoxAdapter(
-                child: SmartNudgeBar(clientId: widget.client.id),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8.0, bottom: 16.0),
+                  child: LiveNudgeTicker(clientId: widget.client.id),
+                ),
               ),
 
+              SliverToBoxAdapter(
+                child: EliteNudgeHub(clientId: widget.client.id),
+              ),
+
+
+
+              // 🎯 ATOMIC DATA INJECTION TO BENTO CARDS
               // 🎯 ATOMIC DATA INJECTION TO BENTO CARDS
               SliverPadding(
                 padding: const EdgeInsets.all(16),
@@ -432,14 +574,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
               ),
 
+              // 📊 TRENDS CARD
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0), // Removed heavy bottom padding here
                 sliver: SliverToBoxAdapter(
                   child: CompactTrendCard(clientId: widget.client.id),
                 ),
               ),
+              const SliverPadding(padding: EdgeInsets.only(bottom: 8)),
+              // 💡 🚀 NEW: PREMIUM KNOWLEDGE HUB
+              // Placed perfectly at the end of the feed as an engaging reward!
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Support & Management", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: theme.hintColor)),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => ClientBookingScreen(tenantId: widget.client.tenantId ?? 'default_tenant', initialCoachId: widget.client.coachId)));
+                              },
+                              icon: const Icon(Icons.video_camera_front_rounded, size: 18),
+                              label: const Text("Book Session"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: colorScheme.primary.withOpacity(0.1),
+                                foregroundColor: colorScheme.primary,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientWalletScreen()));
+                              },
+                              icon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
+                              label: const Text("My Wallet"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
+                                foregroundColor: colorScheme.onSurface,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
-              const SliverPadding(padding: EdgeInsets.only(bottom: 160)),
+              const SliverPadding(padding: EdgeInsets.only(bottom: 120)),
+              // Bottom nav clearance
             ],
           ),
         ],

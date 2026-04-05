@@ -3,15 +3,17 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+
+ // FlatClientDietPlanModel
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
 import '../../core/utils/mindfullness_config.dart';
 
 class BreathingDetailSheet extends ConsumerStatefulWidget {
   final DietPlanNotifier notifier;
-  final ClientDietPlanModel activePlan;
+  final FlatClientDietPlanModel activePlan; // 🚀 Strongly typed to Flat Model
   final ClientLogModel? dailyLog; // Represents the Master Record
   final BreathingConfig config;
 

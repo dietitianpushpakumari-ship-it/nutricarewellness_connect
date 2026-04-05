@@ -1,15 +1,32 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
+// --- 🛡️ SAFE PARSERS ---
+int safeInt(dynamic value, [int defaultValue = 0]) {
+  if (value == null) return defaultValue;
+  if (value is int) return value;
+  if (value is double) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? defaultValue;
+  return defaultValue;
+}
+
+double safeDouble(dynamic value, [double defaultValue = 0.0]) {
+  if (value == null) return defaultValue;
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? defaultValue;
+  return defaultValue;
+}
+
 enum LogStatus { followed, skipped, deviated, reviewed }
 
-// 🎯 NEW: Represents a single meal within the Daily Master Record
+// 🎯 Represents a single meal within the Daily Master Record
 class MealEntry {
   final LogStatus status;
   final List<String> actualFoodEaten;
   final List<String> mealPhotoUrls;
-  final String? clientQuery;  // e.g., "I swapped the rice for quinoa"
-  final String? adminComment; // Dietitian's feedback
+  final String? clientQuery;
+  final String? adminComment;
   final bool adminReplied;
   final DateTime? loggedAt;
   final int caloriesEstimate;
@@ -66,35 +83,59 @@ class MealEntry {
   }
 
   factory MealEntry.fromMap(Map<String, dynamic> map) {
-    return MealEntry(
-      status: LogStatus.values.firstWhere(
-            (e) => e.name == map['status'],
-        orElse: () => LogStatus.followed,
-      ),
-      actualFoodEaten: List<String>.from(map['actualFoodEaten'] ?? []),
-      mealPhotoUrls: List<String>.from(map['mealPhotoUrls'] ?? []),
-      clientQuery: map['clientQuery'],
-      adminComment: map['adminComment'],
-      adminReplied: map['adminReplied'] ?? false,
-      loggedAt: map['loggedAt'] != null ? (map['loggedAt'] as Timestamp).toDate() : null,
-      caloriesEstimate: (map['caloriesEstimate'] as num?)?.toInt() ?? 0,
-      isDeviation: map['isDeviation'] ?? false,
-    );
+    try {
+      DateTime? parsedDate;
+      if (map['loggedAt'] != null) {
+        if (map['loggedAt'] is Timestamp) {
+          parsedDate = (map['loggedAt'] as Timestamp).toDate();
+        } else if (map['loggedAt'] is String) {
+          parsedDate = DateTime.tryParse(map['loggedAt'].toString());
+        }
+      }
+
+      List<String> safeList(dynamic item) {
+        if (item is List) return item.map((e) => e.toString()).toList();
+        return [];
+      }
+
+      LogStatus safeStatus(dynamic s) {
+        if (s == null) return LogStatus.followed;
+        final str = s.toString().toLowerCase().trim();
+        return LogStatus.values.firstWhere(
+              (e) => e.name.toLowerCase() == str,
+          orElse: () => LogStatus.followed,
+        );
+      }
+
+      return MealEntry(
+        status: safeStatus(map['status']),
+        actualFoodEaten: safeList(map['actualFoodEaten']),
+        mealPhotoUrls: safeList(map['mealPhotoUrls']),
+        clientQuery: map['clientQuery']?.toString(),
+        adminComment: map['adminComment']?.toString(),
+        adminReplied: map['adminReplied'] == true,
+        loggedAt: parsedDate,
+        caloriesEstimate: safeInt(map['caloriesEstimate']),
+        isDeviation: map['isDeviation'] == true,
+      );
+    } catch (e, stacktrace) {
+      print("🚨 CRITICAL ERROR parsing MealEntry: $e\n$stacktrace");
+      // Fallback object to ensure UI doesn't completely crash
+      return MealEntry(status: LogStatus.followed);
+    }
   }
 }
 
 // 🎯 THE MASTER DAILY RECORD
 class ClientLogModel extends Equatable {
-  final String id; // This is now the "dateId" (YYYY-MM-DD)
+  final String id;
   final String clientId;
   final String tenantId;
   final String dietPlanId;
   final DateTime date;
 
-  // 🥗 MEALS MAP (Key is Meal Name: e.g., 'Breakfast')
   final Map<String, MealEntry> mealLogs;
 
-  // 💧 WELLNESS DATA
   final double hydrationLiters;
   final int stepCount;
   final int sensorStepsBaseline;
@@ -102,7 +143,6 @@ class ClientLogModel extends Equatable {
   final int caloriesBurned;
   final int activityScore;
 
-  // 🌙 SLEEP DATA
   final double totalSleepDurationHours;
   final int sleepScore;
   final int? sleepQualityRating;
@@ -113,14 +153,12 @@ class ClientLogModel extends Equatable {
   final DateTime? wakeTime;
   final String? notesAndFeelings;
 
-  // 🧘 MINDFULNESS & HABITS
   final int breathingMinutes;
   final List<String> completedMandatoryTasks;
   final List<String> createdPersonalGoals;
   final List<String> completedPersonalGoals;
   final Map<String, bool> completedHabits;
 
-  // 📊 DAILY VITALS
   final double? weightKg;
   final int? bloodPressureSystolic;
   final int? bloodPressureDiastolic;
@@ -176,35 +214,6 @@ class ClientLogModel extends Equatable {
     String? dietPlanId,
     DateTime? date,
     Map<String, MealEntry>? mealLogs,
-    double? hydrationLiters,
-    int? stepCount,
-    int? sensorStepsBaseline,
-    int? stepGoal,
-    int? caloriesBurned,
-    int? activityScore,
-    double? totalSleepDurationHours,
-    int? sleepScore,
-    int? sleepQualityRating,
-    int? sleepInterruptions,
-    int? energyLevelRating,
-    int? moodLevelRating,
-    DateTime? sleepTime,
-    DateTime? wakeTime,
-    String? notesAndFeelings,
-    int? breathingMinutes,
-    List<String>? completedMandatoryTasks,
-    List<String>? createdPersonalGoals,
-    List<String>? completedPersonalGoals,
-    Map<String, bool>? completedHabits,
-    double? weightKg,
-    int? bloodPressureSystolic,
-    int? bloodPressureDiastolic,
-    int? heartRateBpm,
-    double? spO2Percentage,
-    double? fbsMgDl,
-    double? ppbsMgDl,
-    double? waistCm,
-    double? hipCm,
   }) {
     return ClientLogModel(
       id: id ?? this.id,
@@ -213,89 +222,115 @@ class ClientLogModel extends Equatable {
       dietPlanId: dietPlanId ?? this.dietPlanId,
       date: date ?? this.date,
       mealLogs: mealLogs ?? this.mealLogs,
-      hydrationLiters: hydrationLiters ?? this.hydrationLiters,
-      stepCount: stepCount ?? this.stepCount,
-      sensorStepsBaseline: sensorStepsBaseline ?? this.sensorStepsBaseline,
-      stepGoal: stepGoal ?? this.stepGoal,
-      caloriesBurned: caloriesBurned ?? this.caloriesBurned,
-      activityScore: activityScore ?? this.activityScore,
-      totalSleepDurationHours: totalSleepDurationHours ?? this.totalSleepDurationHours,
-      sleepScore: sleepScore ?? this.sleepScore,
-      sleepQualityRating: sleepQualityRating ?? this.sleepQualityRating,
-      sleepInterruptions: sleepInterruptions ?? this.sleepInterruptions,
-      energyLevelRating: energyLevelRating ?? this.energyLevelRating,
-      moodLevelRating: moodLevelRating ?? this.moodLevelRating,
-      sleepTime: sleepTime ?? this.sleepTime,
-      wakeTime: wakeTime ?? this.wakeTime,
-      notesAndFeelings: notesAndFeelings ?? this.notesAndFeelings,
-      breathingMinutes: breathingMinutes ?? this.breathingMinutes,
-      completedMandatoryTasks: completedMandatoryTasks ?? this.completedMandatoryTasks,
-      createdPersonalGoals: createdPersonalGoals ?? this.createdPersonalGoals,
-      completedPersonalGoals: completedPersonalGoals ?? this.completedPersonalGoals,
-      completedHabits: completedHabits ?? this.completedHabits,
-      weightKg: weightKg ?? this.weightKg,
-      bloodPressureSystolic: bloodPressureSystolic ?? this.bloodPressureSystolic,
-      bloodPressureDiastolic: bloodPressureDiastolic ?? this.bloodPressureDiastolic,
-      heartRateBpm: heartRateBpm ?? this.heartRateBpm,
-      spO2Percentage: spO2Percentage ?? this.spO2Percentage,
-      fbsMgDl: fbsMgDl ?? this.fbsMgDl,
-      ppbsMgDl: ppbsMgDl ?? this.ppbsMgDl,
-      waistCm: waistCm ?? this.waistCm,
-      hipCm: hipCm ?? this.hipCm,
+      hydrationLiters: hydrationLiters,
+      stepCount: stepCount,
+      sensorStepsBaseline: sensorStepsBaseline,
+      stepGoal: stepGoal,
+      caloriesBurned: caloriesBurned,
+      activityScore: activityScore,
+      totalSleepDurationHours: totalSleepDurationHours,
+      sleepScore: sleepScore,
+      sleepQualityRating: sleepQualityRating,
+      sleepInterruptions: sleepInterruptions,
+      energyLevelRating: energyLevelRating,
+      moodLevelRating: moodLevelRating,
+      sleepTime: sleepTime,
+      wakeTime: wakeTime,
+      notesAndFeelings: notesAndFeelings,
+      breathingMinutes: breathingMinutes,
+      completedMandatoryTasks: completedMandatoryTasks,
+      createdPersonalGoals: createdPersonalGoals,
+      completedPersonalGoals: completedPersonalGoals,
+      completedHabits: completedHabits,
+      weightKg: weightKg,
+      bloodPressureSystolic: bloodPressureSystolic,
+      bloodPressureDiastolic: bloodPressureDiastolic,
+      heartRateBpm: heartRateBpm,
+      spO2Percentage: spO2Percentage,
+      fbsMgDl: fbsMgDl,
+      ppbsMgDl: ppbsMgDl,
+      waistCm: waistCm,
+      hipCm: hipCm,
     );
   }
 
   factory ClientLogModel.fromMap(Map<String, dynamic> data, String docId) {
+    print("========== PARSING CLIENT LOG FOR: $docId ==========");
+
     Map<String, MealEntry> parsedMeals = {};
+
     if (data['mealLogs'] != null) {
-      final mealMap = data['mealLogs'] as Map<String, dynamic>;
-      mealMap.forEach((key, value) {
-        parsedMeals[key] = MealEntry.fromMap(value as Map<String, dynamic>);
-      });
+      print("-> Found mealLogs in database.");
+      if (data['mealLogs'] is Map) {
+        final Map mealMap = data['mealLogs'] as Map;
+        mealMap.forEach((key, value) {
+          print("   -> Parsing meal key: '$key'");
+          try {
+            if (value is Map) {
+              // Extremely safe map conversion
+              final Map<String, dynamic> safeStringMap = {};
+              value.forEach((k, v) => safeStringMap[k.toString()] = v);
+
+              parsedMeals[key.toString().trim()] = MealEntry.fromMap(safeStringMap);
+              print("   ✅ Successfully parsed meal: '$key'");
+            } else {
+              print("   ❌ Skipping: Value for '$key' is not a Map. It is: ${value.runtimeType}");
+            }
+          } catch (e) {
+            print("   🚨 ERROR parsing specific meal '$key': $e");
+          }
+        });
+      } else {
+        print("❌ mealLogs is NOT a Map. It is: ${data['mealLogs'].runtimeType}");
+      }
+    } else {
+      print("-> mealLogs is NULL or EMPTY in this Firestore document.");
     }
 
     DateTime date;
     final dateValue = data['date'];
     if (dateValue is Timestamp) date = dateValue.toDate();
-    else if (dateValue is String) date = DateTime.parse(dateValue);
+    else if (dateValue is String) date = DateTime.tryParse(dateValue) ?? DateTime.now();
     else date = DateTime.now();
 
     return ClientLogModel(
       id: docId,
-      clientId: data['clientId'] as String? ?? '',
-      tenantId: data['tenantId'] as String? ?? 'guest',
-      dietPlanId: data['dietPlanId'] as String? ?? '',
+      clientId: data['clientId']?.toString() ?? '',
+      tenantId: data['tenantId']?.toString() ?? 'guest',
+      dietPlanId: data['dietPlanId']?.toString() ?? '',
       date: date,
       mealLogs: parsedMeals,
-      hydrationLiters: (data['hydrationLiters'] as num?)?.toDouble() ?? 0.0,
-      stepCount: (data['stepCount'] as num?)?.toInt() ?? 0,
-      sensorStepsBaseline: (data['sensorStepsBaseline'] as num?)?.toInt() ?? 0,
-      stepGoal: (data['stepGoal'] as num?)?.toInt() ?? 0,
-      caloriesBurned: (data['caloriesBurned'] as num?)?.toInt() ?? 0,
-      activityScore: (data['activityScore'] as num?)?.toInt() ?? 0,
-      totalSleepDurationHours: (data['totalSleepDurationHours'] as num?)?.toDouble() ?? 0.0,
-      sleepScore: (data['sleepScore'] as num?)?.toInt() ?? 0,
-      sleepQualityRating: (data['sleepQualityRating'] as num?)?.toInt(),
-      sleepInterruptions: (data['sleepInterruptions'] as num?)?.toInt(),
-      energyLevelRating: (data['energyLevelRating'] as num?)?.toInt(),
-      moodLevelRating: (data['moodLevelRating'] as num?)?.toInt(),
-      sleepTime: data['sleepTime'] != null ? DateTime.tryParse(data['sleepTime']) : null,
-      wakeTime: data['wakeTime'] != null ? DateTime.tryParse(data['wakeTime']) : null,
-      notesAndFeelings: data['notesAndFeelings'] as String?,
-      breathingMinutes: (data['breathingMinutes'] as num?)?.toInt() ?? 0,
-      completedMandatoryTasks: List<String>.from(data['completedMandatoryTasks'] ?? []),
-      createdPersonalGoals: List<String>.from(data['createdPersonalGoals'] ?? []),
-      completedPersonalGoals: List<String>.from(data['completedPersonalGoals'] ?? []),
-      completedHabits: data['completedHabits'] != null ? Map<String, bool>.from(data['completedHabits']) : {},
-      weightKg: (data['weightKg'] as num?)?.toDouble(),
-      bloodPressureSystolic: (data['bloodPressureSystolic'] as num?)?.toInt(),
-      bloodPressureDiastolic: (data['bloodPressureDiastolic'] as num?)?.toInt(),
-      fbsMgDl: (data['fbsMgDl'] as num?)?.toDouble(),
-      ppbsMgDl: (data['ppbsMgDl'] as num?)?.toDouble(),
-      heartRateBpm: (data['heartRateBpm'] as num?)?.toInt(),
-      spO2Percentage: (data['spO2Percentage'] as num?)?.toDouble(),
-      waistCm: (data['waistCm'] as num?)?.toDouble(),
-      hipCm: (data['hipCm'] as num?)?.toDouble(),
+      hydrationLiters: safeDouble(data['hydrationLiters']),
+      stepCount: safeInt(data['stepCount']),
+      sensorStepsBaseline: safeInt(data['sensorStepsBaseline']),
+      stepGoal: safeInt(data['stepGoal'], 8000),
+      caloriesBurned: safeInt(data['caloriesBurned']),
+      activityScore: safeInt(data['activityScore']),
+      totalSleepDurationHours: safeDouble(data['totalSleepDurationHours']),
+      sleepScore: safeInt(data['sleepScore']),
+      breathingMinutes: safeInt(data['breathingMinutes']),
+      energyLevelRating: data['energyLevelRating'] != null ? safeInt(data['energyLevelRating']) : null,
+      moodLevelRating: data['moodLevelRating'] != null ? safeInt(data['moodLevelRating']) : null,
+      sleepQualityRating: data['sleepQualityRating'] != null ? safeInt(data['sleepQualityRating']) : null,
+      sleepInterruptions: data['sleepInterruptions'] != null ? safeInt(data['sleepInterruptions']) : null,
+      weightKg: data['weightKg'] != null ? safeDouble(data['weightKg']) : null,
+      bloodPressureSystolic: data['bloodPressureSystolic'] != null ? safeInt(data['bloodPressureSystolic']) : null,
+      bloodPressureDiastolic: data['bloodPressureDiastolic'] != null ? safeInt(data['bloodPressureDiastolic']) : null,
+      fbsMgDl: data['fbsMgDl'] != null ? safeDouble(data['fbsMgDl']) : null,
+      ppbsMgDl: data['ppbsMgDl'] != null ? safeDouble(data['ppbsMgDl']) : null,
+      heartRateBpm: data['heartRateBpm'] != null ? safeInt(data['heartRateBpm']) : null,
+      spO2Percentage: data['spO2Percentage'] != null ? safeDouble(data['spO2Percentage']) : null,
+      waistCm: data['waistCm'] != null ? safeDouble(data['waistCm']) : null,
+      hipCm: data['hipCm'] != null ? safeDouble(data['hipCm']) : null,
+      sleepTime: data['sleepTime'] != null ? DateTime.tryParse(data['sleepTime'].toString()) : null,
+      wakeTime: data['wakeTime'] != null ? DateTime.tryParse(data['wakeTime'].toString()) : null,
+      notesAndFeelings: data['notesAndFeelings']?.toString(),
+      completedMandatoryTasks: (data['completedMandatoryTasks'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      createdPersonalGoals: (data['createdPersonalGoals'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      completedPersonalGoals: (data['completedPersonalGoals'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      completedHabits: data['completedHabits'] is Map
+          ? (data['completedHabits'] as Map).map((k, v) => MapEntry(k.toString(), v == true))
+          : {},
     );
   }
 

@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
+import 'package:nutricare_connect/new/flat_diet_plan_model.dart';
+
+// Ensure this points to FlatClientDietPlanModel
 import 'package:nutricare_connect/new/models/consultation_session_model.dart';
 import 'package:nutricare_connect/new/models/vitals_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
@@ -28,24 +32,79 @@ class DietRepository {
       return null;
     }
   }
+  Future<List<FlatDietPlanItem>> _fetchShardedItems(DocumentReference planRef) async {
+    final List<FlatDietPlanItem> allItems = [];
+    try {
+      // 1. Get all documents from the 'days' subcollection
+      final daysSnapshot = await planRef.collection('days').get();
 
-  Future<ClientDietPlanModel?> getActivePlan(String clientId, String tenantId) async {
+      for (var doc in daysSnapshot.docs) {
+        final data = doc.data();
+        final List? itemsJson = data['items'] as List?;
+
+        if (itemsJson != null) {
+          for (var x in itemsJson) {
+            // 2. Parse each item and add to the master list
+            allItems.add(FlatDietPlanItem.fromMap(Map<String, dynamic>.from(x)));
+          }
+        }
+      }
+    } catch (e) {
+      print("Error fetching sharded items: $e");
+    }
+    return allItems;
+  }
+
+  // 🚀 UPDATE: getActivePlan now REASSEMBLES the sharded data
+  Future<FlatClientDietPlanModel?> getActivePlan(String clientId, String tenantId) async {
     try {
       final query = await _db.collection('patient_mealPlan')
           .where('clientId', isEqualTo: clientId)
-          .where('tenantId', isEqualTo: tenantId) // 🔒 Enforced
           .where('isActive', isEqualTo: true)
-          .orderBy('createdAt', descending: true)
           .limit(1)
           .get();
 
       if (query.docs.isEmpty) return null;
-      return ClientDietPlanModel.fromFirestore(query.docs.first);
+
+      final doc = query.docs.first;
+
+      // 1. Get the base metadata (Habits, Goals, etc.)
+      final basePlan = FlatClientDietPlanModel.fromFirestore(doc);
+
+      // 2. 🎯 CRITICAL: Fetch the food items from the subcollection
+      final items = await _fetchShardedItems(doc.reference);
+
+      // 3. Merge them together
+      return basePlan.copyWith(allItems: items);
+
     } catch (e) {
-      print("Error fetching active plan fallback: $e");
+      print("Fetch error: $e");
       return null;
     }
   }
+
+  // 🚀 UPDATE: getPlanById also needs reassembly
+  Future<FlatClientDietPlanModel?> getPlanById(String planId, String tenantId) async {
+    try {
+      final docRef = _db.collection('patient_mealPlan').doc(planId);
+      final doc = await docRef.get();
+
+      if (!doc.exists) return null;
+
+      final basePlan = FlatClientDietPlanModel.fromFirestore(doc);
+
+      // 🎯 Fetch sharded items
+      final items = await _fetchShardedItems(docRef);
+
+      return basePlan.copyWith(allItems: items);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Inside DietRepository in diet_repositories.dart
+
+
 
   Future<VitalsModel?> getLatestVitals(String clientId, String tenantId) async {
     try {
@@ -64,18 +123,6 @@ class DietRepository {
     }
   }
 
-  Future<ClientDietPlanModel?> getPlanById(String planId, String tenantId) async {
-    try {
-      final doc = await _db.collection('patient_mealPlan').doc(planId).get();
-      // 🔒 STRICT ENFORCEMENT: Reject if the document belongs to another clinic
-      if (!doc.exists || doc.data()?['tenantId'] != tenantId) return null;
-
-      return ClientDietPlanModel.fromFirestore(doc);
-    } catch (e) {
-      print("Error fetching plan $planId: $e");
-      return null;
-    }
-  }
 
   Future<VitalsModel?> getVitalsById(String vitalsId, String tenantId) async {
     try {
@@ -134,6 +181,21 @@ class DietRepository {
       print("Error fetching all logs: $e");
       return [];
     }
+  }
+
+  Future<void> sendPushNotification({
+    required String token,
+    required String title,
+    required String body,
+    Map<String, dynamic>? data,
+  }) async {
+    await FirebaseFunctions.instanceFor(region: 'asia-south1')
+        .httpsCallable('sendCoachNotification').call({
+      'token': token,
+      'title': title,
+      'body': body,
+      'data': data,
+    });
   }
 
   Future<void> saveAtomicDailyRecord({

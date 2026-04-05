@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nutricare_connect/core/services/tts_service.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
@@ -8,9 +9,8 @@ import 'package:nutricare_connect/new/wellnesshub/virtual_trainer_painter.dart';
 import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
 import 'package:nutricare_connect/core/utils/workout_config.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+// FlatClientDietPlanModel
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:collection/collection.dart';
 
 class WorkoutPlayerSheet extends ConsumerStatefulWidget {
   final WorkoutConfig config;
@@ -50,7 +50,6 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
   @override
   void initState() {
     super.initState();
-    //WakelockPlus.enable();
     _repController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
   }
 
@@ -181,9 +180,9 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
     final bool? exit = await showDialog(
       context: context,
       builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15), // 🎯 Premium Glass Blur Effect
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
         child: AlertDialog(
-          backgroundColor: theme.scaffoldBackgroundColor, // 🎯 Solid themed background
+          backgroundColor: theme.scaffoldBackgroundColor,
           elevation: 24,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
@@ -202,8 +201,8 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: colorScheme.error.withOpacity(0.1), // 🎯 Soft error background
-                foregroundColor: colorScheme.error, // 🎯 Red text
+                backgroundColor: colorScheme.error.withOpacity(0.1),
+                foregroundColor: colorScheme.error,
                 elevation: 0,
               ),
               onPressed: () => Navigator.pop(ctx, true),
@@ -222,15 +221,13 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
     return exit ?? false;
   }
 
-// ... imports remain the same ...
-
   // 🎯 ATOMIC WORKOUT LOGGING
   Future<void> _saveAndClose() async {
     if (widget.client != null) {
       final notifier = ref.read(dietPlanNotifierProvider(widget.client!.id).notifier);
       final state = ref.read(activeDietPlanProvider);
 
-      if (state.activePlan != null) {
+      if (state.activePlan != null) { // 🚀 Will now evaluate against FlatClientDietPlanModel
         // 1. Calculate stats based on intensity and effort
         final totalDurationSec = widget.config.steps.fold(0, (sum, item) => sum + (item.duration * _intensity).toInt());
 
@@ -243,14 +240,12 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
         final int currentActivityScore = dailyRecord?.activityScore ?? 0;
 
         // 3. 🎯 Execute Atomic Merge
-        // We only touch calories and activity score; everything else stays intact.
         await notifier.updateDailyRecord(
           data: {
             'caloriesBurned': currentTotalCalories + newWorkoutCalories,
-            // Boost score by a flat 20 points for finishing a guided workout
             'activityScore': (currentActivityScore + 20).clamp(0, 100),
-            'lastWorkoutMood': _selectedMood, // Optional: tracking mood trends
-            'lastWorkoutRPE': _rpeScore,      // Optional: tracking effort trends
+            'lastWorkoutMood': _selectedMood,
+            'lastWorkoutRPE': _rpeScore,
           },
         );
 
@@ -269,11 +264,8 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
     if (mounted) Navigator.pop(context);
   }
 
-// ... rest of the file (UI helpers) remains the same ...
-
   @override
   void dispose() {
-    //WakelockPlus.disable();
     _timer?.cancel();
     _progressController?.dispose();
     _repController.dispose();
@@ -537,7 +529,7 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
                       ? Center(
                       child: _isPreparing || isRest
                           ? ValueListenableBuilder<int>(valueListenable: _secondsLeft, builder: (ctx, sec, _) => Text("$sec", style: TextStyle(fontSize: mediaSize * 0.35, fontWeight: FontWeight.w900, color: themeColor)))
-                          : Text("X ${step.reps}", style: TextStyle(fontSize: mediaSize * 0.25, fontWeight: FontWeight.w900, color: themeColor)) // 🎯 Reps view
+                          : Text("X ${step.reps}", style: TextStyle(fontSize: mediaSize * 0.25, fontWeight: FontWeight.w900, color: themeColor))
                   )
                       : AnimatedBuilder(animation: _repController, builder: (ctx, child) => CustomPaint(painter: VirtualTrainerPainter(progress: _repController.value, type: step.type, color: themeColor), size: Size.infinite)),
                 ),

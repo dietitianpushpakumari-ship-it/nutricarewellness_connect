@@ -1,135 +1,249 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
+import 'dart:math';
 
-class VitalsTrendChart extends StatefulWidget {
+import 'package:nutricare_connect/new/models/vitals_model.dart';
+// 🔥 Ensure this points to where your labTestConfigsProvider is defined
+import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+
+class VitalsTrendChart extends ConsumerStatefulWidget {
   final List<VitalsModel> history;
   const VitalsTrendChart({super.key, required this.history});
 
   @override
-  State<VitalsTrendChart> createState() => _VitalsTrendChartState();
+  ConsumerState<VitalsTrendChart> createState() => _VitalsTrendChartState();
 }
 
-class _VitalsTrendChartState extends State<VitalsTrendChart> {
-  String _metric = 'Weight'; // Toggle: 'Weight' or 'BMI'
+class _VitalsTrendChartState extends ConsumerState<VitalsTrendChart> {
+  String _selectedMetric = 'weightKg';
+
+  @override
+  void initState() {
+    super.initState();
+    _setInitialMetric();
+  }
+
+  void _setInitialMetric() {
+    if (widget.history.isEmpty) return;
+    // Default to weight if it exists, otherwise pick the first lab test available
+    final firstLog = widget.history.first;
+    if (firstLog.weightKg == 0 && firstLog.labResults.isNotEmpty) {
+      _selectedMetric = firstLog.labResults.keys.first;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Sort oldest to newest for the graph
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    // 1. FETCH MASTER CONFIGS (For ID -> Name mapping)
+    final configsAsync = ref.watch(labTestConfigsProvider);
+
+    // 2. SORT DATA (Oldest to Newest for the X-axis)
     final data = List<VitalsModel>.from(widget.history);
     data.sort((a, b) => a.date.compareTo(b.date));
 
-    if (data.isEmpty) return const SizedBox();
+    if (data.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        children: [
-          // Toggle Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    // 3. DISCOVER ALL AVAILABLE METRICS IN THIS PATIENT'S HISTORY
+    Set<String> availableMetrics = {};
+    if (data.any((l) => l.weightKg > 0)) availableMetrics.add('weightKg');
+    if (data.any((l) => l.bloodPressureSystolic != null)) availableMetrics.add('bloodPressureSystolic');
+
+    for (var log in data) {
+      availableMetrics.addAll(log.labResults.keys);
+    }
+
+    return configsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, s) => const Text("Error loading clinical labels"),
+      data: (configs) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(theme.brightness == Brightness.dark ? 0.2 : 0.05),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              )
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("$_metric Trend", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2D3142))),
-              Container(
-                decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.all(4),
+              // --- 🏷️ DYNAMIC HORIZONTAL CHIP SELECTOR ---
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
                 child: Row(
-                  children: ['Weight', 'BMI'].map((m) {
-                    final isSelected = _metric == m;
-                    return GestureDetector(
-                      onTap: () => setState(() => _metric = m),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.white : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)] : [],
+                  children: availableMetrics.map((metricId) {
+                    final isSelected = _selectedMetric == metricId;
+                    // 🔥 Using the ID to Name mapping fix
+                    final label = _getPrettyNameFromConfigs(metricId, configs);
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(label),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) setState(() => _selectedMetric = metricId);
+                        },
+                        selectedColor: colorScheme.primary,
+                        labelStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isSelected ? Colors.white : theme.hintColor,
                         ),
-                        child: Text(m, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? Colors.indigo : Colors.grey)),
                       ),
                     );
                   }).toList(),
                 ),
               ),
+
+              const SizedBox(height: 24),
+
+              // --- 📈 THE CHART ENGINE ---
+              _buildGraph(data, theme, colorScheme),
             ],
           ),
-          const SizedBox(height: 24),
+        );
+      },
+    );
+  }
 
-          // Graph
-          SizedBox(
-            height: 200,
-            child: LineChart(
-              LineChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: FlTitlesData(
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: (data.length / 4).ceilToDouble(), // Avoid crowding
-                      getTitlesWidget: (val, meta) {
-                        final index = val.toInt();
-                        if (index < 0 || index >= data.length) return const SizedBox();
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(DateFormat('d MMM').format(data[index].date), style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: data.asMap().entries.map((e) {
-                      final val = _metric == 'Weight' ? e.value.weightKg : e.value.bmi;
-                      return FlSpot(e.key.toDouble(), val);
-                    }).toList(),
-                    isCurved: true,
-                    color: _metric == 'Weight' ? Colors.blue : Colors.orange,
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: true),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        colors: [
-                          (_metric == 'Weight' ? Colors.blue : Colors.orange).withOpacity(0.3),
-                          (_metric == 'Weight' ? Colors.blue : Colors.orange).withOpacity(0.0),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                ],
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                    getTooltipColor: (_) => Colors.blueGrey.shade800,
-                    getTooltipItems: (spots) {
-                      return spots.map((spot) {
-                        return LineTooltipItem(
-                          "${spot.y.toStringAsFixed(1)} $_metric",
-                          const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        );
-                      }).toList();
-                    },
-                  ),
+  Widget _buildGraph(List<VitalsModel> data, ThemeData theme, ColorScheme colorScheme) {
+    List<FlSpot> spots = [];
+    List<VitalsModel> validLogs = [];
+
+    // Filter logs that actually have the selected data point
+    for (var i = 0; i < data.length; i++) {
+      double? val = _getValue(data[i], _selectedMetric);
+      if (val != null && val > 0) {
+        spots.add(FlSpot(validLogs.length.toDouble(), val));
+        validLogs.add(data[i]);
+      }
+    }
+
+    if (spots.length < 2) {
+      return SizedBox(
+        height: 200,
+        child: Center(
+          child: Text(
+            "Add more records to see a trend line.",
+            style: TextStyle(color: theme.hintColor, fontStyle: FontStyle.italic),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 200,
+      child: LineChart(
+        LineChartData(
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            getDrawingHorizontalLine: (value) => FlLine(
+              color: theme.dividerColor.withOpacity(0.1),
+              strokeWidth: 1,
+            ),
+          ),
+          titlesData: FlTitlesData(
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                getTitlesWidget: (val, meta) => Text(
+                  val.toInt().toString(),
+                  style: TextStyle(fontSize: 10, color: theme.hintColor, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: max(1, (validLogs.length / 3).floorToDouble()),
+                getTitlesWidget: (val, meta) {
+                  final index = val.toInt();
+                  if (index < 0 || index >= validLogs.length) return const SizedBox();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10.0),
+                    child: Text(
+                      DateFormat('d MMM').format(validLogs[index].date),
+                      style: TextStyle(fontSize: 10, color: theme.hintColor),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
-        ],
+          borderData: FlBorderData(show: false),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              curveSmoothness: 0.3,
+              color: colorScheme.primary,
+              barWidth: 4,
+              isStrokeCapRound: true,
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (spot, p, bar, i) => FlDotCirclePainter(
+                  radius: 4,
+                  color: Colors.white,
+                  strokeWidth: 3,
+                  strokeColor: colorScheme.primary,
+                ),
+              ),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  colors: [colorScheme.primary.withOpacity(0.3), colorScheme.primary.withOpacity(0)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  // --- 🔥 CLINICAL NAME LOOKUP ---
+  String _getPrettyNameFromConfigs(String id, List<dynamic> configs) {
+    if (id == 'weightKg') return "Weight";
+    if (id == 'bloodPressureSystolic') return "BP (Systolic)";
+
+    try {
+      final match = configs.firstWhere(
+              (c) => c.id.trim().toLowerCase() == id.trim().toLowerCase()
+      );
+      return match.name;
+    } catch (_) {
+      return id.toUpperCase();
+    }
+  }
+
+  // --- 🧬 DYNAMIC VALUE EXTRACTION ---
+  double? _getValue(VitalsModel model, String id) {
+    if (id == 'weightKg') return model.weightKg > 0 ? model.weightKg : null;
+    if (id == 'bloodPressureSystolic') return model.bloodPressureSystolic?.toDouble();
+
+    if (model.labResults.containsKey(id)) {
+      final val = model.labResults[id];
+      return (val is num) ? val?.toDouble() : null;
+    }
+    return null;
   }
 }

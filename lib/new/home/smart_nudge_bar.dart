@@ -6,16 +6,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nutricare_connect/new/dashboard/daily_log_logging_screen.dart';
 import 'package:nutricare_connect/core/utils/wellness_tool_model.dart';
-import 'package:nutricare_connect/new/models/diet_plan_item_model.dart';
+import 'package:nutricare_connect/new/flat_diet_plan_model.dart';
 import 'package:nutricare_connect/new/models/vitals_model.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
 import 'package:collection/collection.dart';
+
+
 
 // Sheets & Data
 import 'package:nutricare_connect/new/dietplan/meal_detail_sheet.dart';
 import 'package:nutricare_connect/new/dietplan/hydration_detail_screen.dart';
+
+import '../FlatClientDietPlanModel.dart';
 
 class _NudgeCardData {
   final String title;
@@ -149,9 +152,9 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
   List<_NudgeCardData> _getAllNudges(BuildContext context) {
     final state = ref.watch(activeDietPlanProvider);
     final vitalsAsync = ref.watch(vitalsHistoryProvider(widget.clientId));
-    final ClientDietPlanModel? plan = state.activePlan;
 
-    // 🎯 Use the Single Source of Truth
+    // 🚀 THE FIX: Strongly typed Flat Model
+    final FlatClientDietPlanModel? plan = state.activePlan;
     final dailyRecord = state.dailyRecord;
 
     List<_NudgeCardData> nudges = [];
@@ -165,14 +168,13 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
         final latestMeds = sortedVitals.first.medications;
         final now = TimeOfDay.now();
 
-        final dueMed = IterableExtensions(latestMeds).firstWhereOrNull((m) {
+        final dueMed = latestMeds.firstWhereOrNull((m) {
           if (m.reminderTime == null) return false;
           final parts = m.reminderTime!.split(':');
           if (parts.length < 2) return false;
           final medHour = int.tryParse(parts[0]) ?? -1;
           return (now.hour == medHour || now.hour == medHour + 1);
         });
-
         if (dueMed != null) {
           nudges.add(_NudgeCardData(
             title: "Medication Alert",
@@ -193,24 +195,48 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
 
     if (plan == null) return nudges;
 
-    // 🟠 2. MEALS
-    if (plan.days.isNotEmpty) {
-      final todayMeals = plan.days.first.meals;
+    // 🟠 2. MEALS (🚀 THE FIX: Adapted for Flat Architecture)
+    if (plan.allItems.isNotEmpty) {
       final now = TimeOfDay.now();
       final nowDouble = now.hour + now.minute / 60.0;
 
-      for (var meal in todayMeals) {
-        // 🎯 Read directly from the mealLogs map
-        final mealLog = dailyRecord?.mealLogs[meal.mealName];
+      // Get the correct day's items based on selectedDate
+      final bool isWeekly = plan.allItems.map((e) => e.dayId).toSet().length > 1;
+      List<FlatDietPlanItem> itemsForSelectedDay = [];
+
+      if (isWeekly) {
+        final selectedDayName = DateFormat('EEEE').format(state.selectedDate);
+        itemsForSelectedDay = plan.allItems.where((item) => item.dayName.toLowerCase() == selectedDayName.toLowerCase()).toList();
+        if (itemsForSelectedDay.isEmpty) itemsForSelectedDay = plan.allItems.where((i) => i.dayId == plan.allItems.first.dayId).toList();
+      } else {
+        itemsForSelectedDay = plan.allItems;
+      }
+
+      // Group by unique meals
+      final uniqueMealIds = itemsForSelectedDay.map((e) => e.mealId).toSet().toList();
+      uniqueMealIds.sort((a, b) {
+        final orderA = itemsForSelectedDay.firstWhere((i) => i.mealId == a).mealOrder;
+        final orderB = itemsForSelectedDay.firstWhere((i) => i.mealId == b).mealOrder;
+        return orderA.compareTo(orderB);
+      });
+
+      for (var mealId in uniqueMealIds) {
+        final mealItems = itemsForSelectedDay.where((i) => i.mealId == mealId).toList();
+        if (mealItems.isEmpty) continue;
+
+        final mealName = mealItems.first.mealName;
+        final mealTime = mealItems.first.mealTime;
+
+        final mealLog = dailyRecord?.mealLogs[mealName];
         final isLogged = mealLog != null && mealLog.status != LogStatus.skipped;
 
         if (isLogged) continue;
 
         double targetEndDouble = 24.0;
-        if (meal.time != null && meal.time!.isNotEmpty) {
-          targetEndDouble = _parseTimeStrToDouble(meal.time!) + 1.0;
+        if (mealTime != null && mealTime.isNotEmpty) {
+          targetEndDouble = _parseTimeStrToDouble(mealTime) + 1.0;
         } else {
-          final name = meal.mealName.toLowerCase();
+          final name = mealName.toLowerCase();
           if (name.contains('wake')) targetEndDouble = 9.0;
           else if (name.contains('lunch')) targetEndDouble = 15.5;
           else if (name.contains('dinner')) targetEndDouble = 22.5;
@@ -219,13 +245,13 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
         if (nowDouble >= targetEndDouble) {
           nudges.add(_NudgeCardData(
             title: "Missed Meal?",
-            subtitle: "You haven't logged your ${meal.mealName} yet.",
+            subtitle: "You haven't logged your $mealName yet.",
             icon: Icons.restaurant_rounded,
             color: const Color(0xFFFF9100),
             btnLabel: "Log Now",
             isUrgent: true,
             timeText: "1h ago",
-            onTap: () => _launchMealLogger(context, meal, plan),
+            onTap: () => _launchMealLogger(context, mealName, mealItems, plan), // 🚀 THE FIX: Passed Flat elements
           ));
           break;
         }
@@ -238,7 +264,6 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
       final currentHour = now.hour;
       final double waterGoal = plan.dailyWaterGoal > 0 ? plan.dailyWaterGoal : 2.0;
 
-      // 🎯 Read hydration directly from dailyRecord
       final double currentWater = dailyRecord?.hydrationLiters ?? 0.0;
 
       const double dayStart = 8.0;
@@ -302,13 +327,11 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // 🎯 FIX 1: Wrapped the left title area in an Expanded widget
               Expanded(
                 child: Row(
                   children: [
                     Icon(Icons.tips_and_updates_rounded, size: 18, color: colorScheme.primary),
                     const SizedBox(width: 6),
-                    // 🎯 FIX 2: Wrapped the text itself so it truncates safely
                     Expanded(
                       child: Text(
                           context.tr("daily_focus") ?? "DAILY FOCUS",
@@ -325,7 +348,7 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
                 ),
               ),
 
-              const SizedBox(width: 12), // Safe spacing
+              const SizedBox(width: 12),
 
               GestureDetector(
                 onTap: () {
@@ -466,7 +489,7 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min, // 🎯 FIX 1: Keeps the column as tight as possible
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -490,10 +513,6 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
                           ],
                         ),
                         const SizedBox(height: 2),
-
-                        // 🎯 FIX 2: Wrapped the subtitle in Flexible.
-                        // This acts as a vertical safety valve, forcing truncation
-                        // if it runs out of vertical space.
                         Flexible(
                           child: Text(
                               data.subtitle,
@@ -508,9 +527,6 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
                     ),
                   ),
                   const SizedBox(width: 8),
-
-                  // 🎯 FIX: Wrapped the ElevatedButton in a Flexible widget
-                  // and added overflow handling to its text.
                   Flexible(
                     child: ElevatedButton(
                       onPressed: () {
@@ -540,15 +556,15 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
         }
     );
   }
-  void _launchMealLogger(BuildContext context, DietPlanMealModel meal, ClientDietPlanModel plan) {
+
+  // 🚀 THE FIX: Passed Flat Elements
+  void _launchMealLogger(BuildContext context, String mealName, List<FlatDietPlanItem> mealItems, FlatClientDietPlanModel plan) {
     final notifier = ref.read(dietPlanNotifierProvider(widget.clientId).notifier);
-    // 🎯 Passes null for logToEdit since this is a nudge for a missed/unlogged meal
-    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MealDetailSheet(notifier: notifier, mealName: meal.mealName, activePlan: plan, logToEdit: null, plannedItems: meal.items));
+    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MealDetailSheet(notifier: notifier, mealName: mealName, activePlan: plan, logToEdit: null, plannedItems: mealItems));
   }
 
   void _launchHydrationSheet(BuildContext context, DietPlanState state, ClientLogModel? dailyRecord, double current) {
     final notifier = ref.read(dietPlanNotifierProvider(widget.clientId).notifier);
-    // 🎯 Passes dailyRecord directly
     showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => HydrationDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyRecord, currentIntake: current));
   }
 
@@ -565,11 +581,13 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
     final dailyRecord = state.dailyRecord;
 
     if (plan != null) {
-      // 1. Count Meals
-      if (plan.days.isNotEmpty) {
-        for (var meal in plan.days.first.meals) {
+      // 1. Count Meals (🚀 THE FIX: Adjusted for Flat Architecture)
+      if (plan.allItems.isNotEmpty) {
+        final uniqueMealIds = plan.allItems.map((e) => e.mealId).toSet();
+        for (var mealId in uniqueMealIds) {
+          final mealName = plan.allItems.firstWhere((i) => i.mealId == mealId).mealName;
           totalTasks++;
-          final mealLog = dailyRecord?.mealLogs[meal.mealName];
+          final mealLog = dailyRecord?.mealLogs[mealName];
           if (mealLog != null && mealLog.status != LogStatus.skipped) {
             completedTasks++;
           }

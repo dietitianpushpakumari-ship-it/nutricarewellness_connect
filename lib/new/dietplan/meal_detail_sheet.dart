@@ -3,17 +3,19 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:nutricare_connect/new/models/diet_plan_item_model.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+
+import '../flat_diet_plan_model.dart';
 
 class MealDetailSheet extends ConsumerStatefulWidget {
   final DietPlanNotifier notifier;
   final String mealName;
-  final ClientDietPlanModel activePlan;
-  final MealEntry? logToEdit; // 🎯 FIXED: Now expects MealEntry instead of ClientLogModel
-  final List<DietPlanItemModel> plannedItems;
+  final FlatClientDietPlanModel activePlan; // 🚀 Flat Model
+  final MealEntry? logToEdit;
+  final List<FlatDietPlanItem> plannedItems; // 🚀 Flat Model List
 
   const MealDetailSheet({
     super.key,
@@ -29,126 +31,101 @@ class MealDetailSheet extends ConsumerStatefulWidget {
 }
 
 class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
+  // We assume 'followed' by default to save clicks.
   LogStatus _status = LogStatus.followed;
-  final List<TextEditingController> _foodControllers = [];
   final TextEditingController _notesController = TextEditingController();
   final List<XFile> _selectedPhotos = [];
   bool _isSaving = false;
   List<String> _photosToDelete = [];
+  bool _showNoteField = false;
 
   @override
   void initState() {
     super.initState();
-    _status = widget.logToEdit?.status ?? LogStatus.followed; // 🎯 Reads from MealEntry
+    _status = widget.logToEdit?.status ?? LogStatus.followed;
     _notesController.text = widget.logToEdit?.clientQuery ?? '';
-
-    if (widget.logToEdit != null && widget.logToEdit!.actualFoodEaten.isNotEmpty) {
-      for (var food in widget.logToEdit!.actualFoodEaten) {
-        _foodControllers.add(TextEditingController(text: food));
-      }
-    }
+    if (_notesController.text.isNotEmpty) _showNoteField = true;
   }
 
   @override
   void dispose() {
-    for (var c in _foodControllers) c.dispose();
     _notesController.dispose();
     super.dispose();
-  }
-
-  // ---------------------------------------------------------------------------
-  // 🔐 CORE LOGIC
-  // ---------------------------------------------------------------------------
-
-  void _addFoodField() {
-    setState(() => _foodControllers.add(TextEditingController()));
-  }
-
-  void _removeFoodField(int index) {
-    setState(() {
-      _foodControllers[index].dispose();
-      _foodControllers.removeAt(index);
-    });
-  }
-
-  Color _getStatusColor(LogStatus status) {
-    switch (status) {
-      case LogStatus.followed: return Colors.green;
-      case LogStatus.deviated: return Colors.orange;
-      case LogStatus.skipped: return Colors.blueGrey;
-      default: return Colors.blue;
-    }
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: source, imageQuality: 70);
-    if (image != null) setState(() => _selectedPhotos.add(image));
+    if (image != null) {
+      setState(() {
+        _selectedPhotos.add(image);
+        if (_status == LogStatus.skipped) _status = LogStatus.followed;
+      });
+    }
   }
 
-  // 🎯 ATOMIC MEAL SAVE LOGIC
-  Future<void> _saveLog() async {
+  Future<void> _saveLog({bool forceSkip = false}) async {
     if (_isSaving) return;
+
+    if (forceSkip) {
+      setState(() => _status = LogStatus.skipped);
+    }
+
+    final List<String> remainingUrls = (widget.logToEdit?.mealPhotoUrls ?? [])
+        .where((url) => !_photosToDelete.contains(url))
+        .toList();
+
+    // MANDATORY PHOTO CHECK
+    if (_status != LogStatus.skipped && _selectedPhotos.isEmpty && remainingUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("📸 Please snap a quick photo of your meal!", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          )
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
-      // 1. Determine what was eaten based on the status
       List<String> foodList;
       if (_status == LogStatus.skipped) {
         foodList = ["Skipped"];
-      } else if (_status == LogStatus.followed && _foodControllers.isEmpty) {
-        foodList = widget.plannedItems.map((e) => e.foodItemName).toList();
+      } else if (_status == LogStatus.followed) {
+        // Rely purely on the photo and the status!
+        foodList = [];
       } else {
-        foodList = _foodControllers
-            .map((c) => c.text.trim())
-            .where((t) => t.isNotEmpty)
-            .toList();
+        foodList = ["Deviated from plan"];
       }
 
-      // 2. Filter out photos marked for deletion from existing server URLs
-      final List<String> remainingUrls = (widget.logToEdit?.mealPhotoUrls ?? [])
-          .where((url) => !_photosToDelete.contains(url))
-          .toList();
-
-      // 3. 🎯 Build the new MealEntry map
       final Map<String, dynamic> mealEntryMap = {
         'status': _status.name,
         'actualFoodEaten': foodList,
-        'mealPhotoUrls': remainingUrls, // Handled correctly in Notifier
+        'mealPhotoUrls': forceSkip ? [] : remainingUrls,
         'clientQuery': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
         'isDeviation': _status == LogStatus.deviated,
-        'loggedAt': DateTime.now().toIso8601String(), // Timestamp for precise logging
+        'loggedAt': DateTime.now().toIso8601String(),
       };
 
-      // 4. 🎯 Execute Atomic Update via Notifier
       await widget.notifier.updateDailyRecord(
         data: {
-          'mealLogs.${widget.mealName}': mealEntryMap, // Target the specific map key
+          'mealLogs': {
+            widget.mealName: mealEntryMap
+          }
         },
-        newPhotos: _selectedPhotos,
+        newPhotos: forceSkip ? [] : _selectedPhotos,
         mealNameForPhotos: widget.mealName,
       );
 
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Meal Logged Successfully"), backgroundColor: Colors.green)
-        );
-      }
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // 🎨 UI COMPONENTS
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -156,17 +133,14 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    // 🎯 FORCE OPAQUE COLOR
     final solidBgColor = isDark ? const Color(0xFF121212) : Colors.white;
+    final hasPhotos = _selectedPhotos.isNotEmpty || (widget.logToEdit?.mealPhotoUrls.isNotEmpty ?? false);
 
     return Container(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       decoration: BoxDecoration(
         color: solidBgColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, -5))
-        ],
       ),
       child: SafeArea(
         top: false,
@@ -174,15 +148,15 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 12),
-            _buildHandle(theme),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.5), borderRadius: BorderRadius.circular(2))),
 
             Padding(
               padding: const EdgeInsets.all(20.0),
-              child: Column(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildHeader(widget.mealName, colorScheme),
-                  const SizedBox(height: 20),
-                  _buildStatusToggle(colorScheme),
+                  Text(widget.mealName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
                 ],
               ),
             ),
@@ -192,258 +166,235 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_status == LogStatus.skipped)
-                      _buildSimpleMessage("Marking this meal as skipped.")
-                    else if (_status == LogStatus.followed && _foodControllers.isEmpty)
-                      _buildPlanSummary(colorScheme)
-                    else
-                      _buildDynamicFoodList(colorScheme),
+                    // 📸 1. MASSIVE PHOTO UPLOAD ZONE
+                    _buildMassivePhotoZone(colorScheme),
 
-                    const SizedBox(height: 20),
-                    _buildPhotoAndNotes(theme, colorScheme),
+                    const SizedBox(height: 24),
+
+                    // ⚠️ 2. ONLY SHOW "DEVIATED" TOGGLE IF THEY HAVE UPLOADED A PHOTO
+                    if (hasPhotos) ...[
+                      _buildDeviationToggle(colorScheme,theme),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // 📝 3. ON-DEMAND NOTES (Hidden by default)
+                    _buildNoteSection(colorScheme,theme),
                     const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
 
-            _buildSaveButton(colorScheme),
+            // 💾 4. BIG SAVE BUTTON
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SizedBox(
+                width: double.infinity, height: 56,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : () => _saveLog(forceSkip: false),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text("SAVE MEAL LOG", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 1.0)),
+                ),
+              ),
+            ),
+
+            // ⏭️ 5. SUBTLE SKIP BUTTON AT THE VERY BOTTOM
+            TextButton(
+              onPressed: _isSaving ? null : () => _saveLog(forceSkip: true),
+              style: TextButton.styleFrom(foregroundColor: Colors.grey),
+              child: const Text("I skipped this meal", style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHandle(ThemeData theme) => Container(
-    width: 40, height: 4,
-    decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.5), borderRadius: BorderRadius.circular(2)),
-  );
+  // --- UI WIDGETS ---
 
-  Widget _buildHeader(String title, ColorScheme colorScheme) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildMassivePhotoZone(ColorScheme colorScheme) {
+    final List<String> remotePhotos = (widget.logToEdit?.mealPhotoUrls ?? [])
+        .where((url) => !_photosToDelete.contains(url)).toList();
+    final bool hasPhotos = _selectedPhotos.isNotEmpty || remotePhotos.isNotEmpty;
+
+    if (!hasPhotos) {
+      return GestureDetector(
+        onTap: () => _pickPhoto(ImageSource.camera),
+        child: Container(
+          width: double.infinity,
+          height: 160,
+          decoration: BoxDecoration(
+            color: colorScheme.primary.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: colorScheme.primary.withOpacity(0.3), style: BorderStyle.solid, width: 2),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.camera_alt_rounded, size: 48, color: colorScheme.primary.withOpacity(0.7)),
+              const SizedBox(height: 12),
+              Text("Tap to snap a photo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: colorScheme.primary)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 120,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
         children: [
-          Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const Text("Track your nutrition intake", style: TextStyle(fontSize: 13, color: Colors.grey)),
-        ],
-      ),
-      IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
-    ],
-  );
-
-  Widget _buildStatusToggle(ColorScheme colorScheme) => Container(
-    decoration: BoxDecoration(color: colorScheme.surfaceVariant.withOpacity(0.3), borderRadius: BorderRadius.circular(12)),
-    child: Row(
-      children: LogStatus.values.map((s) {
-        final isSelected = _status == s;
-        // Skip "reviewed" since that is for admins
-        if (s == LogStatus.reviewed) return const SizedBox.shrink();
-
-        return Expanded(
-          child: GestureDetector(
-            onTap: () {
-              setState(() => _status = s);
-              if (s == LogStatus.deviated && _foodControllers.isEmpty) {
-                for (var item in widget.plannedItems) {
-                  _foodControllers.add(TextEditingController(text: item.foodItemName));
-                }
-              }
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(color: isSelected ? _getStatusColor(s) : Colors.transparent, borderRadius: BorderRadius.circular(10)),
-              child: Text(s.name.toUpperCase(), textAlign: TextAlign.center, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : colorScheme.onSurfaceVariant)),
+          ...remotePhotos.map((url) => _buildImagePreview(
+            source: url,
+            child: Image.network(url, fit: BoxFit.cover),
+            onDelete: () => setState(() => _photosToDelete.add(url)),
+          )),
+          ..._selectedPhotos.map((file) => _buildImagePreview(
+            source: file,
+            child: Image.file(File(file.path), fit: BoxFit.cover),
+            onDelete: () => setState(() => _selectedPhotos.remove(file)),
+          )),
+          GestureDetector(
+            onTap: () => _pickPhoto(ImageSource.camera),
+            child: Container(
+              width: 120, height: 120,
+              decoration: BoxDecoration(color: colorScheme.surfaceVariant.withOpacity(0.5), borderRadius: BorderRadius.circular(16)),
+              child: Icon(Icons.add_a_photo_rounded, color: colorScheme.primary, size: 32),
             ),
           ),
-        );
-      }).toList(),
-    ),
-  );
+        ],
+      ),
+    );
+  }
 
-  Widget _buildPlanSummary(ColorScheme colorScheme) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: colorScheme.primary.withOpacity(0.1))),
-    child: Row(
-      children: [
-        Icon(Icons.auto_awesome_rounded, color: colorScheme.primary, size: 20),
-        const SizedBox(width: 12),
-        const Expanded(child: Text("Logged exactly as planned.", style: TextStyle(fontSize: 13))),
-        TextButton(
-            onPressed: () {
-              setState(() => _status = LogStatus.deviated);
-              for (var item in widget.plannedItems) {
-                _foodControllers.add(TextEditingController(text: item.foodItemName));
-              }
-            },
-            child: const Text("Edit Items")
-        ),
-      ],
-    ),
-  );
-
-  Widget _buildDynamicFoodList(ColorScheme colorScheme) => Column(
-    children: [
-      ..._foodControllers.asMap().entries.map((e) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: TextField(
-          controller: e.value,
-          decoration: InputDecoration(
-            hintText: "Item ${e.key + 1}",
-            filled: true, fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            suffixIcon: IconButton(icon: const Icon(Icons.remove_circle_outline, size: 20), onPressed: () => _removeFoodField(e.key)),
-          ),
-        ),
-      )),
-      TextButton.icon(onPressed: _addFoodField, icon: const Icon(Icons.add_circle_outline, size: 18), label: const Text("Add Item")),
-    ],
-  );
-
-  Widget _buildPhotoAndNotes(ThemeData theme, ColorScheme colorScheme) {
-    final List<String> remotePhotos = (widget.logToEdit?.mealPhotoUrls ?? [])
-        .where((url) => !_photosToDelete.contains(url))
-        .toList();
+  Widget _buildDeviationToggle(ColorScheme colorScheme, ThemeData theme) {
+    final bool isDeviated = _status == LogStatus.deviated;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Photos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: () => _pickPhoto(ImageSource.camera),
-                child: Container(
-                  width: 60, height: 60,
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.add_a_photo_rounded, color: colorScheme.primary, size: 24),
-                ),
-              ),
-              const SizedBox(width: 12),
-              ...remotePhotos.map((url) => _buildImagePreview(
-                source: url,
-                child: Image.network(url, fit: BoxFit.cover),
-                onDelete: () => setState(() => _photosToDelete.add(url)),
-              )),
-              ..._selectedPhotos.map((file) => _buildImagePreview(
-                source: file,
-                child: Image.file(File(file.path), fit: BoxFit.cover),
-                onDelete: () => setState(() => _selectedPhotos.remove(file)),
-              )),
-            ],
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            "ADHERENCE",
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
+              color: theme.hintColor.withOpacity(0.6),
+            ),
           ),
         ),
-        const SizedBox(height: 20),
-        TextField(
-          controller: _notesController,
-          decoration: InputDecoration(
-            hintText: "Add notes or questions...",
-            filled: true,
-            fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        Container(
+          height: 46,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: theme.brightness == Brightness.dark
+                ? Colors.white.withOpacity(0.05)
+                : colorScheme.surfaceVariant.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _StatusSegment(
+                  label: "Followed",
+                  icon: Icons.check_circle_rounded,
+                  isSelected: !isDeviated,
+                  selectedColor: Colors.green.shade600,
+                  onTap: () => setState(() => _status = LogStatus.followed),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _StatusSegment(
+                  label: "Deviated",
+                  icon: Icons.error_outline_rounded,
+                  isSelected: isDeviated,
+                  selectedColor: Colors.orange.shade800,
+                  onTap: () => setState(() => _status = LogStatus.deviated),
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSimpleMessage(String msg) => Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Text(msg, style: const TextStyle(color: Colors.grey)));
-
-  Widget _buildSaveButton(ColorScheme colorScheme) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-    child: SizedBox(
-      width: double.infinity, height: 50,
-      child: ElevatedButton(
-        onPressed: _isSaving ? null : _saveLog,
-        style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary, foregroundColor: colorScheme.onPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-        child: _isSaving ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text("Confirm & Save", style: TextStyle(fontWeight: FontWeight.bold)),
-      ),
-    ),
-  );
-
-  void _showFullScreenPreview(dynamic photo) {
-    final bool isLocal = photo is XFile;
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-          builder: (context, setDialogState) {
-            return GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Material(
-                  color: Colors.transparent,
-                  child: Stack(
-                    children: [
-                      Center(
-                        child: Hero(
-                          tag: photo.toString(),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
-                            child: isLocal
-                                ? Image.file(File(photo.path), fit: BoxFit.contain)
-                                : Image.network(photo, fit: BoxFit.contain),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 50,
-                        left: 0, right: 0,
-                        child: Center(
-                          child: TextButton.icon(
-                            onPressed: () async {
-                              final picker = ImagePicker();
-                              final XFile? newImage = await picker.pickImage(
-                                  source: ImageSource.camera,
-                                  imageQuality: 70
-                              );
-
-                              if (newImage != null) {
-                                setState(() {
-                                  if (isLocal) {
-                                    final index = _selectedPhotos.indexOf(photo);
-                                    if (index != -1) _selectedPhotos[index] = newImage;
-                                  } else {
-                                    _photosToDelete.add(photo);
-                                    _selectedPhotos.add(newImage);
-                                  }
-                                });
-                                if (context.mounted) Navigator.pop(context);
-                              }
-                            },
-                            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                            label: const Text("Retake Photo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            style: TextButton.styleFrom(
-                              backgroundColor: Colors.black.withOpacity(0.6),
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 60, right: 20,
-                        child: CircleAvatar(
-                          backgroundColor: Colors.black.withOpacity(0.5),
-                          child: const Icon(Icons.close, color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+  Widget _buildNoteSection(ColorScheme colorScheme, ThemeData theme) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: !_showNoteField
+          ? SizedBox(
+        width: double.infinity,
+        child: TextButton.icon(
+          onPressed: () => setState(() => _showNoteField = true),
+          icon: Icon(Icons.edit_note_rounded, size: 20, color: colorScheme.primary),
+          label: Text("Add a note", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+          style: TextButton.styleFrom(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      )
+          : Column(
+        key: const ValueKey("note_field"),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.notes_rounded, size: 16, color: theme.hintColor),
+              const SizedBox(width: 8),
+              Text("NOTES", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: theme.hintColor)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close, size: 14),
+                onPressed: () => setState(() {
+                  _showNoteField = false;
+                  _notesController.clear();
+                }),
+                constraints: const BoxConstraints(),
+                padding: EdgeInsets.zero,
+              )
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _notesController,
+            maxLines: 3,
+            autofocus: true,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: "E.g. Extra portion of protein...",
+              hintStyle: TextStyle(color: theme.hintColor.withOpacity(0.5)),
+              filled: true,
+              fillColor: theme.brightness == Brightness.dark ? Colors.white.withOpacity(0.03) : Colors.grey.shade50,
+              contentPadding: const EdgeInsets.all(12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
               ),
-            );
-          }
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -453,28 +404,60 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
       padding: const EdgeInsets.only(right: 12),
       child: Stack(
         children: [
-          GestureDetector(
-            onTap: () => _showFullScreenPreview(source),
-            child: Hero(
-              tag: source.toString(),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(width: 60, height: 60, child: child),
-              ),
-            ),
-          ),
+          ClipRRect(borderRadius: BorderRadius.circular(16), child: SizedBox(width: 120, height: 120, child: child)),
           Positioned(
-            top: -2, right: -2,
+            top: 4, right: 4,
             child: GestureDetector(
               onTap: onDelete,
-              child: const CircleAvatar(
-                radius: 10,
-                backgroundColor: Colors.red,
-                child: Icon(Icons.close, size: 12, color: Colors.white),
-              ),
+              child: CircleAvatar(radius: 14, backgroundColor: Colors.black.withOpacity(0.6), child: const Icon(Icons.close, size: 16, color: Colors.white)),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StatusSegment extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final Color selectedColor;
+  final VoidCallback onTap;
+
+  const _StatusSegment({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.selectedColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: isSelected ? selectedColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: isSelected ? Colors.white : Colors.grey),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: isSelected ? Colors.white : Colors.grey,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

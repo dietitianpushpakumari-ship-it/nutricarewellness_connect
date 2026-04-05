@@ -9,19 +9,17 @@ import 'package:nutricare_connect/features/dietplan/domain/entities/programme_fe
 
 /// Service class for managing Guideline master data in Firestore.
 class PackageService {
-  final CollectionReference _packageCollection = FirebaseFirestore.instance.collection('packages');
+  final CollectionReference _packageCollection = FirebaseFirestore.instance.collection('patient_subscription');
   final CollectionReference _clientCollection = FirebaseFirestore.instance.collection('clients');
-  final CollectionReference _paymentCollection = FirebaseFirestore.instance.collection('payments');
+  final CollectionReference _paymentCollection = FirebaseFirestore.instance.collection('patient_payment');
   CollectionReference clientAssignmentCollection(String clientId) {
     // 🎯 FIX: Drill down from the existing _clientCollection reference.
     // This correctly returns a CollectionReference, resolving the type mismatch error
     // that the compiler was seeing.
-    return _clientCollection
-        .doc(clientId)
-        .collection('packageAssignments');
+    return _packageCollection;
   }
   final CollectionReference _featureCollection =
-  FirebaseFirestore.instance.collection('programFeatures');
+  FirebaseFirestore.instance.collection('master_packageFeature');
 
   // Stream all features for the master list
   Future<List<ProgramFeatureModel>> getFeaturesByIds(List<String> ids) async {
@@ -47,7 +45,7 @@ class PackageService {
 
     try {
       final snapshot = await assignmentRef
-          .orderBy('purchaseDate', descending: true)
+          .orderBy('startDate', descending: true)
           .get(); // ✅ get() returns a Future, not a Stream
 
       return snapshot.docs

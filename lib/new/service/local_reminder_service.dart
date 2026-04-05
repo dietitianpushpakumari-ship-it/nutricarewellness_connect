@@ -1,14 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
 import 'package:nutricare_connect/new/models/clinical_model.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/core/utils/wellness_message_generator.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/reminder_config_model.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:collection/collection.dart';
 
 class LocalReminderService {
   // 🎯 FIX: Define the plugin instance directly inside the service
@@ -80,7 +79,7 @@ class LocalReminderService {
 
   Future<void> reScheduleAllReminders({
     required ClientModel client,
-    required ClientDietPlanModel? activePlan,
+    required FlatClientDietPlanModel? activePlan,
     required ClientLogModel? dailyRecord,
   }) async {
     await _notificationsPlugin.cancelAll();
@@ -122,33 +121,40 @@ class LocalReminderService {
   }
 
   // 🎯 ATOMIC FIX: Checks the nested mealLogs map for completion
-  Future<void> _scheduleMealReminders(ClientDietPlanModel plan, ClientLogModel? record, ClientReminderConfig config) async {
-    if (plan.days.isEmpty) return;
-    final todayMeals = plan.days.first.meals;
+// 🎯 ATOMIC FIX: Updated for the Flat model to prevent duplicate notifications
+  Future<void> _scheduleMealReminders(FlatClientDietPlanModel plan, ClientLogModel? record, ClientReminderConfig config) async {
+    if (plan.allItems.isEmpty) return;
 
-    for (var meal in todayMeals) {
+    // 1. Extract unique meals to avoid scheduling multiple notifications for the same meal time
+    final Map<String, dynamic> uniqueMeals = {};
+    for (var item in plan.allItems) {
+      // If we haven't seen this meal yet, and it has a time, save it
+      if (!uniqueMeals.containsKey(item.mealName) && item.mealTime != null && item.mealTime!.isNotEmpty) {
+        uniqueMeals[item.mealName] = item;
+      }
+    }
+
+    // 2. Schedule a reminder for each unique meal
+    for (var meal in uniqueMeals.values) {
       // 🎯 Direct lookup in the atomic map
       final mealLog = record?.mealLogs[meal.mealName];
       final isLogged = mealLog != null && mealLog.status != LogStatus.skipped;
 
       if (isLogged) continue;
 
-      if (meal.time != null && meal.time!.isNotEmpty) {
-        final timeOfDay = _parseTime(meal.time!);
-        if (timeOfDay == null) continue;
+      final timeOfDay = _parseTime(meal.mealTime!);
+      if (timeOfDay == null) continue;
 
-        await _scheduleNotification(
-          id: meal.mealName.hashCode,
-          title: "Log ${meal.mealName}",
-          body: "It's time for your ${meal.mealName}. Don't forget to track it!",
-          scheduledDate: _getTodayDateAt(timeOfDay),
-          config: config,
-          voiceMessage: "Hi, have you had your ${meal.mealName}? Please log your meal.",
-        );
-      }
+      await _scheduleNotification(
+        id: meal.mealName.hashCode,
+        title: "Log ${meal.mealName}",
+        body: "It's time for your ${meal.mealName}. Don't forget to track it!",
+        scheduledDate: _getTodayDateAt(timeOfDay),
+        config: config,
+        voiceMessage: "Hi, have you had your ${meal.mealName}? Please log your meal.",
+      );
     }
   }
-
   // ... (scheduleMedicationReminders, _parseTime, _scheduleTimeBasedReminder remain unchanged) ...
 
   void _scheduleGoalReminder(String title, GoalReminderSettings settings, double current, double goal, ClientReminderConfig config, String type) {

@@ -1,14 +1,16 @@
-import 'dart:ui'; // 🎯 NEW: Required for the frosted glass BackdropFilter
+import 'dart:ui'; // 🎯 Required for the frosted glass BackdropFilter
 import 'package:flutter/material.dart';
 
 class ModernBottomBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
+  final int unreadChatCount; // 🎯 1. Added unread count variable
 
   const ModernBottomBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.unreadChatCount = 0, // 🎯 2. Default to 0
   });
 
   @override
@@ -85,33 +87,59 @@ class ModernBottomBar extends StatelessWidget {
                 selectedIndex: currentIndex,
                 onDestinationSelected: onTap,
                 backgroundColor: Colors.transparent, // 🎯 Transparent to reveal glass
-                destinations: const [
-                  NavigationDestination(
+                destinations: [ // 🚨 Removed 'const' here so the badge can be dynamic!
+                  const NavigationDestination(
                     icon: Icon(Icons.grid_view_outlined),
                     selectedIcon: Icon(Icons.grid_view_rounded),
                     label: 'Home',
                   ),
-                  NavigationDestination(
+                  const NavigationDestination(
                     icon: Icon(Icons.restaurant_menu_outlined),
                     selectedIcon: Icon(Icons.restaurant_menu_rounded),
                     label: 'Plan',
                   ),
-                  NavigationDestination(
+                  const NavigationDestination(
                     icon: Icon(Icons.directions_run_outlined),
                     selectedIcon: Icon(Icons.directions_run_rounded),
                     label: 'Move',
                   ),
-                  NavigationDestination(
+                  const NavigationDestination(
                     icon: Icon(Icons.self_improvement_outlined),
                     selectedIcon: Icon(Icons.self_improvement_rounded),
                     label: 'Wellness',
                   ),
-                  NavigationDestination(
+                  const NavigationDestination(
                     icon: Icon(Icons.rss_feed_rounded),
                     selectedIcon: Icon(Icons.rss_feed),
                     label: 'Feed',
                   ),
+
+                  // 🎯 3. THE NEW CHAT TAB WITH LIVE BADGE
                   NavigationDestination(
+                    icon: Badge(
+                      isLabelVisible: unreadChatCount > 0,
+                      label: Text(
+                        unreadChatCount > 99 ? '99+' : '$unreadChatCount',
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                      backgroundColor: Colors.redAccent,
+                      offset: const Offset(4, -4),
+                      child: const Icon(Icons.chat_bubble_outline_rounded),
+                    ),
+                    selectedIcon: Badge(
+                      isLabelVisible: unreadChatCount > 0,
+                      label: Text(
+                        unreadChatCount > 99 ? '99+' : '$unreadChatCount',
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                      backgroundColor: Colors.redAccent,
+                      offset: const Offset(4, -4),
+                      child: const Icon(Icons.chat_bubble_rounded),
+                    ),
+                    label: 'Chat',
+                  ),
+
+                  const NavigationDestination(
                     icon: Icon(Icons.support_agent_outlined),
                     selectedIcon: Icon(Icons.support_agent_rounded),
                     label: 'Coach',

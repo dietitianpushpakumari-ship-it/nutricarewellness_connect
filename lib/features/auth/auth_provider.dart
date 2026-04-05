@@ -94,33 +94,62 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-// Inside your AuthNotifier class in lib/features/auth/auth_provider.dart
-
-  Future<void> signIn(String mobile, String password) async {
+  // 🚀 THE FIX: Added {String? tenantId} to bypass DB lookup during rapid registration
+  Future<List<ClientModel>> signIn(String mobile, String password) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      // 1. Authenticate and fetch profile from Service
-      final profile = await _clientService.clientSignIn(mobile, password);
+      // 1. 🙈 BLIND SIGN-IN: We construct the email deterministically.
+      // An attacker cannot guess tenant IDs because we don't use them here anymore.
+      final String authEmail = "$mobile@nutricare.internal";
+
+      // This will throw if the PIN is wrong or the user doesn't exist.
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: authEmail,
+        password: password,
+      );
 
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception("Authentication failed.");
 
-      // 2. 🎯 ATOMIC UPDATE
-      // We update everything in ONE shot.
-      state = state.copyWith(
-        currentUser: user,
-        clientId: user.uid,
-        clientProfile: profile, // This is what the Dashboard needs
-        isLoading: false,
-        initialCheckComplete: true,
-      );
+      // 2. 🔐 SECURE LOOKUP: Now that we know they have the right PIN, we fetch the profiles!
+      final profiles = await _clientService.getProfilesForAuthenticatedUser(mobile);
 
-      debugPrint("✅ AuthNotifier: State updated with Profile for ${profile.name}");
+      if (profiles.isEmpty) {
+        throw Exception("Account verified, but profile data is missing.");
+      }
 
+      // 3. 🎯 MULTI-PROFILE HANDLING
+      if (profiles.length == 1) {
+        // Single user: Auto-select their profile
+        state = state.copyWith(
+          currentUser: user,
+          clientId: user.uid,
+          clientProfile: profiles.first,
+          isLoading: false,
+          initialCheckComplete: true,
+        );
+      } else {
+        // Multiple users (Family): Keep clientProfile NULL until UI picker is used
+        state = state.copyWith(
+          currentUser: user,
+          clientId: user.uid,
+          clientProfile: null,
+          isLoading: false,
+          initialCheckComplete: true,
+        );
+      }
+      return profiles;
+    } on FirebaseAuthException catch (e) {
+      state = state.copyWith(isLoading: false, error: "Invalid Mobile Number or PIN.");
+      throw Exception("Invalid Mobile Number or PIN.");
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
       rethrow;
     }
+  }
+
+  void selectProfile(ClientModel profile) {
+    state = state.copyWith(clientProfile: profile);
   }
 
   Future<void> signOut() async {

@@ -64,41 +64,6 @@ class _FeedTabState extends ConsumerState<FeedTab> {
     return null;
   }
 
-  String? _getYouTubeThumbnail(String? videoUrl) {
-    if (videoUrl == null) return null;
-    try {
-      final uri = Uri.parse(videoUrl);
-      String? videoId;
-
-      if (uri.host.contains('youtu.be')) {
-        videoId = uri.pathSegments.first;
-      } else if (uri.host.contains('youtube.com')) {
-        videoId = uri.queryParameters['v'];
-      }
-
-      if (videoId != null) {
-        return 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
-      }
-    } catch (e) {
-      return null;
-    }
-    return null;
-  }
-
-  Future<void> _launchUrl(String url) async {
-    if (url.isEmpty) return;
-    final uri = Uri.parse(url);
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        debugPrint("Could not launch $url");
-      }
-    } catch (e) {
-      debugPrint("Error launching URL: $e");
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -156,15 +121,21 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                   // 3. Filter Bar
                   SliverToBoxAdapter(child: _buildFilterBar(feedNotifier, theme, colorScheme, isDark)),
 
-                  // 4. Feed Items
+                  // 4. 🔥 THE NEW GRID LAYOUT
                   if (feedState.isLoading)
                     SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: colorScheme.primary)))
                   else if (feedState.items.isEmpty)
                     SliverFillRemaining(child: _buildEmptyState(theme, colorScheme))
                   else
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
-                      sliver: SliverList(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
+                      sliver: SliverGrid(
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2, // 2 Columns
+                          mainAxisSpacing: 16, // Vertical spacing
+                          crossAxisSpacing: 16, // Horizontal spacing
+                          mainAxisExtent: 340, // 🔥 Fixed height prevents layout overflow!
+                        ),
                         delegate: SliverChildBuilderDelegate(
                               (context, index) {
                             if (index == feedState.items.length) {
@@ -183,23 +154,21 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                               final videoId = _getYouTubeId(link);
 
                               if (videoId != null) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 20),
-                                  child: _YoutubeFeedCard(
-                                    key: ValueKey(item.id),
-                                    item: item,
-                                    videoId: videoId,
-                                    videoUrl: link ?? '',
-                                  ),
+                                return _YoutubeFeedCard(
+                                  key: ValueKey(item.id),
+                                  item: item,
+                                  videoId: videoId,
+                                  videoUrl: link ?? '',
                                 );
                               }
                             }
 
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 20),
-                              child: _buildPremiumCard(context, item, theme, colorScheme, isDark),
+                            return _PremiumFeedCard(
+                              key: ValueKey(item.id),
+                              item: item,
                             );
                           },
+                          // We add 1 for the loading spinner at the bottom if hasMore is true
                           childCount: feedState.items.length + (feedNotifier.hasMore ? 1 : 0),
                         ),
                       ),
@@ -248,9 +217,7 @@ class _FeedTabState extends ConsumerState<FeedTab> {
         color: isDark ? colorScheme.surfaceContainerHighest.withOpacity(0.5) : theme.cardColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(isDark ? 0.1 : 0.03), blurRadius: 10, offset: const Offset(0, 4))
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.1 : 0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: TextField(
         controller: controller,
@@ -290,202 +257,18 @@ class _FeedTabState extends ConsumerState<FeedTab> {
                 color: isSelected ? colorScheme.primary : theme.cardColor,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: isSelected ? colorScheme.primary : theme.dividerColor.withOpacity(0.2)),
-                boxShadow: isSelected
-                    ? [BoxShadow(color: colorScheme.primary.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 3))]
-                    : [],
+                boxShadow: isSelected ? [BoxShadow(color: colorScheme.primary.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 3))] : [],
               ),
               child: Center(
                 child: Text(
                   filter,
-                  style: TextStyle(
-                    color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface.withOpacity(0.6),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface.withOpacity(0.6), fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),
             ),
           );
         },
       ),
-    );
-  }
-
-  Widget _buildPremiumCard(BuildContext context, FeedItemModel item, ThemeData theme, ColorScheme colorScheme, bool isDark) {
-    final isVideo = item.type == FeedContentType.video;
-    final isRecipe = item.type == FeedContentType.recipe;
-
-    String? displayImageUrl = item.mediaUrl;
-    if (isVideo && (displayImageUrl == null || displayImageUrl.isEmpty) && item.actionUrl != null) {
-      displayImageUrl = _getYouTubeThumbnail(item.actionUrl);
-    }
-    String? clickUrl = item.actionUrl;
-    if (isVideo && (clickUrl == null || clickUrl.isEmpty)) clickUrl = item.mediaUrl;
-
-    // 🎯 DYNAMIC MEDIA CHECK
-    final bool hasMedia = displayImageUrl != null || isVideo;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(isDark ? 0.1 : 0.04), blurRadius: 15, offset: const Offset(0, 6))
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Media Header
-          if (hasMedia)
-            Stack(
-              children: [
-                SizedBox(
-                  height: 160,
-                  width: double.infinity,
-                  child: displayImageUrl != null
-                      ? CachedNetworkImage(
-                    imageUrl: displayImageUrl,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(color: isDark ? colorScheme.surfaceContainerHighest : Colors.grey.shade100),
-                    errorWidget: (_, __, ___) => Container(
-                      color: isDark ? colorScheme.surfaceContainerHighest : Colors.grey.shade200,
-                      child: Center(child: Icon(Icons.broken_image_rounded, color: theme.hintColor)),
-                    ),
-                  )
-                      : Container(color: isDark ? Colors.black : Colors.grey.shade900),
-                ),
-
-                if (isVideo)
-                  const Positioned.fill(
-                    child: Center(
-                      child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 50),
-                    ),
-                  ),
-
-                if (isRecipe)
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: theme.cardColor.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.restaurant_menu_rounded, size: 12, color: colorScheme.primary),
-                          const SizedBox(width: 4),
-                          Text("RECIPE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-
-          Padding(
-            padding: const EdgeInsets.all(14), // 🎯 Tighter padding
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface, height: 1.2),
-                ),
-                const SizedBox(height: 4), // 🎯 Tighter spacing
-                Text(
-                  item.description,
-                  // 🎯 ONLY 1 LINE IF IT HAS AN IMAGE, 3 LINES IF IT IS TEXT-ONLY
-                  maxLines: hasMedia ? 1 : 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
-                ),
-
-                // Recipe Metadata
-                if (isRecipe && item.recipeData != null) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      _buildRecipeTag(Icons.local_fire_department_rounded, "${item.recipeData!['calories']} Kcal", theme, colorScheme, isDark),
-                      const SizedBox(width: 10),
-                      _buildRecipeTag(Icons.timer_rounded, "${item.recipeData!['time']} Mins", theme, colorScheme, isDark),
-                    ],
-                  ),
-                ],
-
-                // Action Button
-                if (clickUrl != null && clickUrl.isNotEmpty) ...[
-                  const SizedBox(height: 12), // 🎯 Tighter spacing
-                  SizedBox(
-                    width: double.infinity,
-                    height: 40, // 🎯 Thinner button
-                    child: ElevatedButton.icon(
-                      onPressed: () => _launchUrl(clickUrl!),
-                      icon: Icon(isVideo ? Icons.play_arrow_rounded : Icons.open_in_new_rounded, size: 16),
-                      label: Text(_getActionLabel(item.type), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isVideo
-                            ? (isDark ? Colors.redAccent : Colors.red.shade700)
-                            : (isRecipe ? colorScheme.secondary : colorScheme.primary),
-                        foregroundColor: isVideo ? Colors.white : colorScheme.onPrimary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        elevation: 0,
-                      ),
-                    ),
-                  )
-                ]
-              ],
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14), // 🎯 Tighter bottom padding
-            child: Row(
-              children: [
-                _buildStatBadge(Icons.visibility_rounded, "${item.views}", theme),
-                const SizedBox(width: 12),
-                _buildStatBadge(Icons.share_rounded, "${item.shares}", theme),
-                const Spacer(),
-                Text(
-                  DateFormat('dd MMM').format(item.postedAt),
-                  style: TextStyle(fontSize: 11, color: theme.hintColor, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecipeTag(IconData icon, String label, ThemeData theme, ColorScheme colorScheme, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: isDark ? colorScheme.surfaceContainerHighest : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 12, color: theme.iconTheme.color?.withOpacity(0.6)),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colorScheme.onSurface)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatBadge(IconData icon, String label, ThemeData theme) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: theme.hintColor),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.hintColor)),
-      ],
     );
   }
 
@@ -501,18 +284,212 @@ class _FeedTabState extends ConsumerState<FeedTab> {
       ),
     );
   }
+}
+
+// ============================================================================
+// 🎯 GRID-OPTIMIZED PREMIUM CARD
+// ============================================================================
+// 🎯 GRID-OPTIMIZED PREMIUM CARD (With Ambient Blur Background)
+// ============================================================================
+// ============================================================================
+// 🎯 GRID-OPTIMIZED PREMIUM CARD (Edge-to-Edge Image Focus)
+// ============================================================================
+class _PremiumFeedCard extends StatefulWidget {
+  final FeedItemModel item;
+  const _PremiumFeedCard({super.key, required this.item});
+
+  @override
+  State<_PremiumFeedCard> createState() => _PremiumFeedCardState();
+}
+
+class _PremiumFeedCardState extends State<_PremiumFeedCard> with AutomaticKeepAliveClientMixin {
+
+  @override
+  bool get wantKeepAlive => true;
+
+  Future<void> _launchUrl(String url) async {
+    if (url.isEmpty) return;
+    try {
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint("Error launching URL: $e");
+    }
+  }
+
+  void _openFullScreenImage(BuildContext context, String imageUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white), elevation: 0),
+          body: Center(
+            child: InteractiveViewer(
+              panEnabled: true,
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Hero(
+                tag: 'image_${widget.item.id}',
+                child: CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.contain, placeholder: (context, url) => const CircularProgressIndicator(color: Colors.white)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   String _getActionLabel(FeedContentType type) {
     switch (type) {
-      case FeedContentType.video: return "Watch Video";
       case FeedContentType.advertisement: return "Claim Offer";
       case FeedContentType.recipe: return "View Recipe";
       default: return "Read More";
     }
   }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final isRecipe = widget.item.type == FeedContentType.recipe;
+    final displayImageUrl = widget.item.mediaUrl;
+    final hasMedia = displayImageUrl != null && displayImageUrl.isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.1 : 0.04), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasMedia)
+            GestureDetector(
+              onTap: () => _openFullScreenImage(context, displayImageUrl),
+              child: SizedBox(
+                height: 170, // 🔥 INCREASED FROM 120px to 170px (50% of card)
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Hero(
+                      tag: 'image_${widget.item.id}',
+                      child: CachedNetworkImage(
+                        imageUrl: displayImageUrl,
+                        // 🔥 FORCE COVER & TOP ALIGNMENT (No black space, no chopped heads)
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        memCacheWidth: 600,
+                        maxWidthDiskCache: 800,
+                        fadeInDuration: const Duration(milliseconds: 200),
+                        placeholder: (_, __) => Container(color: isDark ? colorScheme.surfaceContainerHighest : Colors.grey.shade100, child: const Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                        errorWidget: (_, __, ___) => Container(color: isDark ? colorScheme.surfaceContainerHighest : Colors.grey.shade200, child: Center(child: Icon(Icons.broken_image_rounded, color: theme.hintColor))),
+                      ),
+                    ),
+
+                    if (isRecipe)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(color: theme.cardColor.withOpacity(0.9), borderRadius: BorderRadius.circular(8)),
+                          child: Row(
+                            children: [
+                              Icon(Icons.restaurant_menu_rounded, size: 10, color: colorScheme.primary),
+                              const SizedBox(width: 4),
+                              Text("RECIPE", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: colorScheme.onSurface, height: 1.2),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.item.description,
+                    maxLines: hasMedia ? 2 : 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, color: theme.hintColor, height: 1.3),
+                  ),
+
+                  const Spacer(),
+
+                  if (widget.item.actionUrl != null && widget.item.actionUrl!.isNotEmpty) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 32,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _launchUrl(widget.item.actionUrl!),
+                        icon: const Icon(Icons.open_in_new_rounded, size: 12),
+                        label: Text(_getActionLabel(widget.item.type), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isRecipe ? colorScheme.secondary : colorScheme.primary,
+                          foregroundColor: colorScheme.onPrimary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    children: [
+                      Icon(Icons.visibility_rounded, size: 12, color: theme.hintColor),
+                      Text("${widget.item.views}", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.hintColor)),
+                      Icon(Icons.share_rounded, size: 12, color: theme.hintColor),
+                      Text("${widget.item.shares}", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.hintColor)),
+                    ],
+                  )
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-// 🎯 YOUTUBE CARD
+// ============================================================================
+// 🎯 GRID-OPTIMIZED YOUTUBE CARD
+// ============================================================================
+// ============================================================================
+// 🎯 GRID-OPTIMIZED & PREMIUM YOUTUBE CARD
+// ============================================================================
+// ============================================================================
+// 🎯 GRID-OPTIMIZED & PREMIUM YOUTUBE CARD (Black Bars Removed)
+// ============================================================================
+// ============================================================================
+// 🎯 GRID-OPTIMIZED YOUTUBE CARD (Edge-to-Edge Zoomed Thumbnail)
+// ============================================================================
 class _YoutubeFeedCard extends StatefulWidget {
   final FeedItemModel item;
   final String videoId;
@@ -530,41 +507,15 @@ class _YoutubeFeedCard extends StatefulWidget {
 }
 
 class _YoutubeFeedCardState extends State<_YoutubeFeedCard> with AutomaticKeepAliveClientMixin {
-  late YoutubePlayerController _controller;
 
   @override
   bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = YoutubePlayerController(
-      initialVideoId: widget.videoId,
-      flags: const YoutubePlayerFlags(
-        autoPlay: false,
-        mute: false,
-        enableCaption: false,
-        isLive: false,
-        forceHD: false,
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   Future<void> _openInApp() async {
     final url = 'https://www.youtube.com/watch?v=${widget.videoId}';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     }
-  }
-
-  void _shareVideo() {
-    Share.share('Check out this video on NutriCare: ${widget.videoUrl}');
   }
 
   @override
@@ -574,67 +525,130 @@ class _YoutubeFeedCardState extends State<_YoutubeFeedCard> with AutomaticKeepAl
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
+    final String thumbnailUrl = 'https://img.youtube.com/vi/${widget.videoId}/hqdefault.jpg';
+
     return Container(
       decoration: BoxDecoration(
           color: theme.cardColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.1 : 0.04), blurRadius: 15, offset: const Offset(0, 6))]
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.1 : 0.04), blurRadius: 10, offset: const Offset(0, 4))]
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          YoutubePlayer(
-            controller: _controller,
-            showVideoProgressIndicator: true,
-            progressIndicatorColor: Colors.red,
-            progressColors: const ProgressBarColors(playedColor: Colors.red, handleColor: Colors.redAccent),
-            topActions: [
-              const Spacer(),
-              IconButton(icon: const Icon(Icons.share_rounded, color: Colors.white, size: 20), onPressed: _shareVideo),
-              IconButton(icon: const Icon(Icons.open_in_new_rounded, color: Colors.white, size: 20), onPressed: _openInApp),
-            ],
-            bottomActions: [
-              CurrentPosition(),
-              ProgressBar(isExpanded: true),
-              RemainingDuration(),
-              const FullScreenButton(),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.item.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface, height: 1.2)),
-                const SizedBox(height: 4),
-                Text(
-                    widget.item.description,
-                    maxLines: 1, // 🎯 ONLY 1 LINE FOR YOUTUBE CARDS
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4)
-                ),
-              ],
+          GestureDetector(
+            onTap: _openInApp,
+            child: SizedBox(
+              height: 170, // 🔥 INCREASED FROM 120px to 170px
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Transform.scale(
+                    scale: 1.35, // Ensures the baked-in black bars are pushed off screen
+                    child: CachedNetworkImage(
+                      imageUrl: thumbnailUrl,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 600,
+                      maxWidthDiskCache: 800,
+                      placeholder: (_, __) => Container(color: isDark ? colorScheme.surfaceContainerHighest : Colors.grey.shade100),
+                      errorWidget: (_, __, ___) => Container(color: isDark ? colorScheme.surfaceContainerHighest : Colors.grey.shade200, child: const Icon(Icons.video_library_rounded)),
+                    ),
+                  ),
+
+                  Container(
+                    decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
+                        )
+                    ),
+                  ),
+
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(50),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                          ),
+                          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(color: Colors.red.shade700, borderRadius: BorderRadius.circular(6)),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(FontAwesomeIcons.youtube, size: 10, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text("VIDEO", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            child: Row(
-              children: [
-                Icon(Icons.visibility_rounded, size: 14, color: theme.hintColor),
-                const SizedBox(width: 4),
-                Text("${widget.item.views}", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.hintColor)),
-                const SizedBox(width: 12),
-                Icon(Icons.share_rounded, size: 14, color: theme.hintColor),
-                const SizedBox(width: 4),
-                Text("${widget.item.shares}", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.hintColor)),
-                const Spacer(),
-                Text(
-                  DateFormat('dd MMM').format(widget.item.postedAt),
-                  style: TextStyle(fontSize: 11, color: theme.hintColor, fontWeight: FontWeight.bold),
-                ),
-              ],
+
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.item.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: colorScheme.onSurface, height: 1.2)),
+                  const SizedBox(height: 4),
+                  Text(widget.item.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: theme.hintColor, height: 1.3)),
+
+                  const Spacer(),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 32,
+                    child: ElevatedButton.icon(
+                      onPressed: _openInApp,
+                      icon: const Icon(FontAwesomeIcons.youtube, size: 12),
+                      label: const Text("Watch Video", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark ? Colors.redAccent : Colors.red.shade700,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    children: [
+                      Icon(Icons.visibility_rounded, size: 12, color: theme.hintColor),
+                      Text("${widget.item.views}", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.hintColor)),
+                      Icon(Icons.share_rounded, size: 12, color: theme.hintColor),
+                      Text("${widget.item.shares}", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.hintColor)),
+                    ],
+                  )
+                ],
+              ),
             ),
           )
         ],

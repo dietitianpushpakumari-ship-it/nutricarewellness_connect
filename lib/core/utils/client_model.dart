@@ -49,11 +49,19 @@ class ClientModel {
   final String? authEmail;
   final String? authUid; // 🎯 ADDED THIS FIELD
   final String tenantId;
+  final String? coachId;
 
   final DateTime? dob;
   final ClientGoalModel goals;
   final int? freeSessionsRemaining;
   final String clientType;
+
+  // 🔔 NEW: PUSH NOTIFICATION TOKEN
+  final String? fcmToken;
+  final String? lastMessage;
+  final Timestamp? lastMessageTime;
+  final bool hasPendingRequest;
+
 
   ClientModel({
     required this.id,
@@ -71,6 +79,7 @@ class ClientModel {
     this.reminderConfig,
     this.address,
     this.geoLocation,
+    this.coachId,
     this.photoUrl,
     this.hasJoinedSocials = false,
     this.email,
@@ -84,6 +93,10 @@ class ClientModel {
     this.goals = const ClientGoalModel(),
     this.freeSessionsRemaining = 1,
     this.clientType = 'new',
+    this.fcmToken, // 🔔 Added here
+    this.lastMessage,
+    this.lastMessageTime,
+    this.hasPendingRequest = false,
   });
 
   factory ClientModel.fromMap(Map<String, dynamic> data) {
@@ -99,6 +112,7 @@ class ClientModel {
       name: data['name'] ?? '',
       age: data['age'] ?? 0,
       whatsappNumber: data['whatsappNumber'] ?? '',
+      coachId: data['coachId'] as String?,
       gender: data['gender'] ?? '',
       reminderConfig: data['reminderConfig'] != null
           ? ClientReminderConfig.fromMap(Map<String, dynamic>.from(data['reminderConfig']))
@@ -121,6 +135,10 @@ class ClientModel {
           ? ClientGoalModel.fromMap(Map<String, dynamic>.from(data['goals']))
           : ClientGoalModel.defaultGoals(),
       freeSessionsRemaining: data['freeSessionsRemaining'] ?? 0,
+      fcmToken: data['fcmToken']?.toString(), // 🔔 Added here
+      lastMessage: data['lastMessage'] as String?,
+      lastMessageTime: data['lastMessageTime'] as Timestamp?,
+      hasPendingRequest: data['hasPendingRequest'] ?? false,
     );
   }
 
@@ -137,6 +155,7 @@ class ClientModel {
       isArchived: data['isArchived'] ?? false,
       name: data['name'] ?? '',
       age: data['age'] ?? 0,
+      coachId: data['coachId'] as String?,
       whatsappNumber: data['whatsappNumber'] ?? '',
       gender: data['gender'] ?? '',
       reminderConfig: data['reminderConfig'] != null
@@ -160,6 +179,10 @@ class ClientModel {
           ? ClientGoalModel.fromMap(Map<String, dynamic>.from(data['goals']))
           : ClientGoalModel.defaultGoals(),
       freeSessionsRemaining: data['freeSessionsRemaining'] ?? 0,
+      fcmToken: data['fcmToken']?.toString(), // 🔔 Added here
+      lastMessage: data['lastMessage'] as String?,
+      lastMessageTime: data['lastMessageTime'] as Timestamp?,
+      hasPendingRequest: data['hasPendingRequest'] ?? false,
     );
   }
 
@@ -191,7 +214,12 @@ class ClientModel {
       'geoLocation': geoLocation,
       'photoUrl': photoUrl,
       'goals': goals.toMap(),
+      'coachId': coachId,
       'freeSessionsRemaining': freeSessionsRemaining ?? 0,
+      'fcmToken': fcmToken, // 🔔 Added here
+      'lastMessage': lastMessage,
+      'lastMessageTime': lastMessageTime,
+      'hasPendingRequest': hasPendingRequest,
     };
   }
 
@@ -214,7 +242,7 @@ class ClientModel {
     String? photoUrl,
     bool? hasJoinedSocials,
     String? email,
-
+    String? coachId,
     // 🎯 Auth Params
     String? authEmail,
     String? authUid,
@@ -223,6 +251,11 @@ class ClientModel {
     DateTime? dob,
     ClientGoalModel? goals,
     int? freeSessionsRemaining,
+    String? fcmToken, // 🔔 Added to params
+    String? lastMessage,
+    Timestamp? lastMessageTime,
+    bool? hasPendingRequest,
+
   }) {
     return ClientModel(
       id: id ?? this.id,
@@ -240,6 +273,7 @@ class ClientModel {
       reminderConfig: reminderConfig ?? this.reminderConfig,
       address: address ?? this.address,
       email: email ?? this.email,
+      coachId: coachId ?? this.coachId,
 
       // 🎯 Copy Auth Params
       authEmail: authEmail ?? this.authEmail,
@@ -252,6 +286,11 @@ class ClientModel {
       photoUrl: photoUrl ?? this.photoUrl,
       goals: goals ?? this.goals,
       freeSessionsRemaining: freeSessionsRemaining ?? this.freeSessionsRemaining,
+      fcmToken: fcmToken ?? this.fcmToken, // 🔔 Added here
+      // 💬 Copy new fields
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageTime: lastMessageTime ?? this.lastMessageTime,
+      hasPendingRequest: hasPendingRequest ?? this.hasPendingRequest,
     );
   }
 }

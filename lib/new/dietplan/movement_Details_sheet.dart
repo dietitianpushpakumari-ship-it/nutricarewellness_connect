@@ -2,13 +2,15 @@ import 'dart:math';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+
+// FlatClientDietPlanModel
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 
 class MovementDetailSheet extends ConsumerStatefulWidget {
   final DietPlanNotifier notifier;
-  final ClientDietPlanModel activePlan;
+  final FlatClientDietPlanModel activePlan; // 🚀 Strongly typed to Flat Model
   final ClientLogModel? dailyLog; // Represents the Master Record
   final int currentSteps;
 
@@ -356,14 +358,14 @@ class _MovementDetailSheetState extends ConsumerState<MovementDetailSheet> with 
 
                 Expanded(
                   flex: 2,
-                  child: widget.activePlan.mandatoryDailyTasks.isEmpty
+                  child: widget.activePlan.assignedHabits.isEmpty // 🚀 THE FIX: Use assignedHabits
                       ? Center(child: Text("${context.tr("no_mission_assigned_today")}.", style: TextStyle(color: theme.hintColor, fontWeight: FontWeight.w500)))
                       : ListView.separated(
                     physics: const BouncingScrollPhysics(),
-                    itemCount: widget.activePlan.mandatoryDailyTasks.length,
+                    itemCount: widget.activePlan.assignedHabits.length, // 🚀 THE FIX: Use assignedHabits length
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
-                      final task = widget.activePlan.mandatoryDailyTasks[index];
+                      final task = widget.activePlan.assignedHabits[index]; // 🚀 THE FIX: Use assignedHabits index
                       final isCompleted = widget.dailyLog?.completedMandatoryTasks.contains(task) ?? false;
 
                       return _buildMissionCard(task, isCompleted, theme, colorScheme, isDark);

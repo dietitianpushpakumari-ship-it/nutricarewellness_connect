@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+// Ensure this points to FlatClientDietPlanModel
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 
 class LogVitalsScreen extends ConsumerStatefulWidget {
   final DietPlanNotifier notifier;
-  final ClientDietPlanModel activePlan;
+  final FlatClientDietPlanModel activePlan; // 🚀 THE FIX: Strongly typed to Flat Model
   final ClientLogModel? dailyLog;
 
   const LogVitalsScreen({
@@ -26,24 +27,42 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
 
-  // Controllers (Mapping directly to the Vitals Map in your new structure)
   late Map<String, TextEditingController> _controllers;
 
   @override
   void initState() {
     super.initState();
-    final log = widget.dailyLog;
+    _initControllers(widget.dailyLog);
+  }
+
+  // 🎯 Update controllers if the date/log changes while the screen is open
+  @override
+  void didUpdateWidget(covariant LogVitalsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.dailyLog != widget.dailyLog) {
+      _initControllers(widget.dailyLog);
+    }
+  }
+
+  void _initControllers(ClientLogModel? log) {
     _controllers = {
-      'weightKg': TextEditingController(text: log?.weightKg?.toString() ?? ''),
-      'bpSystolic': TextEditingController(text: log?.bloodPressureSystolic?.toString() ?? ''),
-      'bpDiastolic': TextEditingController(text: log?.bloodPressureDiastolic?.toString() ?? ''),
-      'heartRate': TextEditingController(text: log?.heartRateBpm?.toString() ?? ''),
-      'spO2': TextEditingController(text: log?.spO2Percentage?.toString() ?? ''),
-      'fbs': TextEditingController(text: log?.fbsMgDl?.toString() ?? ''),
-      'ppbs': TextEditingController(text: log?.ppbsMgDl?.toString() ?? ''),
-      'waist': TextEditingController(text: log?.waistCm?.toString() ?? ''),
-      'hip': TextEditingController(text: log?.hipCm?.toString() ?? ''),
+      'weightKg': TextEditingController(text: _formatVal(log?.weightKg)),
+      'bpSystolic': TextEditingController(text: _formatVal(log?.bloodPressureSystolic)),
+      'bpDiastolic': TextEditingController(text: _formatVal(log?.bloodPressureDiastolic)),
+      'heartRate': TextEditingController(text: _formatVal(log?.heartRateBpm)),
+      'spO2': TextEditingController(text: _formatVal(log?.spO2Percentage)),
+      'fbs': TextEditingController(text: _formatVal(log?.fbsMgDl)),
+      'ppbs': TextEditingController(text: _formatVal(log?.ppbsMgDl)),
+      'waist': TextEditingController(text: _formatVal(log?.waistCm)),
+      'hip': TextEditingController(text: _formatVal(log?.hipCm)),
     };
+  }
+
+  // Helper to prevent showing "null" or awkward "0.0" decimals where not needed
+  String _formatVal(dynamic val) {
+    if (val == null) return '';
+    if (val is double && val % 1 == 0) return val.toInt().toString();
+    return val.toString();
   }
 
   @override
@@ -59,9 +78,6 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final dateId = DateFormat('yyyy-MM-dd').format(widget.notifier.state.selectedDate);
-
-      // 🎯 NEW ATOMIC STRUCTURE: Map directly to specific fields in the master document
       final Map<String, dynamic> vitalsData = {
         'weightKg': double.tryParse(_controllers['weightKg']!.text),
         'bloodPressureSystolic': int.tryParse(_controllers['bpSystolic']!.text),
@@ -75,11 +91,9 @@ class _LogVitalsScreenState extends ConsumerState<LogVitalsScreen> {
         'lastUpdated': DateTime.now().toIso8601String(),
       };
 
-      // 🎯 Atomic Update: Only updates vitals without touching meals/hydration
-   //   await widget.notifier.updateDailyRecord(
-     //   dateId: dateId,
-       // data: vitalsData,
-     // );
+      await widget.notifier.updateDailyRecord(
+        data: vitalsData,
+      );
 
       if (mounted) Navigator.pop(context);
     } catch (e) {

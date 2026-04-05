@@ -1,15 +1,17 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Needed for HapticFeedback
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nutricare_connect/core/utils/client_model.dart';
 import 'package:nutricare_connect/core/utils/wellness_reccomender_service.dart';
 import 'package:nutricare_connect/core/utils/wellness_tool_model.dart';
 import 'package:nutricare_connect/features/content/quiz_swipe_screen.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+                                     // FlatClientDietPlanModel
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:nutricare_connect/new/service/client_service.dart';
 import 'package:collection/collection.dart';
+
 import 'package:nutricare_connect/new/wellnesshub/BalanceLockSheet.dart';
 import 'package:nutricare_connect/new/wellnesshub/BiometricScannerSheet.dart';
 import 'package:nutricare_connect/new/wellnesshub/Co2ToleranceSheet.dart';
@@ -49,6 +51,8 @@ import 'package:nutricare_connect/new/wellnesshub/sleep_debt_bank.dart';
 
 import 'package:nutricare_connect/features/content/geeta_library_screen.dart';
 
+import '../FlatClientDietPlanModel.dart';
+
 class WellnessHubScreen extends ConsumerWidget {
   final ClientModel client;
   const WellnessHubScreen({super.key, required this.client});
@@ -56,6 +60,9 @@ class WellnessHubScreen extends ConsumerWidget {
   void _handleToolTap(BuildContext context, String routeKey, WidgetRef ref, ClientModel client) {
     final state = ref.read(activeDietPlanProvider);
     final notifier = ref.read(dietPlanNotifierProvider(client.id).notifier);
+
+    // 🎯 Haptic feedback for a premium, tactile feel
+    HapticFeedback.selectionClick();
 
     // 🎯 ATOMIC FIX: Use the single daily record directly
     final dailyRecord = state.dailyRecord;
@@ -84,8 +91,12 @@ class WellnessHubScreen extends ConsumerWidget {
       case 'spine_decompression': _launchSheet(context, const SpineDecompressionSheet()); break;
 
       case 'breathing':
-      // 🎯 Pass dailyRecord directly to the menu
-        if (state.activePlan != null) _showBreathingMenu(context, notifier, state.activePlan!, dailyRecord, Theme.of(context));
+      // 🎯 SAFETY CHECK: Ensure plan exists before opening the menu
+        if (state.activePlan != null) {
+          _showBreathingMenu(context, notifier, state.activePlan!, dailyRecord, Theme.of(context));
+        } else {
+          _showNoPlanSnippet(context);
+        }
         break;
       case 'focus': _launchSheet(context, const FocusGridSheet()); break;
       case 'eye': _launchSheet(context, const EyeYogaSheet()); break;
@@ -118,12 +129,17 @@ class WellnessHubScreen extends ConsumerWidget {
     }
   }
 
-  // ... availableCameras logic and evaluateVitals logic remains the same ...
+  // 🎯 Helper to show a snackbar if no diet plan is active
+  void _showNoPlanSnippet(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Please activate a diet plan to use this feature.")),
+    );
+  }
 
-  // 🎯 ATOMIC FIX: Update menu helpers to accept ClientLogModel? dailyRecord
-  void _showBreathingMenu(BuildContext context, DietPlanNotifier notifier, ClientDietPlanModel activePlan, ClientLogModel? dailyRecord, ThemeData theme) {
+  // 🎯 ATOMIC FIX: Update menu helpers to accept FlatClientDietPlanModel
+  void _showBreathingMenu(BuildContext context, DietPlanNotifier notifier, FlatClientDietPlanModel activePlan, ClientLogModel? dailyRecord, ThemeData theme) {
     showModalBottomSheet(
-      isDismissible: false,
+      isDismissible: true, // 🎯 Allowed dismissal for better UX
       isScrollControlled: true,
       context: context,
       backgroundColor: Colors.transparent,
@@ -183,6 +199,7 @@ class WellnessHubScreen extends ConsumerWidget {
       ),
     );
   }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // 🎨 Theme Extraction
@@ -469,7 +486,6 @@ class WellnessHubScreen extends ConsumerWidget {
 
   // 🎯 RESTORED & THEMED: EXPANDED MENUS for Breathing & Quick Fit
 
-
   void _showWorkoutMenu(BuildContext context, ThemeData theme) {
     showModalBottomSheet(
       isDismissible: false,
@@ -543,8 +559,8 @@ class WellnessHubScreen extends ConsumerWidget {
     );
   }
 
-  void _launchBreathingSheet(BuildContext context, DietPlanNotifier notifier, ClientDietPlanModel plan, ClientLogModel? log, BreathingConfig config) {
-    Navigator.pop(context);
+  void _launchBreathingSheet(BuildContext context, DietPlanNotifier notifier, FlatClientDietPlanModel plan, ClientLogModel? log, BreathingConfig config) {
+    Navigator.pop(context); // 🎯 Close menu first
     _launchSheet(context, BreathingDetailSheet(notifier: notifier, activePlan: plan, dailyLog: log, config: config));
   }
 

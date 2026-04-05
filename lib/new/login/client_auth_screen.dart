@@ -83,22 +83,122 @@ class _ClientAuthScreenState extends ConsumerState<ClientAuthScreen> with Single
   // ===========================================================================
 
   Future<void> _login() async {
-    final loginId = _loginIdController.text.trim();
+    final rawLoginId = _loginIdController.text.trim();
     final pin = _loginPinController.text.trim();
-    if (loginId.isEmpty || pin.isEmpty) { _showMessage('Required fields missing.', isError: true); return; }
+
+    if (rawLoginId.isEmpty || pin.isEmpty) {
+      _showMessage('Required fields missing.', isError: true);
+      return;
+    }
+
     HapticFeedback.lightImpact();
+    ref.read(authNotifierProvider.notifier).state = ref.read(authNotifierProvider).copyWith(isLoading: true);
+
+    // 🚀 THE FIX: The backend only uses strictly numeric phone numbers now!
+    final String cleanNum = rawLoginId.replaceAll(RegExp(r'\D'), '');
 
     try {
-      await ref.read(authNotifierProvider.notifier).signIn(loginId, pin + kPinSalt);
-      final clientProfile = ref.read(authNotifierProvider).clientProfile;
+      // Just one deterministic login attempt!
+      final profiles = await ref.read(authNotifierProvider.notifier).signIn(cleanNum, pin + kPinSalt);
 
-      if (clientProfile != null && mounted) {
-        ref.read(globalUserProvider.notifier).setUser(clientProfile);
-        Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => ClientDashboardScreen(client: clientProfile)), (route) => false);
+      if (!mounted) return;
+
+      if (profiles.isEmpty) {
+        ref.read(authNotifierProvider.notifier).state = ref.read(authNotifierProvider).copyWith(isLoading: false);
+        _showMessage("Account verified, but profile document is missing.", isError: true);
+        return;
+      }
+
+      if (profiles.length == 1) {
+        ref.read(globalUserProvider.notifier).setUser(profiles.first);
+        Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => ClientDashboardScreen(client: profiles.first)),
+                (route) => false
+        );
+      } else {
+        ref.read(authNotifierProvider.notifier).state = ref.read(authNotifierProvider).copyWith(isLoading: false);
+        _showProfileSelectionSheet(profiles);
       }
     } catch (e) {
-      if (mounted) _showMessage('Authentication failed. Check your PIN.', isError: true);
+      if (mounted) {
+        ref.read(authNotifierProvider.notifier).state = ref.read(authNotifierProvider).copyWith(isLoading: false);
+        _showMessage(e.toString().replaceAll("Exception:", "").trim(), isError: true);
+      }
     }
+  }
+
+  // 🎯 NEW: Netflix-Style Profile Selection Modal
+  void _showProfileSelectionSheet(List<ClientModel> profiles) {
+    showModalBottomSheet(
+        context: context,
+        backgroundColor: cardDark,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        builder: (context) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(10))),
+                  const Text("Select Profile", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                  const SizedBox(height: 8),
+                  Text("Multiple patients found under this mobile number.", style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                  const SizedBox(height: 24),
+
+                  // List of Profiles
+                  ...profiles.map((profile) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.pop(context); // Close sheet
+                        // Lock state and proceed
+                        ref.read(authNotifierProvider.notifier).selectProfile(profile);
+                        ref.read(globalUserProvider.notifier).setUser(profile);
+                        Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (context) => ClientDashboardScreen(client: profile)),
+                                (route) => false
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: neonGreen.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: neonGreen.withOpacity(0.15),
+                              child: Icon(Icons.person_rounded, color: neonGreen, size: 28),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(profile.name!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                  const SizedBox(height: 4),
+                                  Text("Patient ID: ${profile.patientId}", style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_right_rounded, color: Colors.grey.shade600),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )),
+                ],
+              ),
+            ),
+          );
+        }
+    );
   }
 
   Future<void> _completeActivation() async {
@@ -111,60 +211,53 @@ class _ClientAuthScreenState extends ConsumerState<ClientAuthScreen> with Single
     try {
       final service = ref.read(clientServiceProvider);
       final securePassword = pin + kPinSalt;
-      await service.activateClientAccess(client: _validatedClient!, pin: securePassword);
+      final mobile = _regMobileController.text.replaceAll(RegExp(r'\D'), ''); // Strip non-digits
+
+      // 🚀 THE FIX: Pass raw strings to the Cloud Function
+      await service.activateClientAccess(
+        patientId: _regPatientIdController.text.trim(),
+        mobile: mobile,
+        activationCode: _regActivationCodeController.text.trim(),
+        pin: securePassword,
+      );
+
       if (mounted) {
-        await ref.read(authNotifierProvider.notifier).signIn(_validatedClient!.mobile, securePassword);
+        // Blind sign in! (No tenantId needed anymore)
+        await ref.read(authNotifierProvider.notifier).signIn(mobile, securePassword);
         ref.invalidate(clientProfileFutureProvider);
       }
     } catch (e) {
-      _showMessage('Activation failed: $e', isError: true);
+      _showMessage(e.toString().replaceAll("Exception:", "").trim(), isError: true);
       if (mounted) ref.read(authNotifierProvider.notifier).state = ref.read(authNotifierProvider).copyWith(isLoading: false);
     }
   }
 
   Future<void> _validateRegistration() async {
     if (!_acceptedTerms) { _showMessage("Acceptance of Privacy Policy required.", isError: true); return; }
+
     final patientId = _regPatientIdController.text.trim();
     final mobile = _regMobileController.text.trim();
     final code = _regActivationCodeController.text.trim();
 
-    if (patientId.isEmpty || mobile.isEmpty || code.isEmpty) { _showMessage("All fields required.", isError: true); return; }
-    ref.read(authNotifierProvider.notifier).state = ref.read(authNotifierProvider).copyWith(isLoading: true, error: null);
-
-    try {
-      final query = await FirebaseFirestore.instance.collection('clients').where('patientId', isEqualTo: patientId).limit(1).get();
-      if (query.docs.isEmpty) throw "Patient ID not found.";
-
-      final doc = query.docs.first;
-      final data = doc.data();
-
-      String cleanInput = mobile.replaceAll(RegExp(r'\D'), '');
-      String cleanDb = (data['mobile'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
-      if (cleanInput.length < 10) throw "Invalid mobile format.";
-      if (!cleanDb.endsWith(cleanInput)) throw "Mobile number mismatch.";
-
-      String serverToken = (data['loginToken'] ?? '').toString().trim();
-      if (serverToken.isEmpty) throw "Activation Code not generated.";
-      if (serverToken != code.trim()) throw "Invalid Activation Code.";
-
-      ref.read(isGuestModeProvider.notifier).state = false;
-      await ref.read(firebaseAppProvider.future);
-
-      if (mounted) {
-        setState(() { _validatedClient = ClientModel.fromFirestore(doc); _currentPage = AuthPage.registerPassword; });
-        _showMessage('Verification successful. Secure your account.', isError: false);
-      }
-    } catch (e) {
-      _showMessage(e.toString().replaceAll("Exception:", "").trim(), isError: true);
-    } finally {
-      if (mounted) ref.read(authNotifierProvider.notifier).state = ref.read(authNotifierProvider).copyWith(isLoading: false);
+    if (patientId.isEmpty || mobile.isEmpty || code.isEmpty) {
+      _showMessage("All fields required.", isError: true);
+      return;
     }
+
+    // 🚀 THE FIX: We NO LONGER query Firestore here.
+    // Security rules will block it anyway. We just advance to the PIN screen.
+    // The Cloud Function will do all the secure validation in the next step.
+    ref.read(isGuestModeProvider.notifier).state = false;
+
+    setState(() {
+      _currentPage = AuthPage.registerPassword;
+    });
   }
 
   Future<void> _handleNewUserSignUp() async {
     if (!_acceptedTerms) { _showMessage("Acceptance of Privacy Policy required.", isError: true); return; }
     final name = _regNameController.text.trim();
-    final mobile = _regMobileController.text.trim();
+    final mobile = _regMobileController.text.replaceAll(RegExp(r'\D'), ''); // 🚀 Strip non-digits
     final pin = _regPinController.text.trim();
 
     if (name.isEmpty || mobile.isEmpty || pin.isEmpty) { _showMessage("All fields required.", isError: true); return; }
@@ -176,10 +269,14 @@ class _ClientAuthScreenState extends ConsumerState<ClientAuthScreen> with Single
     ref.read(authNotifierProvider.notifier).state = ref.read(authNotifierProvider).copyWith(isLoading: true);
 
     try {
+      // Call Guest Cloud Function
       await service.registerNewUser(name: name, mobile: mobile, password: pin + kPinSalt);
+
+      // 🚀 THE FIX: Removed `tenantId: 'guest'` because signIn handles deterministic emails now
       await ref.read(authNotifierProvider.notifier).signIn(mobile, pin + kPinSalt);
+
     } catch (e) {
-      _showMessage(e.toString(), isError: true);
+      _showMessage(e.toString().replaceAll("Exception:", "").trim(), isError: true);
     } finally {
       if(mounted) ref.read(authNotifierProvider.notifier).state = ref.read(authNotifierProvider).copyWith(isLoading: false);
     }

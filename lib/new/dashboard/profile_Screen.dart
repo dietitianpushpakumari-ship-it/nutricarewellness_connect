@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:nutricare_connect/new/service/notification_service.dart';
 import 'package:nutricare_connect/new/utils/image_compressor.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
@@ -536,9 +538,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         )
     );
   }
-
   Future<void> _performLogout() async {
+    final user = ref.read(globalUserProvider) ?? ref.read(currentClientProvider);
+    if (user != null) {
+      // 🎯 Use the service to clear the token
+      await NotificationService().clearTokenOnLogout(
+          userId: user.id,
+          collectionName: 'clients'
+      );
+    }
+
+    // 2. Standard Sign Out
     await ref.read(authNotifierProvider.notifier).signOut();
+
     if(mounted) {
       Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const ClientAuthScreen()),

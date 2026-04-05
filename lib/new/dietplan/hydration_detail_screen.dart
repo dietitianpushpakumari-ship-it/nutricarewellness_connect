@@ -1,15 +1,17 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
 import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/wave_clipper.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+
+// FlatClientDietPlanModel
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 
 class HydrationDetailSheet extends ConsumerStatefulWidget {
   final DietPlanNotifier notifier;
-  final ClientDietPlanModel activePlan;
-  final ClientLogModel? dailyLog; // Now represents the Master Record
+  final FlatClientDietPlanModel activePlan; // 🚀 Flat Model
+  final ClientLogModel? dailyLog;
   final double currentIntake;
 
   const HydrationDetailSheet({
@@ -63,9 +65,6 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
         },
       );
 
-      // Note: We no longer need to call loadInitialData manually because
-      // updateDailyRecord automatically fetches the fresh record and updates the Riverpod state!
-
     } catch (e) {
       // Revert UI on failure
       setState(() => _displayIntake = widget.currentIntake);
@@ -102,7 +101,7 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
     final isDark = theme.brightness == Brightness.dark;
 
     final double goalLiters = widget.activePlan.dailyWaterGoal;
-    final double progress = (_displayIntake / goalLiters).clamp(0.0, 1.0);
+    final double progress = goalLiters > 0 ? (_displayIntake / goalLiters).clamp(0.0, 1.0) : 0.0;
     final int percent = (progress * 100).toInt();
 
     // 🎯 Use Solid Opaque Colors for Premium Look
@@ -113,7 +112,7 @@ class _HydrationDetailSheetState extends ConsumerState<HydrationDetailSheet> wit
         maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
       decoration: BoxDecoration(
-        color: solidBgColor, // 🎯 Enforces solid theme
+        color: solidBgColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         boxShadow: [
           BoxShadow(

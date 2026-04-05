@@ -31,6 +31,7 @@ class ClientService {
   // 🎯 DYNAMIC GETTERS
   FirebaseFirestore get _firestore => _ref.read(firestoreProvider);
   FirebaseAuth get _auth => _ref.read(authProvider);
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'asia-south1');
 
   CollectionReference get _clientCollection => _firestore.collection('clients');
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -42,6 +43,66 @@ class ClientService {
   // ---------------------------------------------------------------------------
   // 🔐 CORE SECURITY HELPERS
   // ---------------------------------------------------------------------------
+
+  Future<void> activateClientAccess({
+    required String patientId,
+    required String mobile,
+    required String activationCode,
+    required String pin
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('secureClientActivation');
+
+      final result = await callable.call({
+        'patientId': patientId,
+        'mobile': mobile,
+        'activationCode': activationCode,
+        'pin': pin,
+      });
+
+      if (result.data['success'] != true) {
+        throw Exception("Server rejected activation.");
+      }
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? "Activation failed.");
+    } catch (e) {
+      throw Exception("Network error. Please try again.");
+    }
+  }
+
+  // 🛡️ 2. CALL GUEST REGISTRATION FUNCTION
+  Future<void> registerNewUser({
+    required String name,
+    required String mobile,
+    required String password,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('secureGuestRegistration');
+
+      final result = await callable.call({
+        'name': name,
+        'mobile': mobile,
+        'pin': password,
+      });
+
+      if (result.data['success'] != true) {
+        throw Exception("Server rejected registration.");
+      }
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? "Registration failed.");
+    } catch (e) {
+      throw Exception("Network error. Please try again.");
+    }
+  }
+
+
+  Future<void> updateClient(ClientModel client) async {
+    try {
+      await _clientCollection.doc(client.id).update(client.toMap());
+    } catch (e) {
+      throw Exception('Failed to update client record: $e');
+    }
+  }
 
   String _generateVirtualEmail(String mobile, String tenantId) {
     final cleanMobile = mobile.replaceAll(RegExp(r'\D'), '');
@@ -55,174 +116,65 @@ class ClientService {
   // ---------------------------------------------------------------------------
   // 🚀 AUTHENTICATION FLOWS
   // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+  // 🚀 AUTHENTICATION FLOWS (UPDATED FOR MULTI-PROFILE)
+  // ---------------------------------------------------------------------------
 
-  Future<ClientModel> clientSignIn(String mobile, String pin, {String tenantId = kDefaultTenant}) async {
+  Future<List<ClientModel>> clientSignIn(String mobile, String pin, {String tenantId = kDefaultTenant}) async {
     final cleanMobile = mobile.replaceAll(RegExp(r'\D'), '');
+    final virtualEmail = _generateVirtualEmail(cleanMobile, tenantId);
 
-    // 🎯 STRICT TENANT CHECK: Ensure they belong to this exact clinic
+    // 1. Authenticate with Firebase FIRST
+    try {
+      await _auth.signInWithEmailAndPassword(email: virtualEmail, password: pin);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        throw Exception("Invalid PIN or Login Credentials.");
+      }
+      rethrow;
+    }
+
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) throw Exception("Authentication failed.");
+
+    // 2. Fetch ALL profiles linked to this mobile number & tenant
     final query = await _clientCollection
         .where('mobile', isEqualTo: cleanMobile)
-        .where('tenantId', isEqualTo: tenantId) // 🔒 Prevents cross-tenant leaks
-        .limit(1)
+        .where('tenantId', isEqualTo: tenantId)
         .get();
 
     if (query.docs.isEmpty) {
       throw Exception("Access denied. No account found for this number at this clinic.");
     }
 
-    // 2. Get Data
-    final doc = query.docs.first;
-    final data = doc.data() as Map<String, dynamic>;
-    final client = ClientModel.fromFirestore(doc);
+    List<ClientModel> activeProfiles = [];
+    for (var doc in query.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final client = ClientModel.fromFirestore(doc);
 
-    // 3. Security Checks
-    if (client.isSoftDeleted || client.isArchived) {
-      throw Exception("This account has been deactivated.");
-    }
-    if (!data.containsKey('isActivated') || data['isActivated'] != true) {
-      throw Exception("Account exists but is not activated.");
-    }
+      // Filter out deactivated or non-activated
+      if (!client.isSoftDeleted && !client.isArchived && data['isActivated'] == true) {
+        activeProfiles.add(client);
 
-    // 4. Determine Email
-    final String storedEmail = client.authEmail ?? '';
-    final String clientTenantId = client.tenantId.isEmpty ? kDefaultTenant : client.tenantId;
-
-    final String emailToUse = storedEmail.isNotEmpty
-        ? storedEmail
-        : _generateVirtualEmail(cleanMobile, clientTenantId);
-
-    // 5. Authenticate
-    try {
-      await _auth.signInWithEmailAndPassword(email: emailToUse, password: pin);
-
-      // 6. 🎯 CRITICAL FIX: Wrap the "Link Fix" in try-catch
-      try {
-        final currentUser = _auth.currentUser;
-        if (currentUser != null && client.authUid != currentUser.uid) {
-          _logger.i("Attempting to self-heal authUid link...");
-          await _clientCollection.doc(client.id).update({
+        // 🎯 SELF-HEALING: If the authUid isn't linked yet, link it now.
+        if (client.authUid != currentUser.uid) {
+          _logger.i("Self-healing authUid link for ${client.name}...");
+          await doc.reference.update({
             'authUid': currentUser.uid,
-            'authEmail': emailToUse
+            'authEmail': virtualEmail
           });
-          _logger.i("Link repaired successfully.");
         }
-      } catch (linkError) {
-        _logger.w("Non-fatal error repairing auth link: $linkError");
-      }
-
-      return client;
-
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found' || e.code == 'wrong-password') {
-        throw Exception("Invalid PIN or Login Credentials.");
-      }
-      rethrow;
-    }
-  }
-
-  Future<void> registerNewUser({
-    required String name,
-    required String mobile,
-    required String password,
-  }) async {
-    final cleanMobile = mobile.trim();
-
-    // 🎯 STRICT TENANT CHECK for Registration
-    final existingQuery = await _clientCollection
-        .where('mobile', isEqualTo: cleanMobile)
-        .where('tenantId', isEqualTo: kDefaultTenant)
-        .limit(1)
-        .get();
-
-    if (existingQuery.docs.isNotEmpty) {
-      throw Exception("This mobile number is already registered. Please login.");
-    }
-
-    final virtualEmail = _generateVirtualEmail(cleanMobile, kDefaultTenant);
-
-    try {
-      UserCredential cred = await _auth.createUserWithEmailAndPassword(
-        email: virtualEmail,
-        password: password,
-      );
-
-      final User? user = cred.user;
-      if (user == null) throw Exception("Auth creation failed.");
-
-      final newClient = ClientModel(
-        id: user.uid,
-        name: name,
-        mobile: cleanMobile,
-        loginId: cleanMobile,
-        gender: 'Unknown',
-        patientId: 'GUEST-${cleanMobile.substring(cleanMobile.length - 4)}',
-        hasPasswordSet: true,
-        status: 'Active',
-        isArchived: false,
-        isSoftDeleted: false,
-        reminderConfig: ClientReminderConfig.defaultConfig(),
-        clientType: 'new',
-        authEmail: virtualEmail,
-        tenantId: kDefaultTenant,
-      );
-
-      await _clientCollection.doc(user.uid).set(newClient.toMap());
-      _logger.i("New guest registered: $cleanMobile (Tenant: $kDefaultTenant)");
-
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
-        throw Exception("User already exists (Auth conflict).");
-      }
-      throw Exception(e.message);
-    } catch (e) {
-      throw Exception("Registration failed: $e");
-    }
-  }
-
-  Future<void> activateClientAccess({
-    required ClientModel client,
-    required String pin,
-  }) async {
-    final String tenantId = client.tenantId.isNotEmpty ? client.tenantId : kDefaultTenant;
-    final virtualEmail = _generateVirtualEmail(client.mobile, tenantId);
-
-    UserCredential cred;
-    try {
-      cred = await _auth.createUserWithEmailAndPassword(
-          email: virtualEmail,
-          password: pin
-      );
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
-        cred = await _auth.signInWithEmailAndPassword(
-            email: virtualEmail,
-            password: pin
-        );
-      } else {
-        rethrow;
       }
     }
 
-    if (cred.user == null) throw Exception("Activation failed: No user created.");
-
-    await _clientCollection.doc(client.id).update({
-      'authUid': cred.user!.uid,
-      'authEmail': virtualEmail,
-      'isActivated': true,
-      'hasPasswordSet': true,
-      'password': pin,
-      'activatedAt': FieldValue.serverTimestamp(),
-      'status': 'Active',
-    });
-  }
-
-  Future<void> updateClient(ClientModel client) async {
-    try {
-      await _clientCollection.doc(client.id).update(client.toMap());
-    } catch (e) {
-      throw Exception('Failed to update client record: $e');
+    if (activeProfiles.isEmpty) {
+      throw Exception("No active profiles found for this account.");
     }
+
+    return activeProfiles;
   }
+
+  // 🛡️ 1. CALL CLINIC ACTIVATION FUNCTION
 
   // ---------------------------------------------------------------------------
   // 🔍 VERIFICATION & UTILS
@@ -410,7 +362,15 @@ class ClientService {
       return null;
     }
   }
+  Future<List<ClientModel>> getProfilesForAuthenticatedUser(String mobile) async {
+    // 🚀 THE FIX: Changed _db to _firestore
+    final snap = await _firestore.collection('clients')
+        .where('mobile', isEqualTo: mobile)
+        .where('isSoftDeleted', isEqualTo: false)
+        .where('isArchived', isEqualTo: false)
+        .get();
 
-
+    return snap.docs.map((doc) => ClientModel.fromFirestore(doc)).toList();
+  }
 
 }

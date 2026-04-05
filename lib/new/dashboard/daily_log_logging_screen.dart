@@ -2,8 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+ // Ensure this points to FlatClientDietPlanModel
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 
 // Detail Sheets
@@ -46,7 +47,8 @@ class _DailyGoalsLoggingScreenState extends ConsumerState<DailyGoalsLoggingScree
       );
     }
 
-    final ClientDietPlanModel? plan = state.activePlan;
+    // 🚀 THE FIX: Strongly typed to Flat Model
+    final FlatClientDietPlanModel? plan = state.activePlan;
     if (plan == null) {
       return Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -68,7 +70,8 @@ class _DailyGoalsLoggingScreenState extends ConsumerState<DailyGoalsLoggingScree
     final double sleepCur = dailyRecord?.totalSleepDurationHours ?? 0;
     final int mindCur = dailyRecord?.breathingMinutes ?? 0;
 
-    final List<String> habits = plan.mandatoryDailyTasks;
+    // 🚀 THE FIX: Changed mandatoryDailyTasks to assignedHabits
+    final List<String> habits = plan.assignedHabits;
     final List<String> completedHabits = dailyRecord?.completedMandatoryTasks ?? [];
 
     int totalItems = 4 + habits.length;

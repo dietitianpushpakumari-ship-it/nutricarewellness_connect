@@ -11,20 +11,26 @@ class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
+  // =================================================================
+  // 🎯 1. GET MESSAGES (New Flat Architecture)
+  // =================================================================
   Stream<List<ChatMessageModel>> getMessages(String clientId) {
     return _firestore
-        .collection('chats')
+        .collection('clients')
         .doc(clientId)
-        .collection('messages')
+        .collection('chat') // 🎯 Now points to the correct sub-collection
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => ChatMessageModel.fromFirestore(doc)).toList());
   }
 
-  // 🎯 SEND MESSAGE
+  // =================================================================
+  // 🎯 2. SEND MESSAGE (With Tenant Security & Uploads)
+  // =================================================================
   Future<void> sendMessage({
     required String clientName,
     required String clientId,
+    required String tenantId, // 🔒 CRITICAL: Required for Admin Dashboard visibility
     required String text,
     required MessageType type,
     RequestType requestType = RequestType.none,
@@ -33,21 +39,18 @@ class ChatService {
     List<File>? attachmentFiles,
     String? attachmentName,
   }) async {
-    final chatDocRef = _firestore.collection('chats').doc(clientId);
-    final messageRef = chatDocRef.collection('messages').doc();
+    final clientDocRef = _firestore.collection('clients').doc(clientId);
+    final messageRef = clientDocRef.collection('chat').doc();
 
-    // 🎯 GENERATE UNIQUE TICKET ID (Timestamp based)
+    // 🎫 GENERATE UNIQUE TICKET ID (Timestamp based)
     String? ticketId;
     if (requestType != RequestType.none) {
-      // Get current time in milliseconds
       int timestamp = DateTime.now().millisecondsSinceEpoch;
-      // Extract the last 4 digits (e.g., ...1234) to ensure uniqueness + brevity
       String uniqueId = (timestamp % 10000).toString().padLeft(4, '0');
-
       ticketId = "TICKET-${requestType.name.toUpperCase()}-$uniqueId";
     }
 
-    // 1. Prepare Local Paths
+    // 1. Prepare Local Paths (For Optimistic UI loading)
     List<String>? localPaths;
     if (attachmentFiles != null && attachmentFiles.isNotEmpty) {
       localPaths = attachmentFiles.map((f) => f.path).toList();
@@ -69,24 +72,28 @@ class ChatService {
       localFilePath: attachmentFile?.path,
       localFilePaths: localPaths,
       attachmentName: attachmentName,
-      ticketId: ticketId, // Save the timestamp-based ID
+      ticketId: ticketId,
     );
 
-    await messageRef.set(message.toMap());
+    // 🔒 3. INJECT TENANT ID & SAVE INITIAL STATE
+    final messageData = message.toMap();
+    messageData['tenantId'] = tenantId; // Allows Admin collectionGroup queries to find this
 
-    // 3. Upload Logic
+    await messageRef.set(messageData);
+
+    // 4. UPLOAD LOGIC
     try {
       Map<String, dynamic> updateData = {
         'messageStatus': MessageStatus.sent.name
       };
 
-      // A. Handle Multiple Images
+      // A. Handle Multiple Images (Gallery select)
       if (attachmentFiles != null && attachmentFiles.isNotEmpty) {
         List<String> uploadedUrls = [];
 
         await Future.wait(attachmentFiles.map((file) async {
           String fName = "img_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(1000)}.webp";
-          final ref = _storage.ref().child('chat_attachments/$clientId/$fName');
+          final ref = _storage.ref().child('chat_attachments/$tenantId/$clientId/$fName');
           await ref.putFile(file);
           String url = await ref.getDownloadURL();
           uploadedUrls.add(url);
@@ -96,14 +103,15 @@ class ChatService {
         if (uploadedUrls.isNotEmpty) updateData['attachmentUrl'] = uploadedUrls.first;
       }
 
-      // B. Handle Single File
+      // B. Handle Single File (Camera, Audio, PDF)
       else if (attachmentFile != null) {
-        final ref = _storage.ref().child('chat_attachments/$clientId/${DateTime.now().millisecondsSinceEpoch}_$attachmentName');
+        final ref = _storage.ref().child('chat_attachments/$tenantId/$clientId/${DateTime.now().millisecondsSinceEpoch}_$attachmentName');
         await ref.putFile(attachmentFile);
         String url = await ref.getDownloadURL();
         updateData['attachmentUrl'] = url;
       }
 
+      // Mark as Sent and attach URLs
       await messageRef.update(updateData);
 
     } catch (e) {
@@ -111,7 +119,7 @@ class ChatService {
       await messageRef.update({'messageStatus': MessageStatus.failed.name});
     }
 
-    // 4. Update Dashboard Summary
+    // 5. UPDATE PARENT CLIENT DOC (For Admin Inbox Preview)
     String snippet = text;
     if (text.isEmpty) {
       if (type == MessageType.image) snippet = "📷 Photo";
@@ -123,22 +131,33 @@ class ChatService {
       snippet = "🎫 $ticketId: $snippet";
     }
 
-    await chatDocRef.set({
-      'name':clientName,
+    await clientDocRef.set({
+      'name': clientName,
       'lastMessage': snippet,
       'lastMessageTime': FieldValue.serverTimestamp(),
       'clientId': clientId,
+      'tenantId': tenantId, // 🔒 Keep parent synced with tenant
       'hasPendingRequest': requestType != RequestType.none,
     }, SetOptions(merge: true));
   }
 
-  // Retry Logic
+  // =================================================================
+  // 🎯 3. MESSAGE MANAGEMENT
+  // =================================================================
+
   Future<void> retryMessage(String clientId, ChatMessageModel message) async {
+    // Delete the failed message
     await deleteMessage(clientId, message.id);
-    // In a real app, you'd re-trigger sendMessage here using the localFilePath data
+    // Note: In a full implementation, you would re-call sendMessage here
+    // passing the message.localFilePath back in to attempt the upload again.
   }
 
   Future<void> deleteMessage(String clientId, String messageId) async {
-    await _firestore.collection('chats').doc(clientId).collection('messages').doc(messageId).delete();
+    await _firestore
+        .collection('clients')
+        .doc(clientId)
+        .collection('chat')
+        .doc(messageId)
+        .delete();
   }
 }

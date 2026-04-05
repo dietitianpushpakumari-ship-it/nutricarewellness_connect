@@ -57,5 +57,7 @@
         <string>NutriCare needs your location to update your physical address in your profile.</string>
     <key>NSLocationAlwaysUsageDescription</key>
         <string>NutriCare needs your location to update your physical address in your profile.</string>
+        <key>NSPhotoLibraryAddUsageDescription</key>
+            <string>We need access to your gallery to save your booking slip.</string>
 </dict>
 </plist>

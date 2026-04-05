@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:nutricare_connect/core/utils/smart_dialogs.dart';
+import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
 import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/new/models/client_diet_plan_model.dart';
+
 import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
 
 class SleepDetailSheet extends ConsumerStatefulWidget {
   final DietPlanNotifier notifier;
-  final ClientDietPlanModel activePlan;
+  final FlatClientDietPlanModel activePlan; // 🚀 Use Flat Model
   final ClientLogModel? dailyLog; // Now represents the Master Record
 
   const SleepDetailSheet({
@@ -36,6 +37,7 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
 
   final TextEditingController _notesController = TextEditingController();
   bool _isSaving = false;
+  bool _showNoteField = false;
 
   @override
   void initState() {
@@ -61,6 +63,11 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
       _energyRating = log.energyLevelRating ?? 3;
       _moodRating = log.moodLevelRating ?? 3;
       _notesController.text = log.notesAndFeelings ?? '';
+
+      // If there are existing notes, show the field immediately
+      if (_notesController.text.isNotEmpty) {
+        _showNoteField = true;
+      }
     }
   }
 
@@ -108,12 +115,11 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
         wakeDt = wakeDt.add(const Duration(days: 1));
       }
 
-      // 🎯 THE NEW ATOMIC MAP
       // We directly target the sleep-related properties on the master record.
       final Map<String, dynamic> sleepUpdateMap = {
         'sleepQualityRating': _sleepQuality,
-        'sleepTime': sleepDt.toIso8601String(), // Safe serialization
-        'wakeTime': wakeDt.toIso8601String(),   // Safe serialization
+        'sleepTime': sleepDt.toIso8601String(),
+        'wakeTime': wakeDt.toIso8601String(),
         'sleepInterruptions': _interruptions,
         'totalSleepDurationHours': totalHours,
         'sleepScore': totalScore,
@@ -122,7 +128,7 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
         'notesAndFeelings': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
       };
 
-      // 1. 🎯 Save atomically to Firestore via the Notifier
+      // 1. Save atomically to Firestore via the Notifier
       await widget.notifier.updateDailyRecord(data: sleepUpdateMap);
 
       if (mounted) {
@@ -169,10 +175,12 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
     final sleepFormat = DateFormat.jm().format(DateTime(now.year, now.month, now.day, _sleepTime.hour, _sleepTime.minute));
     final wakeFormat = DateFormat.jm().format(DateTime(now.year, now.month, now.day, _wakeTime.hour, _wakeTime.minute));
 
-    // 🎯 Enforce solid premium theme styling
     final solidBgColor = isDark ? const Color(0xFF121212) : Colors.white;
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
       decoration: BoxDecoration(
         color: solidBgColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
@@ -190,14 +198,32 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
           mainAxisSize: MainAxisSize.min, // Hug content
           children: [
             const SizedBox(height: 12),
-            Center(
-                child: Container(
-                    width: 48, height: 5,
-                    decoration: BoxDecoration(
-                        color: theme.dividerColor.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(3)
-                    )
-                )
+
+            // 🎯 DRAG HANDLE & CLOSE BUTTON
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const SizedBox(width: 40),
+                  Container(
+                      width: 48, height: 5,
+                      decoration: BoxDecoration(
+                          color: theme.dividerColor.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(3)
+                      )
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: theme.dividerColor.withOpacity(0.05),
+                      padding: const EdgeInsets.all(8),
+                      minimumSize: Size.zero,
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             Flexible(
@@ -206,47 +232,50 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
                 padding: EdgeInsets.only(
                   left: 20,
                   right: 20,
-                  top: 20,
+                  top: 10,
                   bottom: MediaQuery.of(context).viewInsets.bottom + 20,
                 ),
                 child: Column(
                   children: [
                     // 1. DURATION PILL
                     Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(100),
-                        border: Border.all(color: colorScheme.primary.withOpacity(0.1)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.access_time_filled_rounded, size: 18, color: colorScheme.primary),
-                          const SizedBox(width: 12),
-                          Text(
-                              "$hours",
-                              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface)
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(color: colorScheme.primary.withOpacity(0.1)),
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.access_time_filled_rounded, size: 18, color: colorScheme.primary),
+                              const SizedBox(width: 12),
+                              Text(
+                                  "$hours",
+                                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface)
+                              ),
+                              Text(
+                                  " HR ",
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.primary)
+                              ),
+                              Text(
+                                  "$minutes",
+                                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface)
+                              ),
+                              Text(
+                                  " MIN",
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.primary)
+                              ),
+                            ],
                           ),
-                          Text(
-                              " HR ",
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.primary)
-                          ),
-                          Text(
-                              "$minutes",
-                              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface)
-                          ),
-                          Text(
-                              " MIN",
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.primary)
-                          ),
-                        ],
-                      ),
+                        )
                     ),
                     const SizedBox(height: 24),
 
-                    // 2. TIME PICKERS
+                    // 2. TIME PICKERS (Responsive)
                     Row(
                       children: [
                         _buildMiniTimeTile("Bedtime", sleepFormat, Icons.bedtime_rounded, () => _pickTime(true), theme, colorScheme.primary, isDark),
@@ -279,7 +308,7 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 4. ENERGY, MOOD & JOURNAL
+                    // 4. ENERGY, MOOD & ON-DEMAND JOURNAL
                     _buildCompactCard(
                       theme: theme,
                       isDark: isDark,
@@ -287,20 +316,13 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
                         children: [
                           _buildRatingRow(label: "Morning Energy", icon: Icons.bolt_rounded, color: Colors.orange, value: _energyRating, onChanged: (v) => setState(() => _energyRating = v), theme: theme),
                           _buildRatingRow(label: "Morning Mood", icon: Icons.sentiment_satisfied_alt_rounded, color: Colors.green, value: _moodRating, onChanged: (v) => setState(() => _moodRating = v), theme: theme),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _notesController,
-                            maxLines: 2,
-                            style: const TextStyle(fontSize: 14),
-                            decoration: InputDecoration(
-                              hintText: "Brief notes (e.g., stressful dreams)",
-                              hintStyle: TextStyle(color: theme.hintColor, fontSize: 13),
-                              filled: true,
-                              fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            ),
-                          ),
+
+                          const SizedBox(height: 12),
+                          const Divider(height: 1),
+                          const SizedBox(height: 8),
+
+                          // 🎯 ON-DEMAND NOTES
+                          _buildNoteSection(theme, colorScheme, isDark),
                         ],
                       ),
                     ),
@@ -309,7 +331,7 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
               ),
             ),
 
-            // 5. SAVE BUTTON (Always visible at bottom)
+            // 5. SAVE BUTTON
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               child: SizedBox(
@@ -337,6 +359,65 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
 
   // --- HELPER WIDGETS ---
 
+  // 🎯 On-Demand Notes UI Builder
+  Widget _buildNoteSection(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(opacity: animation, child: SizeTransition(sizeFactor: animation, child: child));
+      },
+      child: !_showNoteField
+          ? SizedBox(
+        width: double.infinity,
+        child: TextButton.icon(
+          onPressed: () => setState(() => _showNoteField = true),
+          icon: Icon(Icons.add_comment_rounded, size: 18, color: colorScheme.primary),
+          label: Text("Add Sleep Notes", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+          style: TextButton.styleFrom(
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(vertical: 8)
+          ),
+        ),
+      )
+          : Column(
+        key: const ValueKey("note_active"),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("NOTES", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: theme.hintColor)),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 16),
+                onPressed: () => setState(() {
+                  _showNoteField = false;
+                  _notesController.clear();
+                }),
+                constraints: const BoxConstraints(),
+                padding: EdgeInsets.zero,
+              )
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _notesController,
+            maxLines: 2,
+            autofocus: true,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: "Stressful dreams, woke up thirsty...",
+              hintStyle: TextStyle(color: theme.hintColor, fontSize: 13),
+              filled: true,
+              fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRatingRow({required String label, required IconData icon, required Color color, required int value, required ValueChanged<int> onChanged, required ThemeData theme}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -358,19 +439,21 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
             children: List.generate(5, (index) {
               final int rating = index + 1;
               final bool isSelected = rating <= value;
-              return GestureDetector(
-                onTap: () => onChanged(rating),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                      color: isSelected ? color.withOpacity(0.15) : theme.dividerColor.withOpacity(0.05),
-                      shape: BoxShape.circle
-                  ),
-                  child: Icon(
-                    isSelected ? icon : _getOutlineIcon(icon),
-                    color: isSelected ? color : theme.disabledColor,
-                    size: 24,
+              return Flexible(
+                child: GestureDetector(
+                  onTap: () => onChanged(rating),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                        color: isSelected ? color.withOpacity(0.15) : theme.dividerColor.withOpacity(0.05),
+                        shape: BoxShape.circle
+                    ),
+                    child: Icon(
+                      isSelected ? icon : _getOutlineIcon(icon),
+                      color: isSelected ? color : theme.disabledColor,
+                      size: 22,
+                    ),
                   ),
                 ),
               );
@@ -387,7 +470,7 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           decoration: BoxDecoration(
               color: isDark ? theme.cardColor : Colors.white,
               borderRadius: BorderRadius.circular(20),
@@ -397,18 +480,33 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: color, size: 18),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.hintColor)),
-                  const SizedBox(height: 2),
-                  Text(time, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
-                ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.hintColor)
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                          time,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)
+                      ),
+                    ),
+                  ],
+                ),
               )
             ],
           ),

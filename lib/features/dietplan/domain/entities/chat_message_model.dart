@@ -26,6 +26,9 @@ class ChatMessageModel {
   final Map<String, dynamic>? metadata;
   final MessageStatus messageStatus;
 
+  // 🎯 ADDED: To capture the resolution comment when a ticket is closed
+  final String? adminComment;
+
   // 🎯 NEW: Ticket ID
   final String? ticketId;
 
@@ -50,7 +53,8 @@ class ChatMessageModel {
     this.requestStatus = RequestStatus.pending,
     this.metadata,
     this.messageStatus = MessageStatus.sent,
-    this.ticketId,            // 🆕
+    this.adminComment,        // 🆕 Added here
+    this.ticketId,
     this.replyToMessageId,
     this.replyToMessageText,
     this.replyToMessageType,
@@ -64,20 +68,25 @@ class ChatMessageModel {
       isSenderClient: data['isSenderClient'] ?? true,
       text: data['text'] ?? '',
       type: MessageType.values.firstWhere((e) => e.name == (data['type'] ?? 'text'), orElse: () => MessageType.text),
+
+      // 🛡️ Pro-Tip: The fallback DateTime.now() prevents crashes if the local cache reads the doc before the server assigns a timestamp!
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
 
       attachmentUrl: data['attachmentUrl'],
       attachmentName: data['attachmentName'],
       localFilePath: data['localFilePath'],
-      attachmentUrls: data['attachmentUrls'] != null ? List<String>.from(data['attachmentUrls']) : null,
-      localFilePaths: data['localFilePaths'] != null ? List<String>.from(data['localFilePaths']) : null,
+
+      // 🛡️ Bulletproof List Parsing
+      attachmentUrls: (data['attachmentUrls'] as List?)?.map((e) => e.toString()).toList(),
+      localFilePaths: (data['localFilePaths'] as List?)?.map((e) => e.toString()).toList(),
 
       requestType: RequestType.values.firstWhere((e) => e.name == (data['requestType'] ?? 'none'), orElse: () => RequestType.none),
       requestStatus: RequestStatus.values.firstWhere((e) => e.name == (data['requestStatus'] ?? 'pending'), orElse: () => RequestStatus.pending),
       metadata: data['metadata'],
       messageStatus: MessageStatus.values.firstWhere((e) => e.name == (data['messageStatus'] ?? 'sent'), orElse: () => MessageStatus.sent),
 
-      ticketId: data['ticketId'], // 🆕
+      adminComment: data['adminComment'], // 🆕 Mapped here
+      ticketId: data['ticketId'],
 
       replyToMessageId: data['replyToMessageId'],
       replyToMessageText: data['replyToMessageText'],
@@ -101,7 +110,8 @@ class ChatMessageModel {
       'requestStatus': requestStatus.name,
       'metadata': metadata,
       'messageStatus': messageStatus.name,
-      'ticketId': ticketId, // 🆕
+      'adminComment': adminComment, // 🆕 Saved here
+      'ticketId': ticketId,
       'replyToMessageId': replyToMessageId,
       'replyToMessageText': replyToMessageText,
       'replyToMessageType': replyToMessageType?.name,

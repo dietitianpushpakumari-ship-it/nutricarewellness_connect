@@ -10,6 +10,23 @@ extension IterableExtensions<T> on Iterable<T> {
   }
 }
 
+// --- SAFE PARSERS ---
+int safeInt(dynamic value, [int defaultValue = 0]) {
+  if (value == null) return defaultValue;
+  if (value is int) return value;
+  if (value is double) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? defaultValue;
+  return defaultValue;
+}
+
+double safeDouble(dynamic value, [double defaultValue = 0.0]) {
+  if (value == null) return defaultValue;
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? defaultValue;
+  return defaultValue;
+}
+
 // --- CORE MODELS ---
 
 class FoodItemAlternative {
@@ -48,14 +65,15 @@ class FoodItemAlternative {
 
   factory FoodItemAlternative.fromFirestore(Map<String, dynamic> data, String altId) => FoodItemAlternative(
     id: altId,
-    foodItemId: data['foodItemId'] as String? ?? '',
-    foodItemName: data['foodItemName'] as String? ?? '',
-    quantity: (data['quantity'] as num?)?.toDouble() ?? 0.0,
-    unit: data['unit'] as String? ?? '',
-    calories: (data['calories'] as num?)?.toDouble() ?? 0.0,
-    protein: (data['protein'] as num?)?.toDouble() ?? 0.0,
-    carbs: (data['carbs'] as num?)?.toDouble() ?? 0.0,
-    fat: (data['fat'] as num?)?.toDouble() ?? 0.0,
+    foodItemId: data['foodItemId']?.toString() ?? '',
+    foodItemName: data['foodItemName']?.toString() ?? '',
+    // 🎯 FIXED: Replaced strict num? casting with safeDouble
+    quantity: safeDouble(data['quantity']),
+    unit: data['unit']?.toString() ?? '',
+    calories: safeDouble(data['calories']),
+    protein: safeDouble(data['protein']),
+    carbs: safeDouble(data['carbs']),
+    fat: safeDouble(data['fat']),
   );
 }
 
@@ -83,7 +101,6 @@ class DietPlanItemModel {
     this.alternativeGroupId,
   });
 
-  // 🎯 FIX: Added full copyWith support
   DietPlanItemModel copyWith({
     String? id,
     String? foodItemId,
@@ -107,7 +124,7 @@ class DietPlanItemModel {
       calories: calories ?? this.calories,
       protein: protein ?? this.protein,
       carbs: carbs ?? this.carbs,
-      fat: fat ?? this.fat // 🎯 FIX: Correctly maps parameter
+      fat: fat ?? this.fat
   );
 
   Map<String, dynamic> toFirestore() => {
@@ -126,23 +143,39 @@ class DietPlanItemModel {
   };
 
   factory DietPlanItemModel.fromFirestore(Map<String, dynamic> data, String itemId) {
-    final alternativesData = data['alternatives'] as Map<String, dynamic>? ?? {};
-    final alternativesList = alternativesData.entries.map((e) =>
-        FoodItemAlternative.fromFirestore(e.value as Map<String, dynamic>, e.key)
-    ).toList();
+    final alternativesData = data['alternatives'];
+    List<FoodItemAlternative> alternativesList = [];
+
+    // 🎯 FIXED: Safely handle Alternatives whether they are a Map or a List
+    if (alternativesData is Map) {
+      alternativesList = alternativesData.entries.map((e) {
+        if (e.value is Map) {
+          return FoodItemAlternative.fromFirestore(Map<String, dynamic>.from(e.value), e.key.toString());
+        }
+        return null;
+      }).whereType<FoodItemAlternative>().toList();
+    } else if (alternativesData is List) {
+      alternativesList = alternativesData.map((e) {
+        if (e is Map) {
+          final map = Map<String, dynamic>.from(e);
+          return FoodItemAlternative.fromFirestore(map, map['id']?.toString() ?? '');
+        }
+        return null;
+      }).whereType<FoodItemAlternative>().toList();
+    }
 
     return DietPlanItemModel(
       id: itemId,
-      foodItemId: data['foodItemId'] as String? ?? '',
-      foodItemName: data['foodItemName'] as String? ?? '',
-      quantity: (data['quantity'] as num?)?.toDouble() ?? 0.0,
-      unit: data['unit'] as String? ?? '',
-      notes: data['notes'] as String? ?? '',
+      foodItemId: data['foodItemId']?.toString() ?? '',
+      foodItemName: data['foodItemName']?.toString() ?? '',
+      unit: data['unit']?.toString() ?? '',
+      notes: data['notes']?.toString() ?? '',
       alternatives: alternativesList,
-      calories: (data['calories'] as num?)?.toDouble() ?? 0.0,
-      protein: (data['protein'] as num?)?.toDouble() ?? 0.0,
-      carbs: (data['carbs'] as num?)?.toDouble() ?? 0.0,
-      fat: (data['fat'] as num?)?.toDouble() ?? 0.0,
+      quantity: safeDouble(data['quantity']),
+      calories: safeDouble(data['calories']),
+      protein: safeDouble(data['protein']),
+      carbs: safeDouble(data['carbs']),
+      fat: safeDouble(data['fat']),
     );
   }
 }
@@ -180,18 +213,34 @@ class DietPlanMealModel {
   };
 
   factory DietPlanMealModel.fromFirestore(Map<String, dynamic> data, String mealId) {
-    final itemsData = data['items'] as Map<String, dynamic>? ?? {};
-    final itemsList = itemsData.entries.map((e) =>
-        DietPlanItemModel.fromFirestore(e.value as Map<String, dynamic>, e.key)
-    ).toList();
+    final itemsData = data['items'];
+    List<DietPlanItemModel> itemsList = [];
+
+    // 🎯 FIXED: Safely handle Items whether they are a Map or a List
+    if (itemsData is Map) {
+      itemsList = itemsData.entries.map((e) {
+        if (e.value is Map) {
+          return DietPlanItemModel.fromFirestore(Map<String, dynamic>.from(e.value), e.key.toString());
+        }
+        return null;
+      }).whereType<DietPlanItemModel>().toList();
+    } else if (itemsData is List) {
+      itemsList = itemsData.map((e) {
+        if (e is Map) {
+          final map = Map<String, dynamic>.from(e);
+          return DietPlanItemModel.fromFirestore(map, map['id']?.toString() ?? '');
+        }
+        return null;
+      }).whereType<DietPlanItemModel>().toList();
+    }
 
     return DietPlanMealModel(
         id: mealId,
-        mealNameId: data['mealNameId'] as String? ?? '',
-        mealName: data['mealName'] as String? ?? 'Unknown Meal',
+        mealNameId: data['mealNameId']?.toString() ?? '',
+        mealName: data['mealName']?.toString() ?? 'Unknown Meal',
         items: itemsList,
-        time: data['time'] as String?,
-        order: (data['order'] as num?)?.toInt() ?? 99
+        time: data['time']?.toString(),
+        order: safeInt(data['order'], 99)
     );
   }
 }
@@ -226,23 +275,29 @@ class MasterDayPlanModel {
     final mealsData = source['meals'];
     List<DietPlanMealModel> mealsList = [];
 
+    // 🎯 FIXED: Prevents dynamic array lookups that cause "String is not subtype of int" crashes
     if (mealsData is Map) {
-      mealsList = mealsData.entries.map((e) =>
-          DietPlanMealModel.fromFirestore(e.value as Map<String, dynamic>, e.key)
-      ).toList();
+      mealsList = mealsData.entries.map((e) {
+        if (e.value is Map) {
+          return DietPlanMealModel.fromFirestore(Map<String, dynamic>.from(e.value), e.key.toString());
+        }
+        return null;
+      }).whereType<DietPlanMealModel>().toList();
     } else if (mealsData is List) {
-      // Handle legacy or different structures
-      mealsList = mealsData.map((e) =>
-          DietPlanMealModel.fromFirestore(e as Map<String, dynamic>, e['id'] ?? e['mealNameId'] ?? '')
-      ).toList();
+      mealsList = mealsData.map((e) {
+        if (e is Map) {
+          final map = Map<String, dynamic>.from(e);
+          return DietPlanMealModel.fromFirestore(map, map['id']?.toString() ?? map['mealNameId']?.toString() ?? '');
+        }
+        return null;
+      }).whereType<DietPlanMealModel>().toList();
     }
 
-    // Sort meals by order
     mealsList.sort((a, b) => a.order.compareTo(b.order));
 
     return MasterDayPlanModel(
       id: id,
-      dayName: source['dayName'] as String? ?? 'Fixed Day',
+      dayName: source['dayName']?.toString() ?? 'Fixed Day',
       meals: mealsList,
     );
   }
@@ -260,10 +315,9 @@ class MasterDietPlanModel {
   final List<String> dietPlanCategoryIds;
   final List<MasterDayPlanModel> days;
   final bool isActive;
-  final DateTime? createdAt; // 🎯 Changed from Timestamp? to DateTime?
-  final DateTime? updatedAt; // 🎯 Changed from Timestamp? to DateTime?
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
-  // 🎯 TENANT ISOLATION FIELDS
   final String? tenantId;
   final bool isGlobal;
 
@@ -316,14 +370,11 @@ class MasterDietPlanModel {
       'tenantId': tenantId,
       'isGlobal': isGlobal,
       'updatedAt': FieldValue.serverTimestamp(),
-
-      // 🎯 FIX: Preserve createdAt if existing, else use ServerTimestamp
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
 
     if (isMultiDay) {
       data['dayPlanType'] = 'weekly';
-      // For weekly, we store days as a List of Maps for easier indexing/retrieval
       data['daysList'] = days.map((day) => {
         'id': day.id,
         'dayName': day.dayName,
@@ -348,23 +399,34 @@ class MasterDietPlanModel {
 
     if (dayPlanType == 'weekly' && data['daysList'] is List) {
       loadedDays = (data['daysList'] as List).map((dayMap) {
+        if (dayMap is! Map) return null;
         final map = Map<String, dynamic>.from(dayMap);
 
-        // Handle meals inside the list structure
-        final mealsData = map['meals'] as List<dynamic>? ?? [];
-        final mealsList = mealsData.map((mealMap) =>
-            DietPlanMealModel.fromFirestore(Map<String, dynamic>.from(mealMap), mealMap['id'] ?? mealMap['mealNameId'] ?? '')
-        ).toList();
+        final mealsData = map['meals'];
+        List<DietPlanMealModel> mealsList = [];
 
-        // Sort
+        // 🎯 FIXED: Safe Map/List parsing for Day Plans
+        if (mealsData is List) {
+          mealsList = mealsData.map((mealMap) {
+            if (mealMap is! Map) return null;
+            final m = Map<String, dynamic>.from(mealMap);
+            return DietPlanMealModel.fromFirestore(m, m['id']?.toString() ?? m['mealNameId']?.toString() ?? '');
+          }).whereType<DietPlanMealModel>().toList();
+        } else if (mealsData is Map) {
+          mealsList = mealsData.entries.map((e) {
+            if (e.value is! Map) return null;
+            return DietPlanMealModel.fromFirestore(Map<String, dynamic>.from(e.value), e.key.toString());
+          }).whereType<DietPlanMealModel>().toList();
+        }
+
         mealsList.sort((a, b) => a.order.compareTo(b.order));
 
         return MasterDayPlanModel(
-          id: map['id'] ?? '',
-          dayName: map['dayName'] ?? 'Unknown Day',
+          id: map['id']?.toString() ?? '',
+          dayName: map['dayName']?.toString() ?? 'Unknown Day',
           meals: mealsList,
         );
-      }).toList();
+      }).whereType<MasterDayPlanModel>().toList();
     } else {
       final dayPlan = MasterDayPlanModel.fromFirestore(doc);
       loadedDays = [dayPlan];
@@ -372,17 +434,15 @@ class MasterDietPlanModel {
 
     return MasterDietPlanModel(
       id: doc.id,
-      name: data['name'] as String? ?? 'Untitled Plan',
-      description: data['description'] as String? ?? '',
-      dietPlanCategoryIds: List<String>.from(data['dietPlanCategoryIds'] as List? ?? []),
+      name: data['name']?.toString() ?? 'Untitled Plan',
+      description: data['description']?.toString() ?? '',
+      dietPlanCategoryIds: (data['dietPlanCategoryIds'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       days: loadedDays,
-      isActive: data['isActive'] ?? true,
+      isActive: data['isActive'] == true,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
-
-      // 🎯 Tenant Mapping
-      tenantId: data['tenantId'] as String?,
-      isGlobal: data['isGlobal'] ?? false,
+      tenantId: data['tenantId']?.toString(),
+      isGlobal: data['isGlobal'] == true,
     );
   }
 }

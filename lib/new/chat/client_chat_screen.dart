@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui'; // Required for Glassmorphism effects
+import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart'; // 🎯 Added for Firestore batch updates
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,11 +13,8 @@ import 'package:nutricare_connect/core/utils/pdf_compressor.dart';
 import 'package:nutricare_connect/features/chat/data/services/chat_service.dart';
 import 'package:nutricare_connect/features/chat/presentation/chat_audio_player.dart';
 import 'package:nutricare_connect/features/auth/auth_provider.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/global_user_provider.dart';
 import 'package:nutricare_connect/features/dietplan/domain/entities/chat_message_model.dart';
-import 'package:nutricare_connect/new/core/theme_provider.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -62,23 +60,46 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
   }
 
   // =================================================================
+  // 🎯 UNREAD BADGE CLEARER
+  // =================================================================
+  void _markAsRead(String clientId) {
+    FirebaseFirestore.instance
+        .collection('clients')
+        .doc(clientId)
+        .collection('chat')
+        .where('isSenderClient', isEqualTo: false) // Only Coach messages
+        .where('isRead', isEqualTo: false)         // That are unread
+        .get()
+        .then((snapshot) {
+      if (snapshot.docs.isEmpty) return;
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (var doc in snapshot.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      batch.commit(); // Instantly clears the badge on the bottom nav!
+    }).catchError((e) => debugPrint("Error marking read: $e"));
+  }
+
+  // =================================================================
   // --- 1. SEND LOGIC ---
   // =================================================================
 
-  void _handleSendMessage(ChatService chatService, String clientId, String name) async {
+  void _handleSendMessage(ChatService chatService, String clientId, String name, String tenantId) async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
     _textController.clear();
 
     await chatService.sendMessage(
-      clientName: name,
-      clientId: clientId,
-      text: text,
-      type: MessageType.text,
+        clientName: name,
+        clientId: clientId,
+        text: text,
+        type: MessageType.text,
+        tenantId: tenantId
     );
   }
 
-  Future<void> _handleImageUpload(ChatService service, String clientId, ImageSource source, String name) async {
+  Future<void> _handleImageUpload(ChatService service, String clientId, ImageSource source, String name, String tenantId) async {
     final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
 
     if (picked != null) {
@@ -87,18 +108,19 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
       File? compressed = await ImageCompressor.compressAndGetFile(original);
 
       await service.sendMessage(
-        clientName: name,
-        clientId: clientId,
-        text: "",
-        type: MessageType.image,
-        attachmentFile: compressed ?? original,
-        attachmentName: "photo.webp",
+          clientName: name,
+          clientId: clientId,
+          text: "",
+          type: MessageType.image,
+          attachmentFile: compressed ?? original,
+          attachmentName: "photo.webp",
+          tenantId: tenantId
       );
       if (mounted) setState(() => _isUploading = false);
     }
   }
 
-  Future<void> _handleFileUpload(String name, ChatService service, String clientId, {bool isReport = false}) async {
+  Future<void> _handleFileUpload(String name, ChatService service, String clientId, String tenantId, {bool isReport = false}) async {
     if (!isReport) Navigator.pop(context);
 
     final result = await FilePicker.platform.pickFiles(type: FileType.any);
@@ -124,25 +146,27 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
       if (['mp3', 'wav', 'm4a', 'aac'].contains(ext)) type = MessageType.audio;
 
       await service.sendMessage(
-        clientName: name,
-        clientId: clientId,
-        text: isReport ? "Uploaded a Lab Report" : "Shared a file",
-        type: type,
-        requestType: isReport ? RequestType.labReport : RequestType.none,
-        attachmentFile: file,
-        attachmentName: fname,
+          clientName: name,
+          clientId: clientId,
+          text: isReport ? "Uploaded a Lab Report" : "Shared a file",
+          type: type,
+          requestType: isReport ? RequestType.labReport : RequestType.none,
+          attachmentFile: file,
+          attachmentName: fname,
+          tenantId: tenantId
       );
       if (mounted) setState(() => _isUploading = false);
     }
   }
 
-  void _sendQuickMessage(ChatService service, String clientId, String text, RequestType type, String name) {
+  void _sendQuickMessage(ChatService service, String clientId, String text, RequestType type, String name, String tenantId) {
     service.sendMessage(
-      clientName: name,
-      clientId: clientId,
-      text: text,
-      type: MessageType.request,
-      requestType: type,
+        clientName: name,
+        clientId: clientId,
+        text: text,
+        type: MessageType.request,
+        requestType: type,
+        tenantId: tenantId
     );
   }
 
@@ -166,7 +190,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
     }
   }
 
-  Future<void> _stopRecording(ChatService service, String clientId, String name) async {
+  Future<void> _stopRecording(ChatService service, String clientId, String name, String tenantId) async {
     if (!_isRecording) return;
     _recordTimer?.cancel();
 
@@ -175,12 +199,13 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
       setState(() => _isRecording = false);
       if (path != null) {
         await service.sendMessage(
-          clientName: name,
-          clientId: clientId,
-          text: "Voice Note",
-          type: MessageType.audio,
-          attachmentFile: File(path),
-          attachmentName: "Voice Note",
+            clientName: name,
+            clientId: clientId,
+            text: "Voice Note",
+            type: MessageType.audio,
+            attachmentFile: File(path),
+            attachmentName: "Voice Note",
+            tenantId: tenantId
         );
       }
     } catch (e) {
@@ -197,13 +222,19 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-
-    final clientId = ref.watch(currentClientIdProvider);
     final chatService = ref.watch(chatServiceProvider);
-    final currentUser = ref.read(globalUserProvider);
-    final String name = currentUser?.name ?? widget.clientName;
 
-    if (clientId == null) return Scaffold(backgroundColor: theme.scaffoldBackgroundColor, body: const Center(child: CircularProgressIndicator()));
+    final clientProfile = ref.read(authNotifierProvider).clientProfile;
+    final String name = clientProfile?.name ?? widget.clientName;
+    final tenantId = clientProfile?.tenantId ?? "default_tenant";
+    String clientId = clientProfile?.id ?? "id";
+
+    if (clientProfile?.id == null || clientProfile!.id.isEmpty) {
+      return Scaffold(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          body: Center(child: CircularProgressIndicator(color: colorScheme.primary))
+      );
+    }
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -246,7 +277,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: TextButton.icon(
-              onPressed: () => _showRequestBottomSheet(context, chatService, clientId, name, theme, colorScheme, isDark),
+              onPressed: () => _showRequestBottomSheet(context, chatService, clientId, name, theme, colorScheme, isDark, tenantId),
               icon: Icon(Icons.bolt_rounded, size: 18, color: colorScheme.primary),
               label: Text("Actions", style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold)),
             ),
@@ -259,8 +290,19 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
             child: StreamBuilder<List<ChatMessageModel>>(
               stream: chatService.getMessages(clientId),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+                }
+
                 final messages = snapshot.data ?? [];
+
+                // 🎯 TRIGGER READ RECEIPT WHEN MESSAGES LOAD OR UPDATE
+                if (messages.isNotEmpty) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _markAsRead(clientId);
+                  });
+                }
+
                 if (messages.isEmpty) return _buildEmptyState(theme);
 
                 return ListView.builder(
@@ -289,13 +331,13 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
             ),
           ),
           if (_isUploading) LinearProgressIndicator(minHeight: 2, color: colorScheme.primary, backgroundColor: Colors.transparent),
-          _buildInputArea(chatService, clientId, name, theme, colorScheme, isDark),
+          _buildInputArea(chatService, clientId, name, theme, colorScheme, isDark, tenantId),
         ],
       ),
     );
   }
 
-  Widget _buildInputArea(ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme, bool isDark) {
+  Widget _buildInputArea(ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme, bool isDark, String tenantId) {
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 16),
       decoration: BoxDecoration(
@@ -307,7 +349,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
           if (!_isRecording)
             IconButton(
               icon: Icon(Icons.add_circle_rounded, color: theme.hintColor, size: 28),
-              onPressed: () => _showAttachmentOptions(context, service, clientId, name, theme, colorScheme),
+              onPressed: () => _showAttachmentOptions(context, service, clientId, name, theme, colorScheme, tenantId),
             ),
           if (!_isRecording) const SizedBox(width: 8),
 
@@ -364,10 +406,10 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
 
           GestureDetector(
             onLongPressStart: (_) async { if (!_showSendButton) await _startRecording(); },
-            onLongPressEnd: (_) async { if (!_showSendButton) await _stopRecording(service, clientId, name); },
+            onLongPressEnd: (_) async { if (!_showSendButton) await _stopRecording(service, clientId, name, tenantId); },
             onTap: () {
               if (_showSendButton) {
-                _handleSendMessage(service, clientId, name);
+                _handleSendMessage(service, clientId, name, tenantId);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text("Hold to Record"), duration: const Duration(milliseconds: 800), backgroundColor: colorScheme.primary));
               }
@@ -402,7 +444,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
   // 🎯 BOTTOM SHEETS (Themed)
   // =================================================================
 
-  void _showRequestBottomSheet(BuildContext context, ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme, bool isDark) {
+  void _showRequestBottomSheet(BuildContext context, ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme, bool isDark, String tenantId) {
     showModalBottomSheet(
       isDismissible: false,
       context: context,
@@ -430,12 +472,12 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                     crossAxisSpacing: 16,
                     childAspectRatio: 1.0,
                     children: [
-                      _buildQuickAction(Icons.calendar_today_rounded, "Book New", Colors.purple, () { Navigator.pop(ctx); _showAppointmentRequestDialog(context, service, clientId, name, theme, colorScheme, isReschedule: false); }, theme, colorScheme),
-                      _buildQuickAction(Icons.edit_calendar_rounded, "Reschedule", Colors.orange, () { Navigator.pop(ctx); _showAppointmentRequestDialog(context, service, clientId, name, theme, colorScheme, isReschedule: true); }, theme, colorScheme),
-                      _buildQuickAction(Icons.restaurant_menu_rounded, "Meal Query", Colors.blue, () { Navigator.pop(ctx); _showMealQueryDialog(context, service, clientId, name, theme, colorScheme, isDark); }, theme, colorScheme),
-                      _buildQuickAction(Icons.upload_file_rounded, "Lab Report", Colors.teal, () { Navigator.pop(ctx); _handleFileUpload(name, service, clientId, isReport: true); }, theme, colorScheme),
-                      _buildQuickAction(Icons.add_call, "Call Me", Colors.green, () { Navigator.pop(ctx); _sendQuickMessage(service, clientId, "📞 Requesting a callback.", RequestType.callback, name); }, theme, colorScheme),
-                      _buildQuickAction(Icons.warning_rounded, "Urgent", Colors.red, () { Navigator.pop(ctx); _sendQuickMessage(service, clientId, "❗ Priority Help Needed", RequestType.prioritySupport, name); }, theme, colorScheme),
+                      _buildQuickAction(Icons.calendar_today_rounded, "Book New", Colors.purple, () { Navigator.pop(ctx); _showAppointmentRequestDialog(context, service, clientId, name, theme, colorScheme, tenantId, isReschedule: false); }, theme, colorScheme),
+                      _buildQuickAction(Icons.edit_calendar_rounded, "Reschedule", Colors.orange, () { Navigator.pop(ctx); _showAppointmentRequestDialog(context, service, clientId, name, theme, colorScheme, tenantId, isReschedule: true); }, theme, colorScheme),
+                      _buildQuickAction(Icons.restaurant_menu_rounded, "Meal Query", Colors.blue, () { Navigator.pop(ctx); _showMealQueryDialog(context, service, clientId, name, theme, colorScheme, isDark, tenantId); }, theme, colorScheme),
+                      _buildQuickAction(Icons.upload_file_rounded, "Lab Report", Colors.teal, () { Navigator.pop(ctx); _handleFileUpload(name, service, clientId, tenantId, isReport: true); }, theme, colorScheme),
+                      _buildQuickAction(Icons.add_call, "Call Me", Colors.green, () { Navigator.pop(ctx); _sendQuickMessage(service, clientId, "📞 Requesting a callback.", RequestType.callback, name, tenantId); }, theme, colorScheme,),
+                      _buildQuickAction(Icons.warning_rounded, "Urgent", Colors.red, () { Navigator.pop(ctx); _sendQuickMessage(service, clientId, "❗ Priority Help Needed", RequestType.prioritySupport, name, tenantId); }, theme, colorScheme),
                     ],
                   ),
                 ),
@@ -473,7 +515,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
     );
   }
 
-  void _showAppointmentRequestDialog(BuildContext context, ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme, {required bool isReschedule}) {
+  void _showAppointmentRequestDialog(BuildContext context, ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme, String tenantId, {required bool isReschedule}) {
     DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
     final noteController = TextEditingController();
     final isDark = theme.brightness == Brightness.dark;
@@ -481,15 +523,14 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
     showModalBottomSheet(
       isDismissible: false,
       context: context,
-      isScrollControlled: true, // 🎯 Essential for bottom sheets with text fields
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) => SafeArea(
           child: Container(
-            // 🎯 Add bottom padding for the keyboard
             padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
             decoration: BoxDecoration(
-              color: theme.scaffoldBackgroundColor, // 🎯 Themed Background
+              color: theme.scaffoldBackgroundColor,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
               border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
             ),
@@ -497,7 +538,6 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Drag Handle
                 Center(
                   child: Container(
                     width: 40, height: 4,
@@ -505,8 +545,6 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                     decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.5), borderRadius: BorderRadius.circular(2)),
                   ),
                 ),
-
-                // 2. Title & Subtitle
                 Text(
                     isReschedule ? "Reschedule Session" : "Request Session",
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: colorScheme.onSurface)
@@ -517,8 +555,6 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                     style: TextStyle(fontSize: 14, color: theme.hintColor)
                 ),
                 const SizedBox(height: 24),
-
-                // 3. Date Picker Tile
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   title: Text(DateFormat.yMMMd().format(selectedDate), style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w600)),
@@ -536,8 +572,6 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                   tileColor: theme.cardColor,
                 ),
                 const SizedBox(height: 16),
-
-                // 4. Notes Input
                 TextField(
                     controller: noteController,
                     style: TextStyle(color: colorScheme.onSurface),
@@ -553,8 +587,6 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                     )
                 ),
                 const SizedBox(height: 32),
-
-                // 5. Action Buttons
                 Row(
                   children: [
                     Expanded(
@@ -575,16 +607,17 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                           Navigator.pop(ctx);
                           final String typeText = isReschedule ? "Reschedule Request" : "New Appointment Request";
                           service.sendMessage(
-                            clientName: name,
-                            clientId: clientId,
-                            text: "$typeText: ${DateFormat.yMMMd().format(selectedDate)}",
-                            type: MessageType.request,
-                            requestType: RequestType.appointment,
-                            metadata: {
-                              'date': selectedDate.toIso8601String(),
-                              'note': noteController.text,
-                              'isReschedule': isReschedule
-                            },
+                              clientName: name,
+                              clientId: clientId,
+                              text: "$typeText: ${DateFormat.yMMMd().format(selectedDate)}",
+                              type: MessageType.request,
+                              requestType: RequestType.appointment,
+                              metadata: {
+                                'date': selectedDate.toIso8601String(),
+                                'note': noteController.text,
+                                'isReschedule': isReschedule
+                              },
+                              tenantId: tenantId
                           );
                         },
                         style: FilledButton.styleFrom(
@@ -604,7 +637,8 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
       ),
     );
   }
-  void _showMealQueryDialog(BuildContext context, ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme, bool isDark) {
+
+  void _showMealQueryDialog(BuildContext context, ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme, bool isDark, String tenantId) {
     final queryController = TextEditingController();
     List<File> selectedImages = [];
     final List<String> quickTags = ["Is this allowed?", "Portion check", "Good for dinner?", "Too much oil?", "Carb content?", "Protein sufficient?", "Post-workout?", "Eating out"];
@@ -769,12 +803,13 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                       onPressed: () {
                         Navigator.pop(ctx);
                         service.sendMessage(
-                          clientName: name,
-                          clientId: clientId,
-                          text: queryController.text.isEmpty ? "Review my meal" : queryController.text,
-                          type: MessageType.request,
-                          requestType: RequestType.mealQuery,
-                          attachmentFiles: selectedImages,
+                            clientName: name,
+                            clientId: clientId,
+                            text: queryController.text.isEmpty ? "Review my meal" : queryController.text,
+                            type: MessageType.request,
+                            requestType: RequestType.mealQuery,
+                            attachmentFiles: selectedImages,
+                            tenantId: tenantId
                         );
                       },
                       style: ElevatedButton.styleFrom(
@@ -795,7 +830,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
     );
   }
 
-  void _showAttachmentOptions(BuildContext context, ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme) {
+  void _showAttachmentOptions(BuildContext context, ChatService service, String clientId, String name, ThemeData theme, ColorScheme colorScheme, String tenantId) {
     showModalBottomSheet(
       isDismissible: false, // Kept as requested, but added a Cancel button below
       context: context,
@@ -834,7 +869,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                   child: Icon(Icons.camera_alt_rounded, color: colorScheme.primary),
                 ),
                 title: Text('Camera', style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 16)),
-                onTap: () { Navigator.pop(context); _handleImageUpload(service, clientId, ImageSource.camera, name); },
+                onTap: () { Navigator.pop(context); _handleImageUpload(service, clientId, ImageSource.camera, name, tenantId); },
               ),
               Divider(height: 1, color: theme.dividerColor.withOpacity(0.1), indent: 76),
 
@@ -847,7 +882,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                   child: const Icon(Icons.photo_library_rounded, color: Colors.purple),
                 ),
                 title: Text('Gallery', style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 16)),
-                onTap: () { Navigator.pop(context); _handleImageUpload(service, clientId, ImageSource.gallery, name); },
+                onTap: () { Navigator.pop(context); _handleImageUpload(service, clientId, ImageSource.gallery, name, tenantId); },
               ),
               Divider(height: 1, color: theme.dividerColor.withOpacity(0.1), indent: 76),
 
@@ -860,7 +895,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                   child: const Icon(Icons.description_rounded, color: Colors.teal),
                 ),
                 title: Text('Document', style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 16)),
-                onTap: () { Navigator.pop(context); _handleFileUpload(name, service, clientId); },
+                onTap: () { Navigator.pop(context); _handleFileUpload(name, service, clientId, tenantId); },
               ),
 
               const SizedBox(height: 16),
@@ -889,6 +924,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
       ),
     );
   }
+
   // --- HELPERS ---
   Widget _buildEmptyState(ThemeData theme) => Center(
     child: Column(
@@ -1044,7 +1080,6 @@ class MessageBubble extends StatelessWidget {
           children: [
             Icon(_getRequestIcon(msg.requestType), size: 14, color: isMe ? Colors.white : colorScheme.secondary),
             const SizedBox(width: 6),
-            // 🎯 FIXED: Wrapped Text in Flexible to prevent overflow on long action names
             Flexible(
               child: Text(
                 msg.requestType.name.toUpperCase(),
