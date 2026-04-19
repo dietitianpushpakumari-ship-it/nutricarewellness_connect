@@ -1,15 +1,17 @@
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:audioplayers/audioplayers.dart';
+
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class ChatAudioPlayer extends StatefulWidget {
   final String? audioUrl;
-  final String? localPath;
   final bool isSender;
 
   const ChatAudioPlayer({
     super.key,
-    this.audioUrl,
-    this.localPath,
+    required this.audioUrl,
     required this.isSender,
   });
 
@@ -20,17 +22,39 @@ class ChatAudioPlayer extends StatefulWidget {
 class _ChatAudioPlayerState extends State<ChatAudioPlayer> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlaying = false;
+  bool _isLoading = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
-  bool _isSourceSet = false;
 
   @override
   void initState() {
     super.initState();
-    _audioPlayer.onPlayerStateChanged.listen((s) { if(mounted) setState(() => _isPlaying = s == PlayerState.playing); });
-    _audioPlayer.onDurationChanged.listen((d) { if(mounted) setState(() => _duration = d); });
-    _audioPlayer.onPositionChanged.listen((p) { if(mounted) setState(() => _position = p); });
-    _audioPlayer.onPlayerComplete.listen((_) { if(mounted) setState(() { _isPlaying = false; _position = Duration.zero; }); });
+    _initAudioPlayer();
+  }
+
+  void _initAudioPlayer() {
+    // Listen to play state changes
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+          if (state == PlayerState.completed) {
+            _position = Duration.zero;
+            _isPlaying = false;
+          }
+        });
+      }
+    });
+
+    // Listen to audio duration
+    _audioPlayer.onDurationChanged.listen((newDuration) {
+      if (mounted) setState(() => _duration = newDuration);
+    });
+
+    // Listen to audio position
+    _audioPlayer.onPositionChanged.listen((newPosition) {
+      if (mounted) setState(() => _position = newPosition);
+    });
   }
 
   @override
@@ -39,94 +63,136 @@ class _ChatAudioPlayerState extends State<ChatAudioPlayer> {
     super.dispose();
   }
 
-  Future<void> _togglePlay() async {
+  Future<void> _togglePlayPause() async {
+    HapticFeedback.lightImpact();
+    if (widget.audioUrl == null || widget.audioUrl!.isEmpty) return;
+
     try {
       if (_isPlaying) {
         await _audioPlayer.pause();
       } else {
-        if (!_isSourceSet) {
-          if (widget.audioUrl != null) await _audioPlayer.setSourceUrl(widget.audioUrl!);
-          else if (widget.localPath != null) await _audioPlayer.setSourceDeviceFile(widget.localPath!);
-          _isSourceSet = true;
+        setState(() => _isLoading = true);
+        // If it's the first time playing, we need to set the source
+        if (_position == Duration.zero) {
+          await _audioPlayer.setSourceUrl(widget.audioUrl!);
         }
         await _audioPlayer.resume();
       }
     } catch (e) {
-      debugPrint("Audio Error: $e");
+      debugPrint("Audio Play Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _formatTime(Duration d) {
-    final min = d.inMinutes.remainder(60).toString().padLeft(1, '0');
-    final sec = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$min:$sec';
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$minutes:$seconds";
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isSender ? Colors.teal.shade900 : Colors.grey.shade800;
-    final trackColor = widget.isSender ? Colors.teal.withOpacity(0.4) : Colors.grey.withOpacity(0.4);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    // 🚀 PREMIUM COLOR LOGIC
+    // If sent by ME (solid colored bubble), use transparent white overlays
+    // If sent by THEM (white/card bubble), use subtle primary color overlays
+    final Color baseColor = widget.isSender ? cs.onPrimary : cs.primary;
+    final Color pillBgColor = widget.isSender ? Colors.black.withOpacity(0.15) : cs.primary.withOpacity(0.08);
+    final Color activeTrackColor = baseColor;
+    final Color inactiveTrackColor = baseColor.withOpacity(0.3);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(0, 4, 8, 4),
+      height: 48,
+      margin: const EdgeInsets.only(top: 4, bottom: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
-        color: widget.isSender ? Colors.teal.withOpacity(0.05) : Colors.grey.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
+        color: pillBgColor,
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 1. Play/Pause Btn
-          IconButton(
-            icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill),
-            color: widget.isSender ? Colors.teal : Colors.grey.shade700,
-            iconSize: 38,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            onPressed: _togglePlay,
+          // 🚀 1. PLAY / PAUSE BUTTON WITH SOFT SHADOW
+          GestureDetector(
+            onTap: _togglePlayPause,
+            child: Container(
+              height: 40,
+              width: 40,
+              decoration: BoxDecoration(
+                color: baseColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: baseColor.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: _isLoading && _duration == Duration.zero
+                  ? Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: widget.isSender ? cs.primary : cs.onPrimary,
+                ),
+              )
+                  : Icon(
+                _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: widget.isSender ? cs.primary : cs.onPrimary,
+                size: 24,
+              ),
+            ),
           ),
 
           const SizedBox(width: 8),
 
-          // 2. Slider & Time
+          // 🚀 2. CUSTOM SLEEK SLIDER
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  height: 20,
-                  child: SliderTheme(
-                    data: SliderThemeData(
-                      trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                      activeTrackColor: widget.isSender ? Colors.teal : Colors.grey.shade700,
-                      inactiveTrackColor: trackColor,
-                      thumbColor: widget.isSender ? Colors.teal : Colors.grey.shade700,
-                      trackShape: const RectangularSliderTrackShape(),
-                    ),
-                    child: Slider(
-                      min: 0,
-                      max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0,
-                      value: _position.inSeconds.toDouble().clamp(0, _duration.inSeconds.toDouble()),
-                      onChanged: (value) async {
-                        final position = Duration(seconds: value.toInt());
-                        await _audioPlayer.seek(position);
-                      },
-                    ),
-                  ),
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3.5, // Thick, modern track
+                activeTrackColor: activeTrackColor,
+                inactiveTrackColor: inactiveTrackColor,
+                thumbColor: baseColor,
+                overlayColor: baseColor.withOpacity(0.2),
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6.0), // Smaller, sleeker thumb
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
+                trackShape: const RoundedRectSliderTrackShape(), // Rounded ends
+              ),
+              child: Slider(
+                min: 0.0,
+                max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0,
+                value: _position.inSeconds.toDouble().clamp(0.0, _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0),
+                onChanged: (value) async {
+                  final newPosition = Duration(seconds: value.toInt());
+                  await _audioPlayer.seek(newPosition);
+                  setState(() => _position = newPosition);
+                },
+              ),
+            ),
+          ),
+
+          // 🚀 3. CRISP TYPOGRAPHY TIMESTAMP
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0, left: 4.0),
+            child: SizedBox(
+              width: 36, // Fixed width prevents jittering when seconds change
+              child: Text(
+                _formatDuration(_duration == Duration.zero || !_isPlaying ? _duration : _position),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontFamily: kDisplayFont,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: baseColor.withOpacity(0.9),
+                  fontFeatures: const [FontFeature.tabularFigures()], // Keeps numbers aligned
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(_formatTime(_position), style: TextStyle(fontSize: 10, color: color)),
-                      Text(_formatTime(_duration), style: TextStyle(fontSize: 10, color: color)),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:nutricare_connect/new/models/vitals_model.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
 // 🔥 Adjust this import to wherever your labTestConfigsProvider lives:
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
 
 class SmartVitalsReportCard extends ConsumerWidget {
   final VitalsModel current;

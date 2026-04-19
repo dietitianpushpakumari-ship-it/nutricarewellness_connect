@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:flutter/material.dart';
-// import 'package:nutricare_connect/services/client_service.dart';
+// import 'package:pure_shift/services/client_service.dart';
 
 // Task ID
 const String kBackgroundSyncTask = "nutricare.sync.4hr";

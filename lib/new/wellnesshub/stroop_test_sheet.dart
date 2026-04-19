@@ -1,7 +1,12 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:flutter/services.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class StroopTestSheet extends StatefulWidget {
   const StroopTestSheet({super.key});
@@ -26,7 +31,7 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
     {"name": "RED", "color": Colors.red.shade500},
     {"name": "BLUE", "color": Colors.blue.shade500},
     {"name": "GREEN", "color": Colors.green.shade500},
-    {"name": "YELLOW", "color": Colors.orange.shade500}, // Using orange-yellow for better contrast
+    {"name": "YELLOW", "color": Colors.orange.shade500},
     {"name": "PURPLE", "color": Colors.purple.shade500},
     {"name": "PINK", "color": Colors.pink.shade500},
   ];
@@ -49,7 +54,6 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
     int textIndex = _random.nextInt(_colors.length);
     int colorIndex = _random.nextInt(_colors.length);
 
-    // 🎯 80% of the time, force the color and text to mis-match (the core of the Stroop Test)
     if (_random.nextDouble() > 0.2 && textIndex == colorIndex) {
       colorIndex = (colorIndex + 1) % _colors.length;
     }
@@ -57,11 +61,12 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
     setState(() {
       _displayText = _colors[textIndex]["name"];
       _displayColor = _colors[colorIndex]["color"];
-      _correctColor = _displayColor; // The user must tap the visual COLOR, not the word!
+      _correctColor = _displayColor; // The user must tap the color the word is written in.
     });
   }
 
   void _startGame() {
+    HapticFeedback.lightImpact();
     setState(() {
       _score = 0;
       _timeLeft = 45;
@@ -69,7 +74,7 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
       _isGameOver = false;
     });
     _generateNextWord();
-    _audio.playClick(); // Assuming you have this generic UI sound
+    _audio.playClick();
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_timeLeft > 0) {
@@ -83,6 +88,7 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
   void _endGame() {
     _timer?.cancel();
     _audio.playSuccess();
+    HapticFeedback.mediumImpact();
     setState(() {
       _isPlaying = false;
       _isGameOver = true;
@@ -94,14 +100,16 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
 
     if (tappedColor == _correctColor) {
       // ✅ Correct
+      HapticFeedback.selectionClick();
       _audio.playClick();
       setState(() => _score += 10);
       _generateNextWord();
     } else {
       // ❌ Wrong
-      _shakeController.forward(from: 0.0); // Simple visual feedback
+      HapticFeedback.heavyImpact(); // Premium tactile warning
+      _shakeController.forward(from: 0.0);
       setState(() {
-        _score = max(0, _score - 5); // Deduct points, but don't go below 0
+        _score = max(0, _score - 5);
       });
     }
   }
@@ -119,13 +127,16 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    return SafeArea(
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.90,
-        decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(32))
-        ),
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.90,
+      decoration: BoxDecoration(
+          color: theme.scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32))
+      ),
+      // 🚀 STRICT SAFE AREA HANDLING
+      child: SafeArea(
+        top: true,
+        bottom: true,
         child: Column(
           children: [
             // ==========================================
@@ -143,9 +154,9 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("COGNITIVE FOCUS", style: TextStyle(color: theme.hintColor, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                        Text("COGNITIVE FOCUS", style: TextStyle(fontFamily: kDisplayFont, color: theme.hintColor, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
                         const SizedBox(height: 2),
-                        Text("Stroop Test", style: TextStyle(color: colorScheme.onSurface, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                        Text("Stroop Test", style: TextStyle(fontFamily: kBodyFont, color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
@@ -161,13 +172,13 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.bolt_rounded, size: 16, color: colorScheme.primary),
+                        Icon(Icons.bolt_rounded, size: 14, color: colorScheme.primary),
                         const SizedBox(width: 4),
-                        Text("$_score", style: TextStyle(color: colorScheme.primary, fontSize: 14, fontWeight: FontWeight.w900)),
+                        Text("$_score", style: TextStyle(fontFamily: kDisplayFont, color: colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w700)),
                         const SizedBox(width: 8),
-                        Icon(Icons.timer_outlined, size: 16, color: _isPlaying && _timeLeft <= 10 ? Colors.red : colorScheme.primary),
+                        Icon(Icons.timer_outlined, size: 14, color: _isPlaying && _timeLeft <= 10 ? Colors.red : colorScheme.primary),
                         const SizedBox(width: 4),
-                        Text("0:${_timeLeft.toString().padLeft(2, '0')}", style: TextStyle(color: _isPlaying && _timeLeft <= 10 ? Colors.red : colorScheme.primary, fontSize: 14, fontWeight: FontWeight.w900, fontFamily: 'Monospace')),
+                        Text("0:${_timeLeft.toString().padLeft(2, '0')}", style: TextStyle(fontFamily: kDisplayFont, color: _isPlaying && _timeLeft <= 10 ? Colors.red : colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
@@ -178,9 +189,12 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
                   Container(
                     decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.1), shape: BoxShape.circle),
                     child: IconButton(
-                      iconSize: 18, padding: const EdgeInsets.all(6), constraints: const BoxConstraints(),
+                      iconSize: 16, padding: const EdgeInsets.all(6), constraints: const BoxConstraints(),
                       icon: Icon(Icons.close_rounded, color: colorScheme.onSurface),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                      },
                     ),
                   ),
                 ],
@@ -215,7 +229,7 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
             child: Text(
               "Tap the button that matches the INK COLOR, not the word itself. Go as fast as you can!",
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: theme.hintColor, height: 1.5),
+              style: TextStyle(fontFamily: kBodyFont, fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor, height: 1.5),
             ),
           ),
 
@@ -225,7 +239,6 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
         AnimatedBuilder(
             animation: _shakeController,
             builder: (context, child) {
-              // Simple shake math for incorrect answers
               final sineValue = sin(4 * pi * _shakeController.value);
               return Transform.translate(
                 offset: Offset(sineValue * 10, 0),
@@ -241,9 +254,11 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
                   child: Text(
                     _isPlaying ? _displayText : "READY",
                     style: TextStyle(
-                      fontSize: 56,
-                      fontWeight: FontWeight.w900,
+                      fontFamily: kDisplayFont,
+                      fontSize: 36,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 2,
+                      // 🚀 THE FIX: Using _displayColor so "RED" written in blue ink actually shows up blue!
                       color: _isPlaying ? _displayColor : theme.disabledColor,
                     ),
                   ),
@@ -254,14 +269,13 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
 
         const Spacer(),
 
-        // 🎯 Responsive Color Buttons (Prevents overflow)
+        // 🎯 Responsive Color Buttons
         if (_isPlaying)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            // 'Wrap' fixes the Row overflow. If buttons don't fit horizontally, they wrap to the next line.
             child: Wrap(
-              spacing: 12, // Horizontal space between buttons
-              runSpacing: 12, // Vertical space between rows of buttons
+              spacing: 12,
+              runSpacing: 12,
               alignment: WrapAlignment.center,
               children: _colors.map((colorData) {
                 return _buildColorButton(colorData["name"], colorData["color"], theme);
@@ -272,11 +286,15 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
           Padding(
             padding: const EdgeInsets.all(24.0),
             child: SizedBox(
-              width: double.infinity, height: 56,
+              width: double.infinity, height: 50,
               child: FilledButton.icon(
                 onPressed: _startGame,
-                icon: const Icon(Icons.play_arrow_rounded, size: 28),
-                label: const Text("Start Test", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                label: const Text("Start Test", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                style: FilledButton.styleFrom(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
               ),
             ),
           ),
@@ -291,7 +309,7 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
         onTap: () => _checkAnswer(btnColor),
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          width: 100, // Fixed width to ensure 3 fit on most screens, 2 on very small screens
+          width: 100,
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
             color: btnColor.withOpacity(0.15),
@@ -301,7 +319,7 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
           child: Center(
             child: Text(
               name,
-              style: TextStyle(color: btnColor, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1),
+              style: TextStyle(fontFamily: kDisplayFont, color: btnColor, fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 1),
             ),
           ),
         ),
@@ -320,23 +338,29 @@ class _StroopTestSheetState extends State<StroopTestSheet> with SingleTickerProv
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(Icons.psychology_rounded, size: 64, color: colorScheme.primary),
+            child: Icon(Icons.psychology_rounded, size: 48, color: colorScheme.primary),
           ),
           const SizedBox(height: 24),
-          Text("Test Complete!", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+          Text("Test Complete!", style: TextStyle(fontFamily: kBodyFont, fontSize: 16, fontWeight: FontWeight.w700, color: colorScheme.onSurface)),
           const SizedBox(height: 8),
-          Text("Your Focus Score", style: TextStyle(fontSize: 16, color: theme.hintColor)),
-          const SizedBox(height: 12),
-          Text("$_score", style: TextStyle(fontSize: 64, fontWeight: FontWeight.w900, color: colorScheme.primary)),
+          Text("Your Focus Score", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+          const SizedBox(height: 8),
+          Text("$_score", style: TextStyle(fontFamily: kDisplayFont, fontSize: 36, fontWeight: FontWeight.w700, color: colorScheme.primary)),
+
           const SizedBox(height: 48),
+
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 48),
             child: SizedBox(
-              width: double.infinity, height: 56,
+              width: double.infinity, height: 50,
               child: FilledButton.icon(
                 onPressed: _startGame,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text("Try Again", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text("Try Again", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                style: FilledButton.styleFrom(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
               ),
             ),
           )

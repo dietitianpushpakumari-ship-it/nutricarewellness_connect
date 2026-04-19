@@ -3,12 +3,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
 
  // FlatClientDietPlanModel
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
 import '../../core/utils/mindfullness_config.dart';
 
 class BreathingDetailSheet extends ConsumerStatefulWidget {
@@ -211,7 +211,7 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(widget.config.title.toUpperCase(), style: TextStyle(color: themeColor, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                            Text(widget.config.title.toUpperCase(), style: TextStyle(color: themeColor, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
                             const SizedBox(height: 4),
                             Text(widget.config.description, style: TextStyle(color: theme.hintColor, fontSize: 15, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
                           ],
@@ -238,7 +238,7 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                             builder: (context, seconds, child) {
                               return Text(
                                   _formatTime(seconds),
-                                  style: TextStyle(color: colorScheme.onSurface, fontSize: 44, fontWeight: FontWeight.w900, letterSpacing: 2)
+                                  style: TextStyle(color: colorScheme.onSurface, fontSize: 44, fontWeight: FontWeight.w700, letterSpacing: 2)
                               );
                             },
                           ),
@@ -282,7 +282,7 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                                       style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 34,
-                                          fontWeight: FontWeight.w900,
+                                          fontWeight: FontWeight.w700,
                                           shadows: [Shadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))]
                                       ),
                                     ),
@@ -311,7 +311,7 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
                             ),
                             icon: const Icon(Icons.check_circle_rounded),
-                            label: const Text("Finish & Save", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                            label: const Text("Finish & Save", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -328,7 +328,7 @@ class _BreathingDetailSheetState extends ConsumerState<BreathingDetailSheet> wit
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
                           icon: Icon(_isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 32),
-                          label: Text(_isRunning ? "Pause" : (_hasStarted ? "Resume" : "Start Breathing"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                          label: Text(_isRunning ? "Pause" : (_hasStarted ? "Resume" : "Start Breathing"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                         ),
                       ),
                     ],

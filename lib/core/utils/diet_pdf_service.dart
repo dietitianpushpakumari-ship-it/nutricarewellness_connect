@@ -4,11 +4,11 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 // Model Imports
-import 'package:nutricare_connect/core/utils/client_model.dart';
-import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
-import 'package:nutricare_connect/new/flat_diet_plan_model.dart'; // For FlatDietPlanItem
-import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
+import 'package:pure_shift/core/utils/client_model.dart';
+import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
+import 'package:pure_shift/new/flat_diet_plan_model.dart'; // For FlatDietPlanItem
+import 'package:pure_shift/features/dietplan/domain/entities/admin_profile_model.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
 
 class DietPdfService {
   static Future<Uint8List> generateDietPdf({

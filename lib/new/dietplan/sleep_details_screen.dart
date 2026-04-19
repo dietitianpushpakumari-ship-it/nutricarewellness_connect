@@ -1,17 +1,19 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:nutricare_connect/core/utils/smart_dialogs.dart';
-import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/layout_utils.dart'; // 🚀 Required for scaling
+import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+const String kFontFamily = 'Inter';
+const String kDisplayFont = 'Space Grotesk';
 
 class SleepDetailSheet extends ConsumerStatefulWidget {
   final DietPlanNotifier notifier;
-  final FlatClientDietPlanModel activePlan; // 🚀 Use Flat Model
-  final ClientLogModel? dailyLog; // Now represents the Master Record
+  final FlatClientDietPlanModel activePlan;
+  final ClientLogModel? dailyLog;
 
   const SleepDetailSheet({
     super.key,
@@ -25,138 +27,64 @@ class SleepDetailSheet extends ConsumerStatefulWidget {
 }
 
 class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
-  // Default times if nothing saved
   TimeOfDay _sleepTime = const TimeOfDay(hour: 22, minute: 30);
   TimeOfDay _wakeTime = const TimeOfDay(hour: 6, minute: 30);
-
-  // State Variables
   int _sleepQuality = 3;
-  int _interruptions = 0;
   int _energyRating = 3;
   int _moodRating = 3;
-
-  final TextEditingController _notesController = TextEditingController();
+  int _interruptions = 0;
   bool _isSaving = false;
-  bool _showNoteField = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeData();
-  }
-
-  void _initializeData() {
     if (widget.dailyLog != null) {
       final log = widget.dailyLog!;
-
-      // Convert to Local Time to ensure correct TimeOfDay
-      if (log.sleepTime != null) {
-        _sleepTime = TimeOfDay.fromDateTime(log.sleepTime!.toLocal());
-      }
-      if (log.wakeTime != null) {
-        _wakeTime = TimeOfDay.fromDateTime(log.wakeTime!.toLocal());
-      }
-
-      // Load other metrics if they exist, otherwise keep defaults
+      if (log.sleepTime != null) _sleepTime = TimeOfDay.fromDateTime(log.sleepTime!.toLocal());
+      if (log.wakeTime != null) _wakeTime = TimeOfDay.fromDateTime(log.wakeTime!.toLocal());
       _sleepQuality = log.sleepQualityRating ?? 3;
-      _interruptions = log.sleepInterruptions ?? 0;
       _energyRating = log.energyLevelRating ?? 3;
       _moodRating = log.moodLevelRating ?? 3;
-      _notesController.text = log.notesAndFeelings ?? '';
-
-      // If there are existing notes, show the field immediately
-      if (_notesController.text.isNotEmpty) {
-        _showNoteField = true;
-      }
+      _interruptions = log.sleepInterruptions ?? 0;
     }
   }
 
-  @override
-  void dispose() {
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  // --- Logic ---
   Duration _calculateDuration() {
     final date = widget.notifier.state.selectedDate;
-
     DateTime sleepDt = DateTime(date.year, date.month, date.day, _sleepTime.hour, _sleepTime.minute);
     DateTime wakeDt = DateTime(date.year, date.month, date.day, _wakeTime.hour, _wakeTime.minute);
 
-    // If wake time is before sleep time, assume wake is next day
-    if (wakeDt.isBefore(sleepDt)) {
-      wakeDt = wakeDt.add(const Duration(days: 1));
-    }
+    // If you wake up before you went to sleep, it means you crossed midnight!
+    if (wakeDt.isBefore(sleepDt)) wakeDt = wakeDt.add(const Duration(days: 1));
     return wakeDt.difference(sleepDt);
   }
 
-  // 🎯 ATOMIC SLEEP SAVE LOGIC
-  Future<void> _saveSleepLog() async {
-    setState(() => _isSaving = true);
-
-    try {
-      final duration = _calculateDuration();
-      final double totalHours = duration.inMinutes / 60.0;
-
-      // Simple Score Logic
-      int baseScore = (totalHours >= 7 ? 50 : 30) - (_interruptions * 5);
-      int qualityScore = _sleepQuality * 4;
-      int wellnessScore = (_energyRating * 3) + (_moodRating * 3);
-      int totalScore = (baseScore + qualityScore + wellnessScore).clamp(0, 100);
-
-      final date = widget.notifier.state.selectedDate;
-
-      // Construct DateTimes for saving
-      DateTime sleepDt = DateTime(date.year, date.month, date.day, _sleepTime.hour, _sleepTime.minute);
-      DateTime wakeDt = DateTime(date.year, date.month, date.day, _wakeTime.hour, _wakeTime.minute);
-
-      if (wakeDt.isBefore(sleepDt)) {
-        wakeDt = wakeDt.add(const Duration(days: 1));
-      }
-
-      // We directly target the sleep-related properties on the master record.
-      final Map<String, dynamic> sleepUpdateMap = {
-        'sleepQualityRating': _sleepQuality,
-        'sleepTime': sleepDt.toIso8601String(),
-        'wakeTime': wakeDt.toIso8601String(),
-        'sleepInterruptions': _interruptions,
-        'totalSleepDurationHours': totalHours,
-        'sleepScore': totalScore,
-        'energyLevelRating': _energyRating,
-        'moodLevelRating': _moodRating,
-        'notesAndFeelings': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-      };
-
-      // 1. Save atomically to Firestore via the Notifier
-      await widget.notifier.updateDailyRecord(data: sleepUpdateMap);
-
-      if (mounted) {
-        Navigator.pop(context);
-        showContextualSuccessDialog(context, 'sleep');
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error saving sleep: $e"), backgroundColor: Colors.red));
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
-  Future<void> _pickTime(bool isSleep) async {
-    final newTime = await showTimePicker(
+  // 🚀 NEW: The Native Time Picker Dialog
+  Future<void> _pickTime(BuildContext context, bool isSleepTime) async {
+    HapticFeedback.lightImpact();
+    final TimeOfDay? picked = await showTimePicker(
       context: context,
-      initialTime: isSleep ? _sleepTime : _wakeTime,
-      builder: (BuildContext context, Widget? child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+      initialTime: isSleepTime ? _sleepTime : _wakeTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: Theme.of(context).colorScheme.primary,
+              onPrimary: Colors.white,
+            ),
+          ),
           child: child!,
         );
       },
     );
-    if (newTime != null) {
+
+    if (picked != null) {
       setState(() {
-        if (isSleep) _sleepTime = newTime;
-        else _wakeTime = newTime;
+        if (isSleepTime) {
+          _sleepTime = picked;
+        } else {
+          _wakeTime = picked;
+        }
       });
     }
   }
@@ -166,190 +94,181 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-
     final duration = _calculateDuration();
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes % 60;
 
-    final now = DateTime.now();
-    final sleepFormat = DateFormat.jm().format(DateTime(now.year, now.month, now.day, _sleepTime.hour, _sleepTime.minute));
-    final wakeFormat = DateFormat.jm().format(DateTime(now.year, now.month, now.day, _wakeTime.hour, _wakeTime.minute));
-
-    final solidBgColor = isDark ? const Color(0xFF121212) : Colors.white;
+    // Formatting the date for the header
+    final String displayDate = DateFormat('EEEE, MMM d').format(widget.notifier.state.selectedDate);
 
     return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
-      ),
       decoration: BoxDecoration(
-        color: solidBgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-          )
-        ],
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(context.scale(32))),
       ),
       child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min, // Hug content
-          children: [
-            const SizedBox(height: 12),
-
-            // 🎯 DRAG HANDLE & CLOSE BUTTON
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(context.scale(24)),
+          child: Column(
+            children: [
+              // 1. Header & Close
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const SizedBox(width: 40),
-                  Container(
-                      width: 48, height: 5,
-                      decoration: BoxDecoration(
-                          color: theme.dividerColor.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(3)
-                      )
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("SLEEP ANALYSIS", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(10), fontWeight: FontWeight.w800, letterSpacing: 1.5, color: theme.hintColor.withOpacity(0.6))),
+                      SizedBox(height: context.scale(4)),
+                      // 🚀 NEW: Date context so they know what night they are editing
+                      Text("Night of $displayDate", style: TextStyle(fontFamily: kFontFamily, fontSize: context.scale(12), fontWeight: FontWeight.w600, color: colorScheme.primary)),
+                    ],
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    style: IconButton.styleFrom(
-                      backgroundColor: theme.dividerColor.withOpacity(0.05),
-                      padding: const EdgeInsets.all(8),
-                      minimumSize: Size.zero,
-                    ),
-                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: CircleAvatar(radius: context.scale(14), backgroundColor: isDark ? Colors.white10 : Colors.black.withOpacity(0.05), child: Icon(Icons.close_rounded, size: context.scale(16), color: colorScheme.onSurface)),
+                  )
                 ],
               ),
-            ),
+              SizedBox(height: context.scale(24)),
 
-            Flexible(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 10,
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              // 🚀 2. THE NEW TIME PICKER CARDS
+              Row(
+                children: [
+                  Expanded(child: _buildTimePickerCard("Bedtime", _sleepTime, Icons.bedtime_rounded, Colors.indigoAccent, () => _pickTime(context, true), context)),
+                  SizedBox(width: context.scale(12)),
+                  Expanded(child: _buildTimePickerCard("Wake Up", _wakeTime, Icons.wb_sunny_rounded, Colors.orangeAccent, () => _pickTime(context, false), context)),
+                ],
+              ),
+              SizedBox(height: context.scale(24)),
+
+              // 3. Duration Visual
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(context.scale(20)),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [colorScheme.primary.withOpacity(0.1), colorScheme.primary.withOpacity(0.02)]),
+                  borderRadius: BorderRadius.circular(context.scale(24)),
+                  border: Border.all(color: colorScheme.primary.withOpacity(0.1)),
                 ),
                 child: Column(
                   children: [
-                    // 1. DURATION PILL
-                    Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(color: colorScheme.primary.withOpacity(0.1)),
-                        ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.access_time_filled_rounded, size: 18, color: colorScheme.primary),
-                              const SizedBox(width: 12),
-                              Text(
-                                  "$hours",
-                                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface)
-                              ),
-                              Text(
-                                  " HR ",
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.primary)
-                              ),
-                              Text(
-                                  "$minutes",
-                                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface)
-                              ),
-                              Text(
-                                  " MIN",
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.primary)
-                              ),
-                            ],
-                          ),
-                        )
-                    ),
-                    const SizedBox(height: 24),
-
-                    // 2. TIME PICKERS (Responsive)
+                    Text("Total Rest Calculated", style: TextStyle(fontFamily: kFontFamily, fontSize: context.scale(11), fontWeight: FontWeight.w600, color: theme.hintColor)),
+                    SizedBox(height: context.scale(4)),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
                       children: [
-                        _buildMiniTimeTile("Bedtime", sleepFormat, Icons.bedtime_rounded, () => _pickTime(true), theme, colorScheme.primary, isDark),
-                        const SizedBox(width: 12),
-                        _buildMiniTimeTile("Wake up", wakeFormat, Icons.wb_sunny_rounded, () => _pickTime(false), theme, Colors.orange, isDark),
+                        Text("${duration.inHours}", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(42), fontWeight: FontWeight.w700, color: colorScheme.primary)),
+                        Text("h ", style: TextStyle(fontFamily: kFontFamily, fontSize: context.scale(18), fontWeight: FontWeight.w500, color: theme.hintColor)),
+                        Text("${duration.inMinutes % 60}", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(42), fontWeight: FontWeight.w700, color: colorScheme.primary)),
+                        Text("m", style: TextStyle(fontFamily: kFontFamily, fontSize: context.scale(18), fontWeight: FontWeight.w500, color: theme.hintColor)),
                       ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 3. COMBINED QUALITY & INTERRUPTIONS
-                    _buildCompactCard(
-                      theme: theme,
-                      isDark: isDark,
-                      child: Column(
-                        children: [
-                          _buildRatingRow(label: "Sleep Quality", icon: Icons.star_rounded, color: Colors.amber, value: _sleepQuality, onChanged: (v) => setState(() => _sleepQuality = v), theme: theme),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12.0),
-                            child: Divider(height: 1),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text("Interruptions", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              _buildCounter(theme),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 4. ENERGY, MOOD & ON-DEMAND JOURNAL
-                    _buildCompactCard(
-                      theme: theme,
-                      isDark: isDark,
-                      child: Column(
-                        children: [
-                          _buildRatingRow(label: "Morning Energy", icon: Icons.bolt_rounded, color: Colors.orange, value: _energyRating, onChanged: (v) => setState(() => _energyRating = v), theme: theme),
-                          _buildRatingRow(label: "Morning Mood", icon: Icons.sentiment_satisfied_alt_rounded, color: Colors.green, value: _moodRating, onChanged: (v) => setState(() => _moodRating = v), theme: theme),
-
-                          const SizedBox(height: 12),
-                          const Divider(height: 1),
-                          const SizedBox(height: 8),
-
-                          // 🎯 ON-DEMAND NOTES
-                          _buildNoteSection(theme, colorScheme, isDark),
-                        ],
-                      ),
                     ),
                   ],
                 ),
               ),
-            ),
+              SizedBox(height: context.scale(32)),
 
-            // 5. SAVE BUTTON
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: SizedBox(
+              // 4. Modern Rating Selectors
+              _buildSegmentedRating("Sleep Quality", _sleepQuality, (v) => setState(() => _sleepQuality = v), colorScheme.primary, context),
+              SizedBox(height: context.scale(20)),
+              _buildSegmentedRating("Morning Energy", _energyRating, (v) => setState(() => _energyRating = v), Colors.orange, context),
+              SizedBox(height: context.scale(20)),
+              _buildSegmentedRating("Waking Mood", _moodRating, (v) => setState(() => _moodRating = v), Colors.green, context),
+
+              SizedBox(height: context.scale(32)),
+
+              // 5. Save Button
+              // 5. Save Button
+              SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: context.scale(54),
                 child: ElevatedButton(
-                  onPressed: _isSaving ? null : _saveSleepLog,
+                  onPressed: _isSaving ? null : () async {
+                    HapticFeedback.mediumImpact();
+                    setState(() => _isSaving = true);
+
+                    try {
+                      final date = widget.notifier.state.selectedDate;
+
+                      // 1. Calculate the exact DateTimes
+                      DateTime sleepDt = DateTime(date.year, date.month, date.day, _sleepTime.hour, _sleepTime.minute);
+                      DateTime wakeDt = DateTime(date.year, date.month, date.day, _wakeTime.hour, _wakeTime.minute);
+
+                      // Handle midnight crossover
+                      if (wakeDt.isBefore(sleepDt)) wakeDt = wakeDt.add(const Duration(days: 1));
+
+                      // 1. Calculate the actual duration
+// This handles the "sleeping past midnight" logic automatically if wakeDt is properly set to the next day
+                      final duration = wakeDt.difference(sleepDt);
+                      final double hours = duration.inMinutes / 60.0;
+
+// 2. Send the exact payload to your Provider & Firestore
+                      await widget.notifier.updateDailyRecord(data: {
+                        'sleepTime': sleepDt.toUtc().toIso8601String(),
+                        'wakeTime': wakeDt.toUtc().toIso8601String(),
+                        'sleepQualityRating': _sleepQuality,
+                        'energyLevelRating': _energyRating,
+                        'moodLevelRating': _moodRating,
+                        'lastUpdated': DateTime.now().toUtc().toIso8601String(),
+                        'totalSleepDurationHours': double.parse(hours.toStringAsFixed(1)), // 🔥 Fixed: Added value with 1 decimal precision
+                      });
+                      // 3. Close the sheet on success
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                      }
+                    } catch (e) {
+                      debugPrint("Error saving sleep log: $e");
+                    } finally {
+                      if (mounted) setState(() => _isSaving = false);
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(context.scale(16))),
+                    elevation: 0,
                   ),
                   child: _isSaving
-                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text("Save Sleep Log", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                      ? SizedBox(width: context.scale(24), height: context.scale(24), child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text("Update Sleep Log", style: TextStyle(fontFamily: kFontFamily, fontWeight: FontWeight.w700, fontSize: context.scale(15))),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🚀 NEW: The Premium Tappable Time Cards
+  Widget _buildTimePickerCard(String title, TimeOfDay time, IconData icon, Color color, VoidCallback onTap, BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.all(context.scale(16)),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
+          borderRadius: BorderRadius.circular(context.scale(20)),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: context.scale(16), color: color),
+                SizedBox(width: context.scale(8)),
+                Text(title, style: TextStyle(fontFamily: kFontFamily, fontSize: context.scale(11), color: theme.hintColor, fontWeight: FontWeight.w600)),
+              ],
+            ),
+            SizedBox(height: context.scale(12)),
+            Text(
+              time.format(context), // Automatically handles 12h/24h based on phone settings!
+              style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(22), fontWeight: FontWeight.w800, color: theme.colorScheme.onSurface, letterSpacing: -0.5),
             ),
           ],
         ),
@@ -357,201 +276,62 @@ class _SleepDetailSheetState extends ConsumerState<SleepDetailSheet> {
     );
   }
 
-  // --- HELPER WIDGETS ---
+  // 🚀 INDUSTRY GRADE SEGMENTED SELECTOR
+  Widget _buildSegmentedRating(String label, int currentValue, ValueChanged<int> onSelect, Color activeColor, BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-  // 🎯 On-Demand Notes UI Builder
-  Widget _buildNoteSection(ThemeData theme, ColorScheme colorScheme, bool isDark) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return FadeTransition(opacity: animation, child: SizeTransition(sizeFactor: animation, child: child));
-      },
-      child: !_showNoteField
-          ? SizedBox(
-        width: double.infinity,
-        child: TextButton.icon(
-          onPressed: () => setState(() => _showNoteField = true),
-          icon: Icon(Icons.add_comment_rounded, size: 18, color: colorScheme.primary),
-          label: Text("Add Sleep Notes", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
-          style: TextButton.styleFrom(
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(vertical: 8)
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(left: context.scale(4), bottom: context.scale(8)),
+          child: Text(label.toUpperCase(), style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(9), fontWeight: FontWeight.w800, letterSpacing: 1.0, color: theme.hintColor)),
         ),
-      )
-          : Column(
-        key: const ValueKey("note_active"),
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("NOTES", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.2, color: theme.hintColor)),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, size: 16),
-                onPressed: () => setState(() {
-                  _showNoteField = false;
-                  _notesController.clear();
-                }),
-                constraints: const BoxConstraints(),
-                padding: EdgeInsets.zero,
-              )
-            ],
+        Container(
+          height: context.scale(48),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
+            borderRadius: BorderRadius.circular(context.scale(14)),
+            border: Border.all(color: theme.dividerColor.withOpacity(0.05)),
           ),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _notesController,
-            maxLines: 2,
-            autofocus: true,
-            style: const TextStyle(fontSize: 14),
-            decoration: InputDecoration(
-              hintText: "Stressful dreams, woke up thirsty...",
-              hintStyle: TextStyle(color: theme.hintColor, fontSize: 13),
-              filled: true,
-              fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRatingRow({required String label, required IconData icon, required Color color, required int value, required ValueChanged<int> onChanged, required ThemeData theme}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 18),
-              const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              const Spacer(),
-              Text("$value/5", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.hintColor)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Row(
             children: List.generate(5, (index) {
-              final int rating = index + 1;
-              final bool isSelected = rating <= value;
-              return Flexible(
+              final int value = index + 1;
+              final bool isSelected = value == currentValue;
+
+              return Expanded(
                 child: GestureDetector(
-                  onTap: () => onChanged(rating),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onSelect(value);
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.all(6),
+                    margin: EdgeInsets.all(context.scale(4)),
                     decoration: BoxDecoration(
-                        color: isSelected ? color.withOpacity(0.15) : theme.dividerColor.withOpacity(0.05),
-                        shape: BoxShape.circle
+                      color: isSelected ? activeColor : Colors.transparent,
+                      borderRadius: BorderRadius.circular(context.scale(10)),
+                      boxShadow: isSelected ? [BoxShadow(color: activeColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))] : [],
                     ),
-                    child: Icon(
-                      isSelected ? icon : _getOutlineIcon(icon),
-                      color: isSelected ? color : theme.disabledColor,
-                      size: 22,
+                    child: Center(
+                      child: Text(
+                        "$value",
+                        style: TextStyle(
+                          fontFamily: kDisplayFont,
+                          fontSize: context.scale(16),
+                          fontWeight: FontWeight.w800,
+                          color: isSelected ? Colors.white : theme.hintColor.withOpacity(0.6),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               );
             }),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniTimeTile(String label, String time, IconData icon, VoidCallback onTap, ThemeData theme, Color color, bool isDark) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-          decoration: BoxDecoration(
-              color: isDark ? theme.cardColor : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.08)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.hintColor)
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                          time,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            ],
-          ),
         ),
-      ),
+      ],
     );
-  }
-
-  Widget _buildCompactCard({required Widget child, required ThemeData theme, required bool isDark}) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-          color: isDark ? theme.cardColor : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.05)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]
-      ),
-      child: child,
-    );
-  }
-
-  Widget _buildCounter(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-          color: theme.dividerColor.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(20)
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(icon: const Icon(Icons.remove_rounded, size: 20), onPressed: () => setState(() => _interruptions = (_interruptions - 1).clamp(0, 10))),
-          Container(
-            width: 24, alignment: Alignment.center,
-            child: Text("$_interruptions", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-          ),
-          IconButton(icon: const Icon(Icons.add_rounded, size: 20), onPressed: () => setState(() => _interruptions = (_interruptions + 1).clamp(0, 10))),
-        ],
-      ),
-    );
-  }
-
-  IconData _getOutlineIcon(IconData source) {
-    if (source == Icons.star_rounded) return Icons.star_outline_rounded;
-    if (source == Icons.bolt_rounded) return Icons.bolt_outlined;
-    if (source == Icons.sentiment_satisfied_alt_rounded) return Icons.sentiment_neutral_rounded;
-    return source;
   }
 }

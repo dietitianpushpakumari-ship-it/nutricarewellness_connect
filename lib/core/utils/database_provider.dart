@@ -2,11 +2,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/firebase_options_guest.dart';
+import 'package:pure_shift/firebase_options_guest.dart';
 
 // 🎯 TODO: Run the flutterfire configure command for your guest project
 // and import the generated file here.
-// import 'package:nutricare_connect/firebase_options_guest.dart';
+// import 'package:pure_shift/firebase_options_guest.dart';
 
 // 1. THE SWITCH: False = Live (Default), True = Guest
 final isGuestModeProvider = StateProvider<bool>((ref) => false);

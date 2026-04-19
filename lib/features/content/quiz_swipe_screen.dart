@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/core/utils/quiz_model.dart';
+import 'package:pure_shift/core/utils/quiz_model.dart';
 
 class QuizSwipeScreen extends ConsumerStatefulWidget {
   // 🎯 Removed 'category' from constructor as it is no longer used

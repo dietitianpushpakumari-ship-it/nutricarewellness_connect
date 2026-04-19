@@ -1,11 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:nutricare_connect/new/flat_diet_plan_model.dart';
-import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/new/dietplan/meal_detail_sheet.dart';
+import 'package:pure_shift/new/flat_diet_plan_model.dart';
+import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/new/dietplan/meal_detail_sheet.dart';
 
 class EliteMealCard extends StatefulWidget {
   final String mealName;

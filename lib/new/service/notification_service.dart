@@ -4,6 +4,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:pure_shift/global_keys.dart';
+import 'package:pure_shift/new/chat/client_chat_screen.dart';
 
 // 🚨 IMPORTANT: Import your main.dart so this file can access the navigatorKey!
 // import 'package:nutricare_client_management/main.dart';
@@ -124,25 +126,33 @@ class NotificationService {
   }
 
 
-  /// 🎯 THE ROUTER: Where to go when the user taps the push notification
+  /// 🎯 THE ROUTER: Where to go when the user taps the push notification from the OS Tray
   void _handleNotificationClick(RemoteMessage message) {
-    debugPrint("🎯 Notification Clicked! Payload: ${message.data}");
+    debugPrint("🎯 System Notification Clicked! Payload: ${message.data}");
 
-    // These keys must match exactly what you send from the Cloud Function
-    final String? clickAction = message.data['click_action'];
+    // Look for the route or type we defined in the Cloud Function
+    final String? route = message.data['route'] ?? message.data['type'];
+    final String? clientId = message.data['clientId']; // Useful for Admin app
 
-    if (clickAction == "OPEN_CHAT") {
+    if (route == "chat" || route == "chat_message") {
 
-      // 🚀 UNCOMMENT THIS when you add navigatorKey to main.dart
-      /*
-      navigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(
-            // Optional: Pass the mealKey here if your HomeScreen is ready to accept it
-          ),
-        ),
-      );
-      */
+      // We grab the global navigator context
+      final context = GlobalKeys.navigatorKey.currentContext;
+
+      if (context != null) {
+        debugPrint("✅ Navigator is ready. Jumping to Chat Screen...");
+
+        // 🚀 FOR THE CLIENT APP:
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientChatScreen()));
+
+        // 🚀 IF THIS IS THE ADMIN APP, USE THIS INSTEAD:
+        // if (clientId != null) {
+        //   Navigator.push(context, MaterialPageRoute(builder: (_) => AdminChatScreen(clientId: clientId, clientName: "Client")));
+        // }
+
+      } else {
+        debugPrint("❌ Navigator context was null. The app hasn't fully painted yet.");
+      }
     }
   }
 }

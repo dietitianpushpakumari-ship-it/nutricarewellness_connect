@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
+
 enum FluidMode { swarm, repel, orbit }
 
 // 🎯 PARENT WIDGET: Only rebuilds when you press a button
@@ -28,10 +32,39 @@ class _SomaticFluidSheetState extends State<SomaticFluidSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: SafeArea(
+        top: true,
+        bottom: true,
         child: Column(
           children: [
             const SizedBox(height: 12),
             Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+
+            // 🚀 THE FIX: Standardized Header with Cross Button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("NEURO-VISUAL CALMING", style: TextStyle(fontFamily: kDisplayFont, color: cs.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+                        const SizedBox(height: 2),
+                        Text("Somatic Fluid Dynamics", style: TextStyle(fontFamily: kBodyFont, color: theme.colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                      icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                      }
+                  )
+                ],
+              ),
+            ),
+            Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
             const SizedBox(height: 16),
 
             // 🎯 PHYSICS CONTROL DECK
@@ -82,7 +115,7 @@ class _SomaticFluidSheetState extends State<SomaticFluidSheet> {
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          HapticFeedback.lightImpact();
+          HapticFeedback.selectionClick();
           setState(() => _currentMode = mode);
         },
         child: Container(
@@ -96,7 +129,8 @@ class _SomaticFluidSheetState extends State<SomaticFluidSheet> {
             children: [
               Icon(icon, size: 16, color: isSel ? theme.colorScheme.onPrimary : Colors.grey),
               const SizedBox(width: 6),
-              Text(label, style: TextStyle(color: isSel ? theme.colorScheme.onPrimary : Colors.grey, fontWeight: FontWeight.bold, fontSize: 13)),
+              // 🚀 REFINED BUTTON TEXT (Size 11, w700)
+              Text(label, style: TextStyle(fontFamily: kDisplayFont, color: isSel ? theme.colorScheme.onPrimary : Colors.grey, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.5)),
             ],
           ),
         ),
@@ -155,7 +189,6 @@ class _FluidPhysicsEngineState extends State<_FluidPhysicsEngine> {
         if (distance < 180) {
           double force = (180 - distance) / 180;
 
-          // Uses the mode passed down from the parent widget
           if (widget.mode == FluidMode.swarm) {
             p.vx += (dx / distance) * force * 2.5;
             p.vy += (dy / distance) * force * 2.5;
@@ -188,7 +221,6 @@ class _FluidPhysicsEngineState extends State<_FluidPhysicsEngine> {
 
   void _onPanUpdate(DragUpdateDetails details) {
     setState(() => _touchPosition = details.localPosition);
-    HapticFeedback.selectionClick();
   }
 
   void _onPanEnd(DragEndDetails details) {
@@ -203,9 +235,11 @@ class _FluidPhysicsEngineState extends State<_FluidPhysicsEngine> {
 
   @override
   Widget build(BuildContext context) {
-    // This widget now ONLY contains the gesture detector and the canvas.
     return GestureDetector(
-      onPanStart: (d) => _onPanUpdate(DragUpdateDetails(globalPosition: d.globalPosition, localPosition: d.localPosition)),
+      onPanStart: (d) {
+        HapticFeedback.selectionClick();
+        _onPanUpdate(DragUpdateDetails(globalPosition: d.globalPosition, localPosition: d.localPosition));
+      },
       onPanUpdate: _onPanUpdate,
       onPanEnd: _onPanEnd,
       child: CustomPaint(

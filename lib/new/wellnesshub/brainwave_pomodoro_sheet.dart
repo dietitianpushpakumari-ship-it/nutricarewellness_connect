@@ -1,7 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class BrainwavePomodoroSheet extends StatefulWidget {
   const BrainwavePomodoroSheet({super.key});
@@ -32,20 +37,17 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
   void initState() {
     super.initState();
 
-    // 🎯 FIX: Initialize with a default duration, and REMOVE the ..repeat() cascade
     _visualPulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600), // Default starting duration
+      duration: const Duration(milliseconds: 600),
     );
 
     _initAudio();
-    _updateWaveState(); // This will automatically set the correct duration based on the selected wave
+    _updateWaveState();
   }
 
   Future<void> _initAudio() async {
     try {
-      // 🎯 Ensure you drop a file named 'focus_tone.mp3' in your assets/audio folder!
-      // This can be a seamless brown noise or low hum.
       await _audioPlayer.setAsset('assets/audio/focus_tone.mp3');
       await _audioPlayer.setLoopMode(LoopMode.all);
     } catch (e) {
@@ -67,13 +69,16 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
   }
 
   void _changeWave(String wave) {
+    if (_selectedWave == wave) return;
+    HapticFeedback.selectionClick();
     setState(() {
       _selectedWave = wave;
       _updateWaveState();
     });
   }
 
-  void _toggleTimer() async { // 🎯 Added async
+  void _toggleTimer() async {
+    HapticFeedback.lightImpact();
     if (_isRunning) {
       // Pause
       _timer?.cancel();
@@ -85,7 +90,6 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
       setState(() => _isRunning = true);
       _visualPulseController.repeat(reverse: true);
 
-      // 🎯 Make sure audio is actually ready before playing
       if (_audioPlayer.processingState == ProcessingState.idle) {
         await _initAudio();
       }
@@ -107,7 +111,8 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
     _audioPlayer.stop();
     _visualPulseController.stop();
     setState(() => _isRunning = false);
-    WellnessAudioService().playSuccess(); // Rings when 25 mins are up
+    WellnessAudioService().playSuccess();
+    HapticFeedback.heavyImpact();
   }
 
   String _formatTime(int totalSecs) {
@@ -132,10 +137,13 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
     final currentConfig = _waveConfigs[_selectedWave]!;
     final activeColor = currentConfig["color"] as Color;
 
-    return SafeArea(
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: BoxDecoration(color: theme.scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: BoxDecoration(color: theme.scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
+      // 🚀 STRICT SAFE AREA HANDLING (Moved inside container for seamless bottom edge)
+      child: SafeArea(
+        top: true,
+        bottom: true,
         child: Column(
           children: [
             // 🎯 HEADER
@@ -145,9 +153,16 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
               padding: const EdgeInsets.fromLTRB(24, 8, 12, 0),
               child: Row(
                 children: [
-                  Text("DEEP WORK", style: TextStyle(color: theme.hintColor, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                  // 🚀 REFINED HEADER (Max Size 10, w700)
+                  Text("DEEP WORK", style: TextStyle(fontFamily: kDisplayFont, color: theme.hintColor, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
                   const Spacer(),
-                  IconButton(icon: Icon(Icons.close_rounded, color: theme.hintColor), onPressed: () => Navigator.pop(context))
+                  IconButton(
+                      icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                      }
+                  )
                 ],
               ),
             ),
@@ -163,7 +178,8 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
                   final waveColor = _waveConfigs[w]!["color"] as Color;
                   return GestureDetector(
                     onTap: () => _changeWave(w),
-                    child: Container(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
@@ -171,7 +187,8 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: isSel ? waveColor : theme.dividerColor.withOpacity(0.2)),
                       ),
-                      child: Text(w, style: TextStyle(color: isSel ? waveColor : theme.colorScheme.onSurface, fontWeight: FontWeight.bold)),
+                      // 🚀 REFINED SELECTOR TEXT (Size 11, w700)
+                      child: Text(w, style: TextStyle(fontFamily: kBodyFont, fontSize: 11, color: isSel ? waveColor : theme.colorScheme.onSurface, fontWeight: FontWeight.w700)),
                     ),
                   );
                 }).toList(),
@@ -202,7 +219,7 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
                               builder: (context, seconds, _) {
                                 return CircularProgressIndicator(
                                   value: seconds / _totalSeconds,
-                                  strokeWidth: 8,
+                                  strokeWidth: 4, // 🚀 Thinner, more elegant stroke
                                   backgroundColor: theme.dividerColor.withOpacity(0.1),
                                   valueColor: AlwaysStoppedAnimation(activeColor),
                                 );
@@ -215,10 +232,16 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
                                   ValueListenableBuilder<int>(
                                     valueListenable: _secondsLeft,
                                     builder: (context, seconds, _) {
-                                      return Text(_formatTime(seconds), style: TextStyle(fontSize: 56, fontWeight: FontWeight.w900, color: colorScheme.onSurface, fontFamily: 'Monospace'));
+                                      // 🚀 REFINED TIMER TEXT (Capped at 40, w700 instead of 56/w900)
+                                      return Text(
+                                          _formatTime(seconds),
+                                          style: TextStyle(fontFamily: kDisplayFont, fontSize: 40, fontWeight: FontWeight.w700, color: colorScheme.onSurface)
+                                      );
                                     },
                                   ),
-                                  Text("Remaining", style: TextStyle(color: theme.hintColor, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                                  const SizedBox(height: 2),
+                                  // 🚀 REFINED SUBTITLE TEXT (Size 10, w700)
+                                  Text("Remaining", style: TextStyle(fontFamily: kDisplayFont, color: theme.hintColor, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 2)),
                                 ],
                               ),
                             ),
@@ -232,16 +255,19 @@ class _BrainwavePomodoroSheetState extends State<BrainwavePomodoroSheet> with Si
 
             // 🎯 BOTTOM PLAY/PAUSE BUTTON
             Padding(
-              padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 24),
+              padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 20),
               child: SizedBox(
-                width: double.infinity, height: 56,
+                width: double.infinity, height: 50, // 🚀 Standardized premium height
                 child: FilledButton.icon(
                   onPressed: _toggleTimer,
-                  icon: Icon(_isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 28),
-                  label: Text(_isRunning ? "Pause Session" : "Start Deep Work", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  icon: Icon(_isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 18),
+                  // 🚀 REFINED BUTTON TEXT (Max Size 12, w700)
+                  label: Text(_isRunning ? "Pause Session" : "Start Deep Work", style: const TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
                   style: FilledButton.styleFrom(
+                    elevation: 0, // 🚀 Flat premium look
                     backgroundColor: _isRunning ? theme.cardColor : activeColor,
                     foregroundColor: _isRunning ? colorScheme.onSurface : Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
               ),

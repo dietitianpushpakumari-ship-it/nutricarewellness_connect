@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
 
 class EmdrPacerSheet extends StatefulWidget {
   const EmdrPacerSheet({super.key});
@@ -103,7 +103,7 @@ class _EmdrPacerSheetState extends State<EmdrPacerSheet> with SingleTickerProvid
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("BILATERAL STIMULATION", style: TextStyle(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                      Text("BILATERAL STIMULATION", style: TextStyle(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
                       Text("EMDR Orbit Pacer", style: TextStyle(color: theme.hintColor, fontSize: 14)),
                     ],
                   ),

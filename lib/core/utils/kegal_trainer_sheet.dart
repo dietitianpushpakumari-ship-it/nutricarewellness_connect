@@ -1,5 +1,5 @@
    import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
 
 
 class KegelTrainerSheet extends StatefulWidget {

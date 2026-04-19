@@ -1,13 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
-import 'package:nutricare_connect/new/flat_diet_plan_model.dart';
+import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
+import 'package:pure_shift/new/flat_diet_plan_model.dart';
 
 // Ensure this points to FlatClientDietPlanModel
-import 'package:nutricare_connect/new/models/consultation_session_model.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/new/models/consultation_session_model.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 
 class DietRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;

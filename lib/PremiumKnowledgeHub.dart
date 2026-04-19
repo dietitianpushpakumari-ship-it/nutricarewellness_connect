@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 
-import 'package:nutricare_connect/health_content.dart';
+import 'package:pure_shift/health_content.dart';
 
 class PremiumKnowledgeHub extends StatefulWidget {
   const PremiumKnowledgeHub({super.key});

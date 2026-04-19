@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/admin_profile_model.dart';
 
 
 // 🎯 STUB: Assuming this structure from your admin_profile_model.dart import

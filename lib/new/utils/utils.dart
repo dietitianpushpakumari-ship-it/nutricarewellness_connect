@@ -13,3 +13,4 @@ double safeDouble(dynamic value, [double defaultValue = 0.0]) {
   if (value is String) return double.tryParse(value) ?? defaultValue;
   return defaultValue;
 }
+

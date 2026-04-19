@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/core/lab_vitals_data.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
+import 'package:pure_shift/core/lab_vitals_data.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
 
 class LabReportDetailScreen extends StatelessWidget {
   final VitalsModel record;

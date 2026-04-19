@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-import 'package:nutricare_connect/features/auth/auth_provider.dart';
+import 'package:pure_shift/features/auth/auth_provider.dart';
 
 // ============================================================================
 // 🎯 PROVIDER: SMART SORTED UNIFIED LIST

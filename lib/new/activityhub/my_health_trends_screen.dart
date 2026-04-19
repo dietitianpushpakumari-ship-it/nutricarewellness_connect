@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 
 // Import your client log model
 

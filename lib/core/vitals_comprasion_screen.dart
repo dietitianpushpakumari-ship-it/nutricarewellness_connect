@@ -1,23 +1,28 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
 
 // 🔥 Make sure to import your new model and provider
-// import 'package:nutricare_connect/new/models/lab_test_config_model.dart';
-// import 'package:nutricare_connect/new/provider/lab_config_provider.dart';
+// import 'package:pure_shift/new/models/lab_test_config_model.dart';
+// import 'package:pure_shift/new/provider/lab_config_provider.dart';
 
-class VitalsComparisonScreen extends ConsumerStatefulWidget {
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
+
+class VitalsComparisonSheet extends ConsumerStatefulWidget {
   final String clientId;
-  const VitalsComparisonScreen({super.key, required this.clientId});
+  const VitalsComparisonSheet({super.key, required this.clientId});
 
   @override
-  ConsumerState<VitalsComparisonScreen> createState() => _VitalsComparisonScreenState();
+  ConsumerState<VitalsComparisonSheet> createState() => _VitalsComparisonSheetState();
 }
 
-class _VitalsComparisonScreenState extends ConsumerState<VitalsComparisonScreen> {
+class _VitalsComparisonSheetState extends ConsumerState<VitalsComparisonSheet> {
   VitalsModel? _baseRecord;
   VitalsModel? _compareRecord;
   bool _isInitialized = false;
@@ -28,6 +33,7 @@ class _VitalsComparisonScreenState extends ConsumerState<VitalsComparisonScreen>
 
     setState(() {
       _baseRecord = sorted.first;
+      // 🚀 FIX: If there is only 1 record, baseline and current will default to the same record.
       _compareRecord = sorted.last;
       _isInitialized = true;
     });
@@ -36,153 +42,118 @@ class _VitalsComparisonScreenState extends ConsumerState<VitalsComparisonScreen>
   @override
   Widget build(BuildContext context) {
     final vitalsAsync = ref.watch(vitalsHistoryProvider(widget.clientId));
-
-    // 🔥 WATCH YOUR NEW FIRESTORE CONFIGS
     final labConfigsAsync = ref.watch(labTestConfigsProvider);
 
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: Stack(
-        children: [
-          Positioned(
-              top: -100, right: -80,
-              child: Container(
-                  width: 300, height: 300,
-                  decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.1), blurRadius: 80, spreadRadius: 30)]
-                  )
-              )
-          ),
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.90,
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+      ),
+      child: SafeArea(
+        top: true,
+        bottom: true,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
 
-          SafeArea(
-            child: Column(
-              children: [
-                _buildHeader(context),
-
-                Expanded(
-                  child: vitalsAsync.when(
-                    loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (e, s) => Center(child: Text("Error: $e", style: TextStyle(color: colorScheme.error))),
-                    data: (history) {
-                      if (history.length < 2) {
-                        return Center(child: Text("Need at least 2 records to compare.", style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant)));
-                      }
-
-                      if (!_isInitialized) _initRecords(history);
-
-                      return SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 80),
-                        child: Column(
-                          children: [
-                            _buildComparisonSelectors(history, context),
-                            const SizedBox(height: 24),
-
-                            if (_baseRecord != null && _compareRecord != null) ...[
-                              _buildSectionTitle("Anthropometry (Body)", context),
-                              _buildComparisonCard(context, [
-                                _buildDiffRow(context, "Weight", _baseRecord!.weightKg, _compareRecord!.weightKg, inverse: true, unit: "kg"),
-                                _buildDiffRow(context, "BMI", _baseRecord!.bmi, _compareRecord!.bmi, inverse: true),
-                                if (_baseRecord!.bodyFatPercentage > 0 || _compareRecord!.bodyFatPercentage > 0)
-                                  _buildDiffRow(context, "Body Fat", _baseRecord!.bodyFatPercentage, _compareRecord!.bodyFatPercentage, inverse: true, unit: "%"),
-                                if (_baseRecord!.waistCm != null && _compareRecord!.waistCm != null)
-                                  _buildDiffRow(context, "Waist", _baseRecord!.waistCm!, _compareRecord!.waistCm!, inverse: true, unit: "cm"),
-                              ]),
-                              const SizedBox(height: 20),
-
-                              _buildSectionTitle("Vitals & Heart", context),
-                              _buildComparisonCard(context, [
-                                _buildDiffRow(context, "BP Systolic", _baseRecord!.bloodPressureSystolic?.toDouble() ?? 0, _compareRecord!.bloodPressureSystolic?.toDouble() ?? 0, inverse: true, unit: "mmHg"),
-                                _buildDiffRow(context, "BP Diastolic", _baseRecord!.bloodPressureDiastolic?.toDouble() ?? 0, _compareRecord!.bloodPressureDiastolic?.toDouble() ?? 0, inverse: true, unit: "mmHg"),
-                                _buildDiffRow(context, "Heart Rate", _baseRecord!.heartRate?.toDouble() ?? 0, _compareRecord!.heartRate?.toDouble() ?? 0, inverse: true, unit: "bpm"),
-                              ]),
-                              const SizedBox(height: 20),
-
-                              if (_hasAnyLabs(_baseRecord!, _compareRecord!)) ...[
-                                _buildSectionTitle("Key Lab Markers", context),
-
-                                // 🔥 HANDLE LAB CONFIGS LOADING STATE
-                                labConfigsAsync.when(
-                                  loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())),
-                                  error: (e, s) => Text("Failed to load lab configs", style: TextStyle(color: colorScheme.error)),
-                                  data: (configs) {
-                                    return _buildComparisonCard(context, _buildLabRows(context, configs));
-                                  },
-                                )
-                              ]
-                            ]
-                          ],
-                        ),
-                      );
-                    },
+            // 🚀 PREMIUM HEADER
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("CLINICAL HISTORY", style: TextStyle(fontFamily: kDisplayFont, color: colorScheme.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+                        const SizedBox(height: 2),
+                        Text("Progress Comparison", style: TextStyle(fontFamily: kBodyFont, color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  IconButton(
+                      icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                      }
+                  )
+                ],
+              ),
             ),
-          ),
-        ],
+            Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
+
+            Expanded(
+              child: vitalsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, s) => Center(child: Text("Error: $e", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: colorScheme.error))),
+                data: (history) {
+                  // 🚀 FIX: Removed the < 2 restriction. Now works even with 1 record.
+                  if (history.isEmpty) {
+                    return Center(child: Text("No records available.", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor)));
+                  }
+
+                  if (!_isInitialized) _initRecords(history);
+
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+                    child: Column(
+                      children: [
+                        _buildComparisonSelectors(history, context),
+                        const SizedBox(height: 24),
+
+                        if (_baseRecord != null && _compareRecord != null) ...[
+                          _buildSectionTitle("Anthropometry (Body)", context),
+                          _buildComparisonCard(context, [
+                            _buildDiffRow(context, "Weight", _baseRecord!.weightKg, _compareRecord!.weightKg, inverse: true, unit: "kg"),
+                            _buildDiffRow(context, "BMI", _baseRecord!.bmi, _compareRecord!.bmi, inverse: true),
+                            if (_baseRecord!.bodyFatPercentage > 0 || _compareRecord!.bodyFatPercentage > 0)
+                              _buildDiffRow(context, "Body Fat", _baseRecord!.bodyFatPercentage, _compareRecord!.bodyFatPercentage, inverse: true, unit: "%"),
+                            if (_baseRecord!.waistCm != null || _compareRecord!.waistCm != null)
+                              _buildDiffRow(context, "Waist", _baseRecord!.waistCm, _compareRecord!.waistCm, inverse: true, unit: "cm"),
+                          ]),
+                          const SizedBox(height: 24),
+
+                          _buildSectionTitle("Vitals & Heart", context),
+                          _buildComparisonCard(context, [
+                            _buildDiffRow(context, "BP Systolic", _baseRecord!.bloodPressureSystolic?.toDouble(), _compareRecord!.bloodPressureSystolic?.toDouble(), inverse: true, unit: "mmHg"),
+                            _buildDiffRow(context, "BP Diastolic", _baseRecord!.bloodPressureDiastolic?.toDouble(), _compareRecord!.bloodPressureDiastolic?.toDouble(), inverse: true, unit: "mmHg"),
+                            _buildDiffRow(context, "Heart Rate", _baseRecord!.heartRate?.toDouble(), _compareRecord!.heartRate?.toDouble(), inverse: true, unit: "bpm"),
+                          ]),
+                          const SizedBox(height: 24),
+
+                          if (_hasAnyLabs(_baseRecord!, _compareRecord!)) ...[
+                            _buildSectionTitle("Key Lab Markers", context),
+
+                            labConfigsAsync.when(
+                              loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())),
+                              error: (e, s) => Text("Failed to load lab configs", style: TextStyle(fontFamily: kBodyFont, fontSize: 11, color: colorScheme.error)),
+                              data: (configs) {
+                                return _buildComparisonCard(context, _buildLabRows(context, configs));
+                              },
+                            )
+                          ]
+                        ]
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   // --- WIDGETS ---
-
-// 🔥 PREMIUM FLOATING HEADER (No App Bar)
-  Widget _buildHeader(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-      child: Row(
-        children: [
-          // Premium Standalone Back Button
-          InkWell(
-            onTap: () => Navigator.pop(context),
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    )
-                  ]
-              ),
-              child: Padding(
-                padding: const EdgeInsets.only(right: 2.0), // Visually centers the iOS arrow
-                child: Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 18,
-                    color: theme.colorScheme.onSurface
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // Clean, Bold Title
-          Text(
-            "Progress Comparison",
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: theme.colorScheme.onSurface,
-              letterSpacing: -0.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildComparisonSelectors(List<VitalsModel> history, BuildContext context) {
     final sorted = List<VitalsModel>.from(history)..sort((a, b) => b.date.compareTo(a.date));
@@ -191,18 +162,28 @@ class _VitalsComparisonScreenState extends ConsumerState<VitalsComparisonScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
       ),
       child: Row(
         children: [
-          Expanded(child: _buildDropdown(context, "Baseline", _baseRecord, sorted, (v) => setState(() => _baseRecord = v))),
+          Expanded(
+              child: _buildDropdown(context, "Baseline", _baseRecord, sorted, (v) {
+                HapticFeedback.selectionClick();
+                setState(() => _baseRecord = v);
+              })
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Icon(Icons.arrow_forward, color: theme.colorScheme.primary, size: 20),
+            child: Icon(Icons.arrow_forward_rounded, color: theme.colorScheme.primary, size: 16),
           ),
-          Expanded(child: _buildDropdown(context, "Current", _compareRecord, sorted, (v) => setState(() => _compareRecord = v))),
+          Expanded(
+              child: _buildDropdown(context, "Current", _compareRecord, sorted, (v) {
+                HapticFeedback.selectionClick();
+                setState(() => _compareRecord = v);
+              })
+          ),
         ],
       ),
     );
@@ -213,22 +194,22 @@ class _VitalsComparisonScreenState extends ConsumerState<VitalsComparisonScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 4),
+        Text(label, style: TextStyle(fontFamily: kBodyFont, fontSize: 10, fontWeight: FontWeight.w700, color: theme.hintColor)),
+        const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+              color: theme.colorScheme.primary.withOpacity(0.05),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2))
+              border: Border.all(color: theme.colorScheme.primary.withOpacity(0.1))
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<VitalsModel>(
               value: value,
               isExpanded: true,
               isDense: true,
-              icon: Icon(Icons.keyboard_arrow_down, size: 16, color: theme.colorScheme.onSurface),
-              style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 13),
+              icon: Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: theme.colorScheme.onSurface),
+              style: TextStyle(fontFamily: kDisplayFont, color: theme.colorScheme.onSurface, fontWeight: FontWeight.w700, fontSize: 11),
               onChanged: onChanged,
               items: items.map((v) => DropdownMenuItem(value: v, child: Text(DateFormat('dd MMM yy').format(v.date), overflow: TextOverflow.ellipsis))).toList(),
             ),
@@ -243,51 +224,48 @@ class _VitalsComparisonScreenState extends ConsumerState<VitalsComparisonScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 5))]
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.08)),
       ),
       child: Column(children: children),
     );
   }
 
-// 🔥 UPDATED: Now accepts nullable doubles (double?)
   Widget _buildDiffRow(BuildContext context, String label, double? val1, double? val2, {bool inverse = false, String unit = ""}) {
     if (val1 == null && val2 == null) return const SizedBox();
 
     final theme = Theme.of(context);
 
-    // Format the strings, converting nulls to "N/A"
     String val1Str = val1 == null ? "N/A" : (val1 % 1 == 0 ? val1.toInt().toString() : val1.toStringAsFixed(1));
     String val2Str = val2 == null ? "N/A" : (val2 % 1 == 0 ? val2.toInt().toString() : val2.toStringAsFixed(1));
     String unitStr = unit.isNotEmpty ? " $unit" : "";
 
     Widget differenceBadge;
 
-    // If either value is missing, we cannot calculate a difference
     if (val1 == null || val2 == null) {
       differenceBadge = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(color: Colors.grey.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-        child: const Text("-", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+        child: Text("-", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, color: theme.hintColor)),
       );
     } else {
-      // Normal percentage calculation if both exist
       double diff = val2 - val1;
       double pct = val1 != 0 ? (diff / val1) * 100 : 0;
       bool isImprovement = inverse ? (diff <= 0) : (diff >= 0);
 
-      Color color = diff == 0 ? Colors.grey : (isImprovement ? Colors.green : Colors.red);
-      IconData icon = diff > 0 ? Icons.arrow_upward : (diff < 0 ? Icons.arrow_downward : Icons.remove);
+      Color color = diff == 0 ? theme.hintColor : (isImprovement ? Colors.green : Colors.redAccent);
+      IconData icon = diff > 0 ? Icons.arrow_upward_rounded : (diff < 0 ? Icons.arrow_downward_rounded : Icons.remove_rounded);
 
       differenceBadge = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: color),
+            Icon(icon, size: 12, color: color),
             const SizedBox(width: 4),
-            Text("${diff.abs() % 1 == 0 ? diff.abs().toInt() : diff.abs().toStringAsFixed(1)} (${pct.abs().toStringAsFixed(0)}%)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+            Text("${diff.abs() % 1 == 0 ? diff.abs().toInt() : diff.abs().toStringAsFixed(1)} (${pct.abs().toStringAsFixed(0)}%)", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, color: color)),
           ],
         ),
       );
@@ -303,17 +281,17 @@ class _VitalsComparisonScreenState extends ConsumerState<VitalsComparisonScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: theme.colorScheme.onSurface)),
+                Text(label, style: TextStyle(fontFamily: kBodyFont, fontWeight: FontWeight.w700, fontSize: 12, color: theme.colorScheme.onSurface)),
                 const SizedBox(height: 4),
                 RichText(
                   text: TextSpan(
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                    style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, color: theme.hintColor),
                     children: [
-                      const TextSpan(text: "Prev: ", style: TextStyle(fontWeight: FontWeight.w600)),
-                      TextSpan(text: val1 == null ? "N/A" : "$val1Str$unitStr"),
+                      const TextSpan(text: "Prev: ", style: TextStyle(fontWeight: FontWeight.w500)),
+                      TextSpan(text: val1 == null ? "N/A" : "$val1Str$unitStr", style: TextStyle(fontWeight: FontWeight.w700)),
                       const TextSpan(text: "  |  ", style: TextStyle(color: Colors.grey)),
-                      const TextSpan(text: "Now: ", style: TextStyle(fontWeight: FontWeight.w600)),
-                      TextSpan(text: val2 == null ? "N/A" : "$val2Str$unitStr", style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold)),
+                      const TextSpan(text: "Now: ", style: TextStyle(fontWeight: FontWeight.w500)),
+                      TextSpan(text: val2 == null ? "N/A" : "$val2Str$unitStr", style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -325,22 +303,23 @@ class _VitalsComparisonScreenState extends ConsumerState<VitalsComparisonScreen>
       ),
     );
   }
+
   Widget _buildSectionTitle(String title, BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 4),
-      child: Align(alignment: Alignment.centerLeft, child: Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary))),
+      child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(title, style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: Theme.of(context).colorScheme.primary))
+      ),
     );
   }
 
-  // 🔥 CHANGED: Now checks if ANY labs exist in either record (Union instead of Intersection)
   bool _hasAnyLabs(VitalsModel a, VitalsModel b) {
     final keysA = a.labResults.keys.toSet();
     final keysB = b.labResults.keys.toSet();
     return keysA.union(keysB).isNotEmpty;
   }
 
-  // 🔥 UPDATED: Dynamically uses Firestore Configs!
-// 🔥 UPDATED: Uses Union to show missing data
   List<Widget> _buildLabRows(BuildContext context, List/*<LabTestConfigModel>*/ configs) {
     if (_baseRecord == null || _compareRecord == null) return [];
 
@@ -348,13 +327,13 @@ class _VitalsComparisonScreenState extends ConsumerState<VitalsComparisonScreen>
     final keysA = _baseRecord!.labResults.keys.toSet();
     final keysB = _compareRecord!.labResults.keys.toSet();
 
-    // 🔥 COMBINE ALL KEYS (If it exists in A, B, or Both)
     final allKeys = keysA.union(keysB);
 
-    if (allKeys.isEmpty) return [const Text("No lab results found for these dates.")];
+    if (allKeys.isEmpty) {
+      return [Text("No lab results found for these dates.", style: TextStyle(fontFamily: kBodyFont, fontSize: 11, color: Theme.of(context).hintColor))];
+    }
 
     for (var key in allKeys) {
-      // These might be null now if the test was skipped on one of the dates!
       double? v1 = _baseRecord!.labResults[key];
       double? v2 = _compareRecord!.labResults[key];
 

@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
 
 class EyeYogaSheet extends StatefulWidget {
   const EyeYogaSheet({super.key});
@@ -84,7 +84,7 @@ class _EyeYogaSheetState extends State<EyeYogaSheet> with SingleTickerProviderSt
                 children: [
                   Icon(Icons.visibility_rounded, color: colorScheme.primary, size: 20),
                   const SizedBox(width: 8),
-                  Text("EYE YOGA", style: TextStyle(color: colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                  Text("EYE YOGA", style: TextStyle(color: colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
                   const Spacer(),
                   // Play/Pause Button
                   IconButton(
@@ -127,7 +127,7 @@ class _EyeYogaSheetState extends State<EyeYogaSheet> with SingleTickerProviderSt
                           style: TextStyle(
                               fontSize: 13,
                               color: isSel ? colorScheme.primary : theme.colorScheme.onSurface,
-                              fontWeight: isSel ? FontWeight.w900 : FontWeight.bold
+                              fontWeight: isSel ? FontWeight.w700 : FontWeight.bold
                           )
                       ),
                     ),

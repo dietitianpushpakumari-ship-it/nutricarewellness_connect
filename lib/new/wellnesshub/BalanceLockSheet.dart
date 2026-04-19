@@ -1,8 +1,13 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class BalanceLockSheet extends StatefulWidget {
   const BalanceLockSheet({super.key});
@@ -23,7 +28,7 @@ class _BalanceLockSheetState extends State<BalanceLockSheet> with SingleTickerPr
 
   StreamSubscription? _accelSub;
   Timer? _countdownTimer;
-  Timer? _uiRenderTimer; // 🚀 Performance Throttler
+  Timer? _uiRenderTimer;
 
   final _audio = WellnessAudioService();
   late AnimationController _pulseController;
@@ -35,6 +40,7 @@ class _BalanceLockSheetState extends State<BalanceLockSheet> with SingleTickerPr
   }
 
   void _startAudit() {
+    HapticFeedback.mediumImpact();
     setState(() {
       _isLive = true;
       _timeLeft = 20;
@@ -44,38 +50,33 @@ class _BalanceLockSheetState extends State<BalanceLockSheet> with SingleTickerPr
 
     _audio.playDing();
 
-    // 1. Start Countdown
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
       setState(() => _timeLeft--);
       if (_timeLeft <= 0) _stopAudit();
-      else if (_timeLeft <= 3) _audio.hapticLight(); // Warn approaching end
+      else if (_timeLeft <= 3) _audio.hapticLight();
     });
 
-    // 2. Listen to Hardware Sensors (Data collection only, NO setState here)
     _accelSub = accelerometerEventStream().listen((event) {
-      // Map X and Y to a -1.0 to 1.0 alignment grid for the HUD
       _hudX = (event.x / 9.8).clamp(-1.0, 1.0);
       _hudY = (event.y / 9.8).clamp(-1.0, 1.0);
 
-      // Calculate total force vector (Sway)
       double currentSway = sqrt(event.x * event.x + event.y * event.y + event.z * event.z) - 9.8;
       _swayIndex = currentSway.abs();
       if (_swayIndex > _peakSway) _peakSway = _swayIndex;
 
-      // Haptic warning if they are losing balance (High Sway)
       if (_swayIndex > 1.5 && _isLive && _timeLeft % 2 == 0) {
         _audio.hapticHeavy();
       }
     });
 
-    // 3. UI Render Loop (30 FPS for Redmi 8 smooth performance)
     _uiRenderTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
-      if (mounted && _isLive) setState(() {}); // Batch visual updates
+      if (mounted && _isLive) setState(() {});
     });
   }
 
   void _stopAudit() {
+    HapticFeedback.heavyImpact();
     _accelSub?.cancel();
     _countdownTimer?.cancel();
     _uiRenderTimer?.cancel();
@@ -104,157 +105,169 @@ class _BalanceLockSheetState extends State<BalanceLockSheet> with SingleTickerPr
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
       ),
-      child: Column(
-        children: [
-          // 🎯 1. COMPACT MEDICAL HEADER
-          const SizedBox(height: 12),
-          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+      child: SafeArea(
+        top: true,
+        bottom: true,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
 
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("NEUROMUSCULAR CONTROL", style: TextStyle(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                      Text("Vestibular Baseline Audit", style: TextStyle(color: theme.hintColor, fontSize: 14)),
-                    ],
-                  ),
-                ),
-                IconButton(icon: Icon(Icons.close_rounded, color: theme.hintColor), onPressed: () => Navigator.pop(context))
-              ],
-            ),
-          ),
-          Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
-
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
+            // 🚀 STANDARD HEADER
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
+              child: Row(
                 children: [
-                  // 🎯 2. DATA TELEMETRY ROW
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildTelemetry("TIME LEFT", "00:${_timeLeft.toString().padLeft(2, '0')}", cs.primary),
-                      _buildTelemetry("SWAY INDEX", _swayIndex.toStringAsFixed(2), hudColor),
-                      _buildTelemetry("PEAK DEVIATION", _peakSway.toStringAsFixed(2), theme.hintColor),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("NEUROMUSCULAR CONTROL", style: TextStyle(fontFamily: kDisplayFont, color: cs.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+                        const SizedBox(height: 2),
+                        Text("Vestibular Baseline Audit", style: TextStyle(fontFamily: kBodyFont, color: cs.onSurface, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
                   ),
+                  IconButton(
+                      icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                      }
+                  )
+                ],
+              ),
+            ),
+            Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
 
-                  const Spacer(),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    // 🎯 2. DATA TELEMETRY ROW
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildTelemetry("TIME LEFT", "00:${_timeLeft.toString().padLeft(2, '0')}", cs.primary, theme),
+                        _buildTelemetry("SWAY INDEX", _swayIndex.toStringAsFixed(2), hudColor, theme),
+                        _buildTelemetry("PEAK DEVIATION", _peakSway.toStringAsFixed(2), theme.hintColor, theme),
+                      ],
+                    ),
 
-                  // 🎯 3. BIOMETRIC COG HUD
-                  RepaintBoundary(
-                    child: SizedBox(
-                      width: 240, height: 240,
-                      child: Stack(
-                        alignment: Alignment.center,
+                    const Spacer(),
+
+                    // 🎯 3. BIOMETRIC COG HUD
+                    RepaintBoundary(
+                      child: SizedBox(
+                        width: 200, height: 200,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: theme.dividerColor.withOpacity(0.1), width: 1))),
+                            Container(width: 140, height: 140, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: theme.dividerColor.withOpacity(0.2), width: 1))),
+
+                            AnimatedBuilder(
+                              animation: _pulseController,
+                              builder: (context, child) => Container(
+                                width: 70, height: 70,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: cs.primary.withOpacity(0.3 + (_pulseController.value * 0.2)), width: 2),
+                                  color: cs.primary.withOpacity(0.05),
+                                ),
+                              ),
+                            ),
+
+                            Container(width: 1, height: 200, color: theme.dividerColor.withOpacity(0.1)),
+                            Container(width: 200, height: 1, color: theme.dividerColor.withOpacity(0.1)),
+
+                            AnimatedAlign(
+                              duration: const Duration(milliseconds: 100),
+                              alignment: Alignment(-_hudX, _hudY),
+                              child: Container(
+                                width: 20, height: 20,
+                                decoration: BoxDecoration(
+                                  color: hudColor,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [BoxShadow(color: hudColor.withOpacity(0.4), blurRadius: 10, spreadRadius: 1)],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    // 🎯 4. CLINICAL INSTRUCTIONS / RESULTS
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                      ),
+                      child: Column(
                         children: [
-                          // Radar Rings
-                          Container(width: 240, height: 240, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: theme.dividerColor.withOpacity(0.1), width: 1))),
-                          Container(width: 160, height: 160, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: theme.dividerColor.withOpacity(0.2), width: 1))),
-
-                          // The "Safe Zone" Center
-                          AnimatedBuilder(
-                            animation: _pulseController,
-                            builder: (context, child) => Container(
-                              width: 80, height: 80,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: cs.primary.withOpacity(0.3 + (_pulseController.value * 0.2)), width: 2),
-                                color: cs.primary.withOpacity(0.05),
-                              ),
-                            ),
+                          Text(
+                            _isLive ? "Keep the dot inside the center ring." : (_peakSway > 0 ? "Audit Complete." : "Stand on one leg. Hold phone flat against your chest."),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, fontSize: 12, color: cs.onSurface),
                           ),
-
-                          // Crosshairs
-                          Container(width: 2, height: 240, color: theme.dividerColor.withOpacity(0.1)),
-                          Container(width: 240, height: 2, color: theme.dividerColor.withOpacity(0.1)),
-
-                          // 🎯 The Moving CoG Indicator (The "Bubble")
-                          AnimatedAlign(
-                            duration: const Duration(milliseconds: 100), // Smooths out sensor jitter
-                            alignment: Alignment(-_hudX, _hudY), // Negative X so it mirrors natural tilt
-                            child: Container(
-                              width: 24, height: 24,
-                              decoration: BoxDecoration(
-                                color: hudColor,
-                                shape: BoxShape.circle,
-                                boxShadow: [BoxShadow(color: hudColor.withOpacity(0.5), blurRadius: 10, spreadRadius: 2)],
-                              ),
-                            ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _isLive
+                                ? "Testing proprioceptive compensation..."
+                                : (_peakSway > 0 ? _getClinicalResult() : "Press start to calibrate sensors."),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontFamily: kBodyFont, fontSize: 11, color: theme.hintColor, height: 1.4, fontWeight: FontWeight.w500),
                           ),
                         ],
                       ),
                     ),
-                  ),
 
-                  const Spacer(),
+                    const SizedBox(height: 24),
 
-                  // 🎯 4. CLINICAL INSTRUCTIONS / RESULTS
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: theme.cardColor,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          _isLive ? "Keep the dot inside the center ring." : (_peakSway > 0 ? "Audit Complete." : "Stand on one leg. Hold phone flat against your chest."),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    // 🎯 5. ACTION BUTTON
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: FilledButton.icon(
+                        onPressed: _isLive ? null : _startAudit,
+                        icon: Icon(_isLive ? Icons.sensors_rounded : Icons.play_arrow_rounded, size: 18),
+                        label: Text(
+                            _isLive ? "AUDIT IN PROGRESS" : (_peakSway > 0 ? "RETEST BASELINE" : "START AUDIT"),
+                            style: const TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _isLive
-                              ? "Testing proprioceptive compensation..."
-                              : (_peakSway > 0 ? _getClinicalResult() : "Press start to calibrate sensors."),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12, color: theme.hintColor, height: 1.4),
+                        style: FilledButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: _isLive ? theme.dividerColor.withOpacity(0.1) : cs.primary,
+                          foregroundColor: _isLive ? theme.hintColor : Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // 🎯 5. ACTION BUTTON
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: FilledButton.icon(
-                      onPressed: _isLive ? null : _startAudit,
-                      icon: Icon(_isLive ? Icons.sensors_rounded : Icons.play_arrow_rounded),
-                      label: Text(_isLive ? "AUDIT IN PROGRESS" : (_peakSway > 0 ? "RETEST" : "START AUDIT")),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _isLive ? theme.dividerColor.withOpacity(0.2) : cs.primary,
-                        foregroundColor: _isLive ? theme.hintColor : Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildTelemetry(String label, String value, Color color) {
+  Widget _buildTelemetry(String label, String value, Color color, ThemeData theme) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        Text(label, style: TextStyle(fontFamily: kDisplayFont, fontSize: 9, fontWeight: FontWeight.w700, color: theme.hintColor, letterSpacing: 1)),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace')),
+        Text(value, style: TextStyle(fontFamily: kDisplayFont, fontSize: 18, fontWeight: FontWeight.w700, color: color)),
       ],
     );
   }

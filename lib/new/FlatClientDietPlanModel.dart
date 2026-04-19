@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:nutricare_connect/new/flat_diet_plan_model.dart';
+import 'package:pure_shift/new/flat_diet_plan_model.dart';
 import 'package:uuid/uuid.dart';
 
 class FlatClientDietPlanModel {

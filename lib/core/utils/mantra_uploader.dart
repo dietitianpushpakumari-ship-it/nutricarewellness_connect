@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:nutricare_connect/core/utils/spiritual_mantra_model.dart';
+import 'package:pure_shift/core/utils/spiritual_mantra_model.dart';
 
 import 'mantra_data.dart' show masterMantraList;
 

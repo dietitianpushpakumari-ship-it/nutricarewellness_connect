@@ -2,9 +2,9 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/new/dashboard/analytics_detail_screen.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/new/dashboard/analytics_detail_screen.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 
 class WellnessTrendsCard extends ConsumerWidget {
   final String clientId;

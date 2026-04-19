@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/package_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/package_model.dart';
 
 class PackageBrowserScreen extends StatelessWidget {
   const PackageBrowserScreen({super.key});
@@ -128,7 +128,7 @@ class PackageBrowserScreen extends StatelessWidget {
                                 "₹${pkg.price}",
                                 style: TextStyle(
                                     fontSize: 24,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w700,
                                     color: isDark ? Colors.greenAccent.shade400 : Colors.green.shade700
                                 ),
                               ),

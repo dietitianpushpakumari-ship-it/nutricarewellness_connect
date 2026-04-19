@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-// 🎯 1. Define supported animations (Expanded for clinical routines)
+// 🎯 1. Define supported animations (Fully expanded for clinical & strength routines)
 enum ExerciseType {
   jumpingJack,
   squat,
@@ -10,11 +10,15 @@ enum ExerciseType {
   rest,
   neckRoll,
   shoulderShrug,
-  // 🎯 NEW: Added to support clinical & desk relief routines
   pacing,
   calfRaise,
   seatedTwist,
   wristStretch,
+  // 🎯 NEW: Added missing core and lower body exercises
+  plank,
+  lunges,
+  situp,
+  gluteBridge,
 }
 
 class WorkoutStep {
@@ -25,7 +29,7 @@ class WorkoutStep {
   final bool isRest;
   final ExerciseType type;
 
-  // 🎯 NEW FEATURES ADDED HERE
+  // 🎯 NEW FEATURES
   final bool isRepBased; // If true, timer is hidden and waits for user to tap "Done"
   final int reps;        // e.g., 20 Calf Raises
   final bool switchSides; // If true, TTS will announce "Halfway there, switch sides!" at 50% time
@@ -34,7 +38,7 @@ class WorkoutStep {
     required this.title,
     required this.instruction,
     required this.duration,
-    required this.icon,
+    this.icon = Icons.fitness_center,
     this.isRest = false,
     required this.type,
     // 🎯 Defaults set so your old configs don't break
@@ -68,7 +72,6 @@ class WorkoutConfig {
     steps: [
       WorkoutStep(title: "High Knees", instruction: "March in place.", duration: 30, icon: Icons.directions_run, type: ExerciseType.highKnees),
       WorkoutStep(title: "Rest", instruction: "Breathe.", duration: 10, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
-      // 🎯 Example: Added switchSides to Arm Circles so it prompts to reverse direction
       WorkoutStep(title: "Arm Circles", instruction: "Big circles.", duration: 30, icon: Icons.refresh, type: ExerciseType.armCircles, switchSides: true),
       WorkoutStep(title: "Rest", instruction: "Relax.", duration: 10, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
       WorkoutStep(title: "Shoulder Shrugs", instruction: "Lift & Drop.", duration: 30, icon: Icons.accessibility, type: ExerciseType.shoulderShrug),
@@ -84,7 +87,8 @@ class WorkoutConfig {
       WorkoutStep(title: "Rest", instruction: "Breathe.", duration: 20, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
       WorkoutStep(title: "Squats", instruction: "Sit back.", duration: 40, icon: Icons.accessibility_new, type: ExerciseType.squat),
       WorkoutStep(title: "Rest", instruction: "Relax.", duration: 20, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
-      // 🎯 Example: Converted Push-Ups to Rep-Based!
+      WorkoutStep(title: "Lunges", instruction: "Step forward, drop the knee.", duration: 40, icon: Icons.transfer_within_a_station, type: ExerciseType.lunges, switchSides: true),
+      WorkoutStep(title: "Rest", instruction: "Relax.", duration: 20, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
       WorkoutStep(title: "Push-Ups", instruction: "Chest to floor.", duration: 0, isRepBased: true, reps: 15, icon: Icons.fitness_center, type: ExerciseType.pushup),
     ],
   );
@@ -113,6 +117,20 @@ class WorkoutConfig {
       WorkoutStep(title: "Calf Raises", instruction: "Stand on toes, hold, and lower.", duration: 0, isRepBased: true, reps: 20, icon: Icons.height, type: ExerciseType.calfRaise),
       WorkoutStep(title: "Rest", instruction: "Breathe.", duration: 15, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
       WorkoutStep(title: "High Knees", instruction: "March in place gently.", duration: 60, icon: Icons.directions_run, type: ExerciseType.highKnees),
+    ],
+  );
+
+  // 🎯 NEW PRESET: Core & Post-Op Recovery Focus
+  static const coreAndGlutes = WorkoutConfig(
+    title: "Core & Stability",
+    description: "Strengthen your core and posterior chain safely.",
+    color: Colors.purple,
+    steps: [
+      WorkoutStep(title: "Glute Bridge", instruction: "Drive hips up, squeeze at the top.", duration: 40, icon: Icons.airline_seat_legroom_extra, type: ExerciseType.gluteBridge),
+      WorkoutStep(title: "Rest", instruction: "Breathe.", duration: 15, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
+      WorkoutStep(title: "Sit-Ups", instruction: "Keep feet flat, use your abs.", duration: 0, isRepBased: true, reps: 15, icon: Icons.accessibility_new, type: ExerciseType.situp),
+      WorkoutStep(title: "Rest", instruction: "Breathe.", duration: 15, icon: Icons.timer, isRest: true, type: ExerciseType.rest),
+      WorkoutStep(title: "Forearm Plank", instruction: "Keep your body in a straight line.", duration: 45, icon: Icons.horizontal_rule_rounded, type: ExerciseType.plank),
     ],
   );
 }

@@ -1,4 +1,4 @@
-name: nutricare_connect
+name: pure_shift
 description: "Connecting people."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -43,8 +43,9 @@ dependencies:
   firebase_auth: ^6.1.1
   cloud_firestore: ^6.0.3
   cloud_functions: ^6.0.3
-  firebase_storage: ^13.0.3
   vector_math: ^2.1.4
+  syncfusion_flutter_pdfviewer: ^27.1.48
+  syncfusion_flutter_pdf: ^27.1.48
 
 
     # Network
@@ -60,22 +61,23 @@ dependencies:
   firebase_messaging: ^16.0.4
   flutter_image_compress: ^2.4.0
   file_picker: ^10.3.3
-  intl: ^0.20.2
+
   font_awesome_flutter: ^10.9.1
   url_launcher: ^6.3.2
   pedometer: ^4.1.1
   permission_handler: ^12.0.1
   fl_chart: ^0.70.0
   flutter_local_notifications: ^17.1.2
-  flutter_tts: ^4.2.3
+
   camera: ^0.11.4
 
   timezone: ^0.9.3
   record: ^6.1.2
+  health: ^13.1.4
        # For recording audio
   audioplayers: ^6.5.1    # For playing audio
   path_provider: ^2.0.15  # To store temp audio files
-  syncfusion_flutter_pdf: ^24.1.41 # For PDF Compression
+ # For PDF Compression
   cached_network_image: ^3.3.1
   shared_preferences: ^2.2.2
   printing: ^5.11.1
@@ -93,7 +95,7 @@ dependencies:
   easy_localization: ^3.0.8
   geolocator: ^14.0.2
   geocoding: ^4.0.0
-  health: ^13.3.1
+
   qr_flutter: ^4.1.0
 
   sign_in_with_apple: ^7.0.1
@@ -101,6 +103,13 @@ dependencies:
   flutter_svg: ^2.2.4
   scratcher: ^2.5.0
   flutter_card_swiper: ^7.2.0
+  lottie: ^3.3.2
+  flutter_animate: ^4.5.2
+  flutter_launcher_icons: ^0.14.4
+  flutter_tts: ^4.2.5
+  android_intent_plus: ^6.0.0
+  video_player: ^2.11.1
+
 
 
 
@@ -114,6 +123,8 @@ dev_dependencies:
     sdk: flutter
   build_runner: ^2.4.0
   json_serializable: ^6.7.0
+  flutter_native_splash: ^2.4.7
+
 
 
 
@@ -133,16 +144,15 @@ dev_dependencies:
   flutter_localization: ^0.3.3
   flutter_prunekit: ^2.4.0
 
+# Place this at the very bottom of your pubspec.yaml
 flutter_native_splash:
-  color: "#121212"
-  color_dark: "#121212"
-  image: false
+  color: "#F8FAFC"
+  image: assets/images/splash.png
+
   android_12:
-    color: "#121212"
-    color_dark: "#121212"
-    image: false
-  android: true
-  ios: true
+    color: "#F8FAFC"
+    image: assets/images/splash.png
+    icon_background_color: "#F8FAFC"
 
 
 # For information on the generic Dart part of this file, see the
@@ -161,6 +171,8 @@ flutter:
     - assets/gifs/
     - assets/translations/
     - assets/images/
+    - assets/animations/
+    - assets/videos/
 
   # To add images to your application, add an images section, like this:
   # images:
@@ -196,3 +208,10 @@ flutter:
 dependency_overrides:
   flutter_native_timezone:
     path: plugins/flutter_native_timezone
+  intl: ^0.20.2
+
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/splash.png"

@@ -1,4 +1,4 @@
-import 'package:nutricare_connect/core/utils/geeta_shloka_model.dart';
+import 'package:pure_shift/core/utils/geeta_shloka_model.dart';
 
 final List<GeetaShloka> masterGeetaBank = [
   GeetaShloka(

@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:flutter/services.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class EftTappingSheet extends StatefulWidget {
   const EftTappingSheet({super.key});
@@ -65,9 +70,11 @@ class _EftTappingSheetState extends State<EftTappingSheet> with SingleTickerProv
 
   void _nextStep() {
     if (_currentStep < _steps.length - 1) {
+      HapticFeedback.selectionClick();
       _audio.playClick();
       setState(() => _currentStep++);
     } else {
+      HapticFeedback.heavyImpact();
       _audio.playSuccess();
       Navigator.pop(context);
     }
@@ -86,67 +93,58 @@ class _EftTappingSheetState extends State<EftTappingSheet> with SingleTickerProv
     final isDark = theme.brightness == Brightness.dark;
     final stepData = _steps[_currentStep];
 
-    return SafeArea(
-      child: Container(
-        height: MediaQuery
-            .of(context)
-            .size
-            .height * 0.90,
-        decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(32))
-        ),
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.90,
+      decoration: BoxDecoration(
+          color: theme.scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32))
+      ),
+      // 🚀 STRICT SAFE AREA HANDLING (Moved inside container for seamless edges)
+      child: SafeArea(
+        top: true,
+        bottom: true,
         child: Column(
           children: [
             // 🎯 COMPACT HEADER
             const SizedBox(height: 12),
-            Center(child: Container(width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                    color: theme.dividerColor.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(2)))),
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.5), borderRadius: BorderRadius.circular(2)))),
 
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 12, 0),
+              padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
               child: Row(
                 children: [
-                  Text("EFT TAPPING", style: TextStyle(color: theme.hintColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5)),
+                  // 🚀 REFINED HEADER (Max Size 10, w700)
+                  Text("EFT TAPPING", style: TextStyle(fontFamily: kDisplayFont, color: theme.hintColor, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
                   const Spacer(),
                   IconButton(
-                      icon: Icon(Icons.close_rounded, color: theme.hintColor),
-                      onPressed: () => Navigator.pop(context)
+                      icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                      }
                   )
                 ],
               ),
             ),
+            Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
 
-            // 🎯 MAIN CONTENT AREA (MAXIMIZED)
+            // 🎯 MAIN CONTENT AREA
             Expanded(
               child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // Dynamically size image based on available height
-                    double imageSize = (constraints.maxHeight * 0.5).clamp(
-                        200.0, 320.0);
-
                     return SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Column(
                           children: [
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 24),
 
-                            // 🎯 PULSING IMAGE CONTAINER
-                            // 🎯 PULSING IMAGE CONTAINER
-                            // 🎯 DYNAMIC PULSING IMAGE (ADAPTS TO SPACE)
+                            // 🎯 DYNAMIC PULSING IMAGE
                             AnimatedBuilder(
                               animation: _pulseController,
                               builder: (context, child) {
                                 return Container(
-                                  // 🎨 The pulsing glow now wraps the image tightly
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(28),
                                     color: colorScheme.primary.withOpacity(0.02 + (_pulseController.value * 0.08)),
@@ -158,13 +156,12 @@ class _EftTappingSheetState extends State<EftTappingSheet> with SingleTickerProv
                                       )
                                     ],
                                   ),
-                                  padding: const EdgeInsets.all(8), // Subtle padding for the glow
+                                  padding: const EdgeInsets.all(8),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(20),
                                     child: Image.asset(
                                       stepData['imagePath']!,
                                       key: ValueKey<int>(_currentStep),
-                                      // 🎯 'width' fills the screen width, 'fit' ensures height is automatic
                                       width: MediaQuery.of(context).size.width * 0.85,
                                       fit: BoxFit.fitWidth,
                                       errorBuilder: (context, error, stackTrace) => _buildErrorState(theme),
@@ -174,14 +171,13 @@ class _EftTappingSheetState extends State<EftTappingSheet> with SingleTickerProv
                               },
                             ),
 
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 32),
 
                             // 🎯 INSTRUCTION CARD
+                            // 🚀 REFINED TITLE (Capped at 14, w700 instead of 20)
                             Text(
                               "Step ${_currentStep + 1}: ${stepData['point']}",
-                              style: TextStyle(color: colorScheme.primary,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900),
+                              style: TextStyle(fontFamily: kDisplayFont, color: colorScheme.primary, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.5),
                             ),
                             const SizedBox(height: 12),
                             Container(
@@ -190,17 +186,13 @@ class _EftTappingSheetState extends State<EftTappingSheet> with SingleTickerProv
                               decoration: BoxDecoration(
                                   color: theme.cardColor,
                                   borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                      color: theme.dividerColor.withOpacity(
-                                          0.1))
+                                  border: Border.all(color: theme.dividerColor.withOpacity(0.1))
                               ),
+                              // 🚀 REFINED DESCRIPTION (Max Size 12, w500 instead of 18)
                               child: Text(
                                   "${stepData['desc']}",
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 18,
-                                      height: 1.5,
-                                      color: colorScheme.onSurface,
-                                      fontWeight: FontWeight.w500)
+                                  style: TextStyle(fontFamily: kBodyFont, fontSize: 12, height: 1.6, color: colorScheme.onSurface, fontWeight: FontWeight.w500)
                               ),
                             ),
                             const SizedBox(height: 20),
@@ -214,20 +206,22 @@ class _EftTappingSheetState extends State<EftTappingSheet> with SingleTickerProv
 
             // 🎯 BOTTOM BUTTON
             Padding(
-              padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery
-                  .of(context)
-                  .padding
-                  .bottom + 20),
+              // 🚀 Removed MediaQuery padding since SafeArea handles the bottom edge now
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
               child: SizedBox(
-                width: double.infinity, height: 56,
+                width: double.infinity, height: 50, // 🚀 Standardized to 50
                 child: FilledButton.icon(
                   onPressed: _nextStep,
-                  icon: Icon(_currentStep == _steps.length - 1 ? Icons
-                      .check_circle_rounded : Icons.arrow_forward_rounded),
-                  label: Text(_currentStep == _steps.length - 1
-                      ? "Complete Session"
-                      : "Next Point", style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold)),
+                  icon: Icon(_currentStep == _steps.length - 1 ? Icons.check_circle_rounded : Icons.arrow_forward_rounded, size: 18),
+                  // 🚀 REFINED BUTTON TEXT (Max Size 12, w700)
+                  label: Text(
+                      _currentStep == _steps.length - 1 ? "Complete Session" : "Next Point",
+                      style: const TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)
+                  ),
+                  style: FilledButton.styleFrom(
+                    elevation: 0, // 🚀 Flat premium look
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
                 ),
               ),
             ),
@@ -237,52 +231,17 @@ class _EftTappingSheetState extends State<EftTappingSheet> with SingleTickerProv
     );
   }
 
-  // 🎯 ACTUAL IMAGE RENDERING WITH FALLBACK
-  // 🎯 FIXED IMAGE RENDERING
-  // 🎯 THE "PERFECT FILL" IMAGE RENDERING
-  // 🎯 THE "FULL VIEW" IMAGE RENDERING
-  Widget _buildImage({required Key key, required String imagePath, required ThemeData theme, required bool isDark}) {
-    return Container(
-      key: key,
-      padding: const EdgeInsets.all(8), // 🎯 Gives the image "breathing room"
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-        borderRadius: BorderRadius.circular(24), // 🎯 Modern rounded corners instead of a circle
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset(
-          imagePath,
-          // 🎯 'contain' ensures 100% of the image is visible
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.image_not_supported_outlined, size: 40, color: theme.hintColor),
-                  const SizedBox(height: 8),
-                  Text("Image Missing", style: TextStyle(color: theme.hintColor, fontSize: 10)),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
   Widget _buildErrorState(ThemeData theme) {
     return Container(
       height: 200,
       width: double.infinity,
-      color: theme.dividerColor.withOpacity(0.1),
+      color: theme.dividerColor.withOpacity(0.05),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.image_not_supported_outlined, size: 40, color: theme.hintColor),
+          Icon(Icons.image_not_supported_outlined, size: 32, color: theme.hintColor.withOpacity(0.5)),
           const SizedBox(height: 8),
-          Text("Illustration Missing", style: TextStyle(color: theme.hintColor, fontSize: 12)),
+          Text("Illustration Missing", style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: 10, fontWeight: FontWeight.w500)),
         ],
       ),
     );

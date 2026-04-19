@@ -2,8 +2,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
-import 'package:nutricare_connect/features/auth/auth_provider.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
+import 'package:pure_shift/features/auth/auth_provider.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
 
 final Logger _logger = Logger();
 

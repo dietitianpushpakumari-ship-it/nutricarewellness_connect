@@ -1,163 +1,208 @@
 import 'dart:io';
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/chat_message_model.dart';
 
-final chatServiceProvider = Provider((ref) => ChatService());
+// Ensure this matches your actual path for Cloudinary
+import 'package:pure_shift/core/utils/CloudinaryService.dart';
+import 'package:pure_shift/core/utils/database_provider.dart';
+import 'package:pure_shift/features/auth/auth_provider.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/chat_message_model.dart';
+final chatLimitProvider = StateProvider.autoDispose<int>((ref) => 40);
+final chatServiceProvider = Provider<ChatService>((ref) {
+  return ChatService(ref);
+});
 
 class ChatService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final Ref _ref;
+  ChatService(this._ref);
+
+  FirebaseFirestore get _firestore => _ref.read(firestoreProvider);
 
   // =================================================================
-  // 🎯 1. GET MESSAGES (New Flat Architecture)
+  // 🔒 CLIENT CONTEXT HELPERS
   // =================================================================
-  Stream<List<ChatMessageModel>> getMessages(String clientId) {
+
+  String get _clientId {
+    // 🚀 FIXED: Using your actual auth profile instead of the placeholder
+    final client = _ref.read(authNotifierProvider).clientProfile;
+    if (client == null || client.id.isEmpty) throw Exception("🔒 Unauthorized: Missing Client Context");
+    return client.id;
+  }
+
+  String get _tenantId {
+    // 🚀 FIXED: Using your actual auth profile instead of the placeholder
+    final client = _ref.read(authNotifierProvider).clientProfile;
+    if (client == null) throw Exception("🔒 Unauthorized: Missing Tenant Context");
+    return client.tenantId ?? 'guest';
+  }
+
+  // =================================================================
+  // 🎯 1. CHAT MESSAGES STREAM
+  // =================================================================
+
+  Stream<List<ChatMessageModel>> getMessages(int limit) {
+    final client = _ref.read(authNotifierProvider).clientProfile;
+
+    if (client == null || client.id.isEmpty) {
+      return Stream.value([]);
+    }
+
     return _firestore
         .collection('clients')
-        .doc(clientId)
-        .collection('chat') // 🎯 Now points to the correct sub-collection
+        .doc(client.id)
+        .collection('chat')
         .orderBy('timestamp', descending: true)
+        .limit(limit) // 🚀 2. Injecting the dynamic limit here
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => ChatMessageModel.fromFirestore(doc)).toList());
+        .map((snapshot) => snapshot.docs
+        .map((doc) => ChatMessageModel.fromFirestore(doc))
+        .toList());
   }
 
   // =================================================================
-  // 🎯 2. SEND MESSAGE (With Tenant Security & Uploads)
+  // 🎯 2. SEND MESSAGE (WITH CLOUDINARY)
   // =================================================================
-  Future<void> sendMessage({
-    required String clientName,
-    required String clientId,
-    required String tenantId, // 🔒 CRITICAL: Required for Admin Dashboard visibility
+
+  Future<void> sendClientMessage({
     required String text,
     required MessageType type,
-    RequestType requestType = RequestType.none,
-    Map<String, dynamic>? metadata,
     File? attachmentFile,
-    List<File>? attachmentFiles,
     String? attachmentName,
+    String? replyToMessageId,
+    String? replyToMessageText,
+    String? replyToAttachmentUrl,
   }) async {
-    final clientDocRef = _firestore.collection('clients').doc(clientId);
-    final messageRef = clientDocRef.collection('chat').doc();
+    final clientId = _clientId;
+    final tenantId = _tenantId;
+    String? attachmentUrl;
 
-    // 🎫 GENERATE UNIQUE TICKET ID (Timestamp based)
-    String? ticketId;
-    if (requestType != RequestType.none) {
-      int timestamp = DateTime.now().millisecondsSinceEpoch;
-      String uniqueId = (timestamp % 10000).toString().padLeft(4, '0');
-      ticketId = "TICKET-${requestType.name.toUpperCase()}-$uniqueId";
-    }
+    // 🚀 CLOUDINARY UPLOAD LOGIC
+    if (attachmentFile != null) {
+      final secureUrl = await _ref.read(cloudinaryServiceProvider).uploadFile(
+        file: attachmentFile,
+        // Match Admin structure: Organize cleanly by Tenant ID
+        folderName: 'tenants/$tenantId/clients/$clientId/chat_images',
+      );
 
-    // 1. Prepare Local Paths (For Optimistic UI loading)
-    List<String>? localPaths;
-    if (attachmentFiles != null && attachmentFiles.isNotEmpty) {
-      localPaths = attachmentFiles.map((f) => f.path).toList();
-    } else if (attachmentFile != null) {
-      localPaths = [attachmentFile.path];
-    }
-
-    // 2. Create "Sending" Model
-    final message = ChatMessageModel(
-      id: messageRef.id,
-      senderId: clientId,
-      isSenderClient: true,
-      text: text,
-      type: type,
-      timestamp: DateTime.now(),
-      requestType: requestType,
-      metadata: metadata,
-      messageStatus: MessageStatus.sending,
-      localFilePath: attachmentFile?.path,
-      localFilePaths: localPaths,
-      attachmentName: attachmentName,
-      ticketId: ticketId,
-    );
-
-    // 🔒 3. INJECT TENANT ID & SAVE INITIAL STATE
-    final messageData = message.toMap();
-    messageData['tenantId'] = tenantId; // Allows Admin collectionGroup queries to find this
-
-    await messageRef.set(messageData);
-
-    // 4. UPLOAD LOGIC
-    try {
-      Map<String, dynamic> updateData = {
-        'messageStatus': MessageStatus.sent.name
-      };
-
-      // A. Handle Multiple Images (Gallery select)
-      if (attachmentFiles != null && attachmentFiles.isNotEmpty) {
-        List<String> uploadedUrls = [];
-
-        await Future.wait(attachmentFiles.map((file) async {
-          String fName = "img_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(1000)}.webp";
-          final ref = _storage.ref().child('chat_attachments/$tenantId/$clientId/$fName');
-          await ref.putFile(file);
-          String url = await ref.getDownloadURL();
-          uploadedUrls.add(url);
-        }));
-
-        updateData['attachmentUrls'] = uploadedUrls;
-        if (uploadedUrls.isNotEmpty) updateData['attachmentUrl'] = uploadedUrls.first;
+      if (secureUrl == null || secureUrl.isEmpty) {
+        throw Exception("Failed to upload attachment to Cloudinary.");
       }
-
-      // B. Handle Single File (Camera, Audio, PDF)
-      else if (attachmentFile != null) {
-        final ref = _storage.ref().child('chat_attachments/$tenantId/$clientId/${DateTime.now().millisecondsSinceEpoch}_$attachmentName');
-        await ref.putFile(attachmentFile);
-        String url = await ref.getDownloadURL();
-        updateData['attachmentUrl'] = url;
-      }
-
-      // Mark as Sent and attach URLs
-      await messageRef.update(updateData);
-
-    } catch (e) {
-      print("Upload failed: $e");
-      await messageRef.update({'messageStatus': MessageStatus.failed.name});
+      attachmentUrl = secureUrl;
     }
 
-    // 5. UPDATE PARENT CLIENT DOC (For Admin Inbox Preview)
-    String snippet = text;
-    if (text.isEmpty) {
-      if (type == MessageType.image) snippet = "📷 Photo";
-      else if (type == MessageType.audio) snippet = "🎤 Voice Note";
-      else if (type == MessageType.file) snippet = "📎 File";
-    }
-
-    if (ticketId != null) {
-      snippet = "🎫 $ticketId: $snippet";
-    }
-
-    await clientDocRef.set({
-      'name': clientName,
-      'lastMessage': snippet,
-      'lastMessageTime': FieldValue.serverTimestamp(),
-      'clientId': clientId,
-      'tenantId': tenantId, // 🔒 Keep parent synced with tenant
-      'hasPendingRequest': requestType != RequestType.none,
-    }, SetOptions(merge: true));
-  }
-
-  // =================================================================
-  // 🎯 3. MESSAGE MANAGEMENT
-  // =================================================================
-
-  Future<void> retryMessage(String clientId, ChatMessageModel message) async {
-    // Delete the failed message
-    await deleteMessage(clientId, message.id);
-    // Note: In a full implementation, you would re-call sendMessage here
-    // passing the message.localFilePath back in to attempt the upload again.
-  }
-
-  Future<void> deleteMessage(String clientId, String messageId) async {
-    await _firestore
+    final messageDocRef = _firestore
         .collection('clients')
         .doc(clientId)
         .collection('chat')
-        .doc(messageId)
-        .delete();
+        .doc();
+
+    // Build the raw map directly to handle FieldValue.serverTimestamp() cleanly
+    final Map<String, dynamic> messageData = {
+      'id': messageDocRef.id,
+      'senderId': clientId,
+      'isSenderClient': true, // Crucial for UI alignment (Admin vs Client)
+      'text': text,
+      'type': type.name,
+      'timestamp': FieldValue.serverTimestamp(),
+      'attachmentUrl': attachmentUrl,
+      'attachmentName': attachmentName,
+      'isRead': false,
+      'replyToMessageId': replyToMessageId,
+      'replyToMessageText': replyToMessageText,
+      'replyToAttachmentUrl': replyToAttachmentUrl,
+      'tenantId': tenantId,
+    };
+
+    // 🚀 BATCH WRITE: Update Chat AND Parent Document simultaneously
+    final batch = _firestore.batch();
+
+    batch.set(messageDocRef, messageData);
+
+    // Update the parent client document so the Admin Inbox jumps to the top
+    batch.set(_firestore.collection('clients').doc(clientId), {
+      'lastMessage': type == MessageType.text ? text : "📎 Sent an attachment",
+      'lastMessageTime': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await batch.commit();
+  }
+
+  // =================================================================
+  // ✏️ 3. EDIT MESSAGE
+  // =================================================================
+
+  Future<void> editMessage(String messageId, String newText) async {
+    try {
+      await _firestore
+          .collection('clients')
+          .doc(_clientId)
+          .collection('chat')
+          .doc(messageId)
+          .update({
+        'text': newText,
+        'isEdited': true, // Triggers the 'Edited' tag in the UI
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint("Error editing message: $e");
+      throw Exception("Failed to edit message");
+    }
+  }
+
+  // =================================================================
+  // 🗑️ 4. DELETE MESSAGE
+  // =================================================================
+
+  Future<void> deleteMessage(String messageId) async {
+    try {
+      // Hard delete: completely removes the document
+      await _firestore
+          .collection('clients')
+          .doc(_clientId)
+          .collection('chat')
+          .doc(messageId)
+          .delete();
+
+      // Optional Soft Delete (Uncomment if you prefer "This message was deleted"):
+      /*
+      await _firestore.collection('clients').doc(_clientId).collection('chat').doc(messageId).update({
+        'text': '🚫 This message was deleted',
+        'isDeleted': true,
+        'attachmentUrl': FieldValue.delete(),
+        'type': MessageType.text.name,
+      });
+      */
+    } catch (e) {
+      debugPrint("Error deleting message: $e");
+      throw Exception("Failed to delete message");
+    }
+  }
+
+  // =================================================================
+  // 👁️ 5. MARK MESSAGES AS READ (READ RECEIPTS)
+  // =================================================================
+
+  Future<void> markMessagesAsRead() async {
+    try {
+      final unreadDocs = await _firestore
+          .collection('clients')
+          .doc(_clientId)
+          .collection('chat')
+          .where('isSenderClient', isEqualTo: false) // Only target Admin's messages
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      if (unreadDocs.docs.isEmpty) return;
+
+      final batch = _firestore.batch();
+      for (var doc in unreadDocs.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+
+      await batch.commit();
+    } catch (e) {
+      debugPrint("Error marking messages as read: $e");
+    }
   }
 }

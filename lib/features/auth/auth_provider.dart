@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:nutricare_connect/new/service/client_service.dart';
-import 'package:nutricare_connect/core/utils/database_provider.dart';
-import 'package:nutricare_connect/core/utils/client_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:pure_shift/new/service/client_service.dart';
+import 'package:pure_shift/core/utils/database_provider.dart';
+import 'package:pure_shift/core/utils/client_model.dart';
 
 // --- State Definition ---
 class AuthState {
@@ -57,7 +59,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     FirebaseAuth.instance.authStateChanges().listen((User? user) async {
       if (user == null) {
-        // 🛑 LOGOUT: Wipe Everything
+        // 🛑 LOGOUT: Wipe Everything & Finish Check
         state = AuthState(
             currentUser: null,
             clientId: null,
@@ -67,69 +69,98 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
       } else {
         // ✅ LOGIN DETECTED
+        // 1. Set the user, but DO NOT set initialCheckComplete yet.
         state = state.copyWith(
-            currentUser: user,
-            clientId: user.uid,
-            initialCheckComplete: true
+          currentUser: user,
+          clientId: user.uid,
         );
 
-        // 🚑 AUTO-RECOVERY: If we have a user but NO profile, fetch it immediately
+        // 2. 🚑 AUTO-RECOVERY: Wait for the profile to fetch!
         if (state.clientProfile == null) {
           debugPrint("⚠️ Auth: User found, Profile missing. Fetching...");
           await _fetchProfileInternal(user.uid);
         }
+
+        // 3. 🎯 NOW tell main.dart that the check is fully complete
+        state = state.copyWith(initialCheckComplete: true);
       }
     });
   }
 
+// ===========================================================================
+  // 🚀 1. BULLETPROOF PROFILE RECOVERY
+  // ===========================================================================
   Future<void> _fetchProfileInternal(String uid) async {
     try {
-      final profile = await _clientService.getClientById(uid);
-      if (profile != null && mounted) {
-        state = state.copyWith(clientProfile: profile, isLoading: false);
-        debugPrint("✅ Auth: Profile recovered.");
+      final prefs = await SharedPreferences.getInstance();
+
+      final lastPatientId = prefs.getString('last_active_patient_id');
+      final lastTenantId = prefs.getString('last_active_tenant_id') ?? ''; // Safely handle null
+
+      // Attempt 1: Recover via SharedPreferences
+      if (lastPatientId != null && lastPatientId.isNotEmpty) {
+        final profile = await _clientService.getSpecificProfile(uid, lastPatientId, lastTenantId);
+        if (profile != null && mounted) {
+          state = state.copyWith(clientProfile: profile, isLoading: false);
+          debugPrint("✅ Auth: Profile recovered via local storage.");
+          return;
+        }
       }
+
+      // Attempt 2: 🚑 THE FALLBACK RECOVERY
+      // If storage was cleared, but Firebase Auth is still alive, don't give up!
+      debugPrint("⚠️ Auth: Local storage missing. Attempting Firebase Auth fallback...");
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user != null && user.email != null && user.email!.contains('@nutricare.internal')) {
+        // Extract the mobile number from the dummy email (e.g., "1234567890@nutricare.internal")
+        final mobile = user.email!.split('@').first;
+        final profiles = await _clientService.getProfilesForAuthenticatedUser(mobile);
+
+        if (profiles.isNotEmpty && mounted) {
+          // Recover the profile and re-save it to storage
+          await selectProfile(profiles.first);
+          debugPrint("✅ Auth: Profile auto-recovered via Firebase session fallback!");
+          return;
+        }
+      }
+
     } catch (e) {
       debugPrint("❌ Auth: Failed to recover profile: $e");
     }
   }
 
-  // 🚀 THE FIX: Added {String? tenantId} to bypass DB lookup during rapid registration
+  // ===========================================================================
+  // 🚀 2. SAFE SIGN-IN SAVE
+  // ===========================================================================
   Future<List<ClientModel>> signIn(String mobile, String password) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      // 1. 🙈 BLIND SIGN-IN: We construct the email deterministically.
-      // An attacker cannot guess tenant IDs because we don't use them here anymore.
       final String authEmail = "$mobile@nutricare.internal";
-
-      // This will throw if the PIN is wrong or the user doesn't exist.
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: authEmail,
-        password: password,
-      );
+      await FirebaseAuth.instance.signInWithEmailAndPassword(email: authEmail, password: password);
 
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception("Authentication failed.");
 
-      // 2. 🔐 SECURE LOOKUP: Now that we know they have the right PIN, we fetch the profiles!
       final profiles = await _clientService.getProfilesForAuthenticatedUser(mobile);
+      if (profiles.isEmpty) throw Exception("Account verified, but profile data is missing.");
 
-      if (profiles.isEmpty) {
-        throw Exception("Account verified, but profile data is missing.");
-      }
-
-      // 3. 🎯 MULTI-PROFILE HANDLING
       if (profiles.length == 1) {
-        // Single user: Auto-select their profile
+        final profile = profiles.first;
+
+        // 🎯 FIX: Prevent crash if tenantId or patientId is null!
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('last_active_patient_id', profile.patientId ?? '');
+        await prefs.setString('last_active_tenant_id', profile.tenantId ?? '');
+
         state = state.copyWith(
           currentUser: user,
           clientId: user.uid,
-          clientProfile: profiles.first,
+          clientProfile: profile,
           isLoading: false,
           initialCheckComplete: true,
         );
       } else {
-        // Multiple users (Family): Keep clientProfile NULL until UI picker is used
         state = state.copyWith(
           currentUser: user,
           clientId: user.uid,
@@ -139,7 +170,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
       }
       return profiles;
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException catch (_) {
       state = state.copyWith(isLoading: false, error: "Invalid Mobile Number or PIN.");
       throw Exception("Invalid Mobile Number or PIN.");
     } catch (e) {
@@ -148,12 +179,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  void selectProfile(ClientModel profile) {
+  // ===========================================================================
+  // 🚀 3. SAFE PROFILE SELECTION SAVE
+  // ===========================================================================
+  Future<void> selectProfile(ClientModel profile) async {
+    // 🎯 FIX: Prevent crash if tenantId or patientId is null!
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_active_patient_id', profile.patientId ?? '');
+    await prefs.setString('last_active_tenant_id', profile.tenantId ?? '');
+
     state = state.copyWith(clientProfile: profile);
   }
 
+
   Future<void> signOut() async {
     state = state.copyWith(isLoading: true);
+
+    // 🚀 Clear BOTH persistences on logout so next login is fresh
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('last_active_patient_id');
+    await prefs.remove('last_active_tenant_id');
+
     await FirebaseAuth.instance.signOut();
   }
 }
@@ -163,7 +209,22 @@ final authNotifierProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref
   return AuthNotifier(ref.watch(clientServiceProvider), ref);
 });
 
-final currentClientIdProvider = Provider<String?>((ref) => ref.watch(authNotifierProvider).clientId);
+// -----------------------------------------------------------------------------
+// 🎯 THE MAGIC FIX: Get IDs directly from the loaded profile
+// -----------------------------------------------------------------------------
+
+// This now returns the true Firestore Document ID, not the Auth UID!
+final currentClientIdProvider = Provider<String?>((ref) {
+  final profile = ref.watch(authNotifierProvider).clientProfile;
+  return profile?.id;
+});
+
+// Since you need the tenantId too, expose it the exact same way
+final currentTenantIdProvider = Provider<String?>((ref) {
+  final profile = ref.watch(authNotifierProvider).clientProfile;
+  return profile?.tenantId;
+});
+
 final currentClientProvider = Provider<ClientModel?>((ref) => ref.watch(authNotifierProvider).clientProfile);
 
 // -----------------------------------------------------------------------------

@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
-import 'package:nutricare_connect/new/models/clinical_model.dart';
-import 'package:nutricare_connect/core/utils/client_model.dart';
-import 'package:nutricare_connect/core/utils/wellness_message_generator.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/reminder_config_model.dart';
+import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
+import 'package:pure_shift/new/models/clinical_model.dart';
+import 'package:pure_shift/core/utils/client_model.dart';
+import 'package:pure_shift/core/utils/wellness_message_generator.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/reminder_config_model.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 class LocalReminderService {

@@ -3,9 +3,14 @@ import 'dart:math';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 // ============================================================================
 // 1. CLINICAL MODELS & TEMPOS
@@ -59,7 +64,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   int _restSecondsRemaining = 30;
   Timer? _restTimer;
 
-  // 🚨 WORKOUT MODES RESTORED 🚨
+  // Workout Modes
   final Map<String, ClinicalTempo> _modes = {
     "Squats": const ClinicalTempo(eccentricMs: 2000, isometricMs: 500, concentricMs: 1500),
     "Lunges": const ClinicalTempo(eccentricMs: 2000, isometricMs: 1000, concentricMs: 1500),
@@ -69,7 +74,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   String _currentMode = "Squats";
 
   // Mode Tracking
-  bool _useCamera = false; // Default to animation mode for easier testing
+  bool _useCamera = false;
 
   // AI Camera & ML Kit
   CameraController? _cameraController;
@@ -106,6 +111,8 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   }
 
   void _changeMode(String mode) {
+    if (_currentMode == mode) return;
+    HapticFeedback.selectionClick();
     setState(() {
       _currentMode = mode;
       _completedReps = 0;
@@ -113,7 +120,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   }
 
   // ============================================================================
-  // CLINICAL PACEMAKER ENGINE (Asymmetric Tempo)
+  // CLINICAL PACEMAKER ENGINE
   // ============================================================================
   void _updateGhostPacemaker() {
     if (_currentState != CardioSessionState.active) return;
@@ -122,9 +129,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
     _repStartTime ??= DateTime.now();
     final elapsed = DateTime.now().difference(_repStartTime!).inMilliseconds;
 
-    // 🎯 NEW LOGIC: Prioritize Prescription Tempo over Mode Default
     final t = widget.prescription.tempo ?? _modes[_currentMode]!;
-
     final totalRepTime = t.eccentricMs + t.isometricMs + t.concentricMs;
 
     if (elapsed > totalRepTime) {
@@ -162,7 +167,9 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   Future<void> _initializeAICamera() async {
     try {
       final cameras = await availableCameras();
-      final frontCamera = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.front);
+      if (cameras.isEmpty) return;
+
+      final frontCamera = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.front, orElse: () => cameras.first);
       final format = Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420;
 
       _cameraController = CameraController(frontCamera, ResolutionPreset.low, enableAudio: false, imageFormatGroup: format);
@@ -248,7 +255,6 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   }
 
   void _processRepLogic(double kneeAngle) {
-    // For AI Camera mode, we use knee angle to verify reps
     double targetDepth = (_currentMode == "Jumping Jacks" || _currentMode == "High Knees") ? 140.0 : 110.0;
 
     if (kneeAngle < targetDepth && !_isAtBottom) {
@@ -269,6 +275,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   // SESSION WORKFLOW LOGIC
   // ============================================================================
   void _startAnimationMode() {
+    HapticFeedback.mediumImpact();
     setState(() {
       _useCamera = false;
       _currentState = CardioSessionState.active;
@@ -278,6 +285,8 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
 
   void _handleSetComplete() {
     _repStartTime = null;
+    _audio.playSuccess();
+    HapticFeedback.heavyImpact();
     if (_currentSet < widget.prescription.sets) {
       setState(() => _currentState = CardioSessionState.rpeCheck);
     } else {
@@ -286,6 +295,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   }
 
   void _submitRpeScore(double rpeScore) {
+    HapticFeedback.lightImpact();
     if (rpeScore >= widget.prescription.maxSafeRpe) {
       _showSafetyAbortDialog();
     } else {
@@ -299,6 +309,8 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
           setState(() => _restSecondsRemaining--);
         } else {
           timer.cancel();
+          HapticFeedback.mediumImpact();
+          _audio.playSuccess();
           setState(() {
             _currentSet++;
             _completedReps = 0;
@@ -311,15 +323,24 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   }
 
   void _showSafetyAbortDialog() {
+    final theme = Theme.of(context);
     showDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1A0909),
+          backgroundColor: theme.cardColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.redAccent.withOpacity(0.5))),
-          title: const Text("Medical Override", style: TextStyle(color: Colors.redAccent)),
-          content: const Text("Your Perceived Exertion is too high for safe rehabilitation parameters. Terminating session to prevent overexertion.", style: TextStyle(color: Colors.white70)),
-          actions: [TextButton(onPressed: () { Navigator.pop(ctx); Navigator.pop(context); }, child: const Text("Understood"))],
+          title: const Text("Medical Override", style: TextStyle(fontFamily: kDisplayFont, color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.w700)),
+          content: Text(
+              "Your Perceived Exertion is too high for safe rehabilitation parameters. Terminating session to prevent overexertion.",
+              style: TextStyle(fontFamily: kBodyFont, color: theme.colorScheme.onSurface, fontSize: 12)
+          ),
+          actions: [
+            TextButton(
+                onPressed: () { Navigator.pop(ctx); Navigator.pop(context); },
+                child: const Text("Understood", style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700))
+            )
+          ],
         )
     );
   }
@@ -329,27 +350,57 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   // ============================================================================
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9),
+      height: MediaQuery.of(context).size.height * 0.85,
       decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
-          boxShadow: [BoxShadow(color: primaryColor.withOpacity(0.05), blurRadius: 40, offset: const Offset(0, -10))]
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
       ),
       child: SafeArea(
+        top: true,
+        bottom: true,
         child: Column(
           children: [
+            const SizedBox(height: 12),
+            Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+
+            // 🚀 STANDARD HEADER
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("RHYTHM PACER", style: TextStyle(fontFamily: kDisplayFont, color: cs.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+                        const SizedBox(height: 2),
+                        Text("Clinical Cardio Protocol", style: TextStyle(fontFamily: kBodyFont, color: cs.onSurface, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                      icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                      }
+                  )
+                ],
+              ),
+            ),
+            Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
             const SizedBox(height: 16),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 24),
+
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: _buildStateContent(primaryColor),
+                child: _buildStateContent(theme, cs.primary),
               ),
             ),
           ],
@@ -358,51 +409,51 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
     );
   }
 
-  Widget _buildStateContent(Color primary) {
+  Widget _buildStateContent(ThemeData theme, Color primary) {
     switch (_currentState) {
-      case CardioSessionState.calibrating: return _buildCalibration(primary);
-      case CardioSessionState.active: return _buildActiveSession(primary);
-      case CardioSessionState.rpeCheck: return _buildRpeCheck(primary);
-      case CardioSessionState.resting: return _buildResting(primary);
-      case CardioSessionState.summary: return _buildSummary(primary);
+      case CardioSessionState.calibrating: return _buildCalibration(theme, primary);
+      case CardioSessionState.active: return _buildActiveSession(theme, primary);
+      case CardioSessionState.rpeCheck: return _buildRpeCheck(theme, primary);
+      case CardioSessionState.resting: return _buildResting(theme, primary);
+      case CardioSessionState.summary: return _buildSummary(theme, primary);
     }
   }
 
-  Widget _buildCalibration(Color primary) {
+  Widget _buildCalibration(ThemeData theme, Color primary) {
     return Column(
       children: [
-        // 🚨 MODE TOGGLE
+        // 🚨 MODE TOGGLE (AI Camera vs Animation)
         Container(
           padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.1))),
+          decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: theme.dividerColor.withOpacity(0.1))),
           child: Row(
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() => _useCamera = true),
+                  onTap: () { HapticFeedback.selectionClick(); setState(() => _useCamera = true); },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(color: _useCamera ? primary.withOpacity(0.2) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
-                    child: Center(child: Text("AI Camera", style: TextStyle(color: _useCamera ? primary : Colors.white70, fontWeight: FontWeight.bold))),
+                    child: Center(child: Text("AI Camera", style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, color: _useCamera ? primary : theme.hintColor, fontWeight: FontWeight.w700))),
                   ),
                 ),
               ),
               Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() => _useCamera = false),
+                  onTap: () { HapticFeedback.selectionClick(); setState(() => _useCamera = false); },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(color: !_useCamera ? primary.withOpacity(0.2) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
-                    child: Center(child: Text("Animation", style: TextStyle(color: !_useCamera ? primary : Colors.white70, fontWeight: FontWeight.bold))),
+                    child: Center(child: Text("Animation", style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, color: !_useCamera ? primary : theme.hintColor, fontWeight: FontWeight.w700))),
                   ),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
 
-        // 🚨 WORKOUT SELECTOR CHIPS 🚨
+        // WORKOUT SELECTOR CHIPS
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
@@ -412,66 +463,73 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
               return Padding(
                 padding: const EdgeInsets.only(right: 12.0),
                 child: ChoiceChip(
-                  label: Text(m),
+                  label: Text(m, style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
                   selected: isSelected,
                   onSelected: (val) => _changeMode(m),
                   selectedColor: primary.withOpacity(0.15),
-                  backgroundColor: Colors.white.withOpacity(0.03),
-                  side: BorderSide(color: isSelected ? primary.withOpacity(0.5) : Colors.white.withOpacity(0.1)),
+                  backgroundColor: theme.cardColor,
+                  side: BorderSide(color: isSelected ? primary.withOpacity(0.5) : theme.dividerColor.withOpacity(0.1)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  labelStyle: TextStyle(color: isSelected ? primary : Colors.white.withOpacity(0.6), fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                  labelStyle: TextStyle(color: isSelected ? primary : theme.hintColor),
                 ),
               );
             }).toList(),
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 48),
 
         if (_useCamera) ...[
           if (_cameraController?.value.isInitialized == true)
             Container(
               height: 160, width: 160,
-              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.orangeAccent, width: 4)),
+              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.orangeAccent.withOpacity(0.5), width: 4)),
               child: ClipOval(child: Transform.scale(scaleX: -1, child: CameraPreview(_cameraController!))),
             ),
           const SizedBox(height: 24),
-          const Text("Align Camera", style: TextStyle(fontSize: 24, color: Colors.orangeAccent)),
-          const SizedBox(height: 16),
-          const Text("Step back until your entire body\n(Head to ankles) is visible.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, height: 1.5)),
+          const Text("Align Camera", style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: Colors.orangeAccent)),
+          const SizedBox(height: 12),
+          Text("Step back until your entire body\n(Head to ankles) is visible.", textAlign: TextAlign.center, style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor, height: 1.5)),
           const SizedBox(height: 40),
           const CircularProgressIndicator(color: Colors.orangeAccent),
         ] else ...[
-          Icon(Icons.animation, size: 80, color: primary.withOpacity(0.5)),
+          Icon(Icons.animation_rounded, size: 64, color: primary.withOpacity(0.5)),
           const SizedBox(height: 24),
-          Text("$_currentMode", style: const TextStyle(fontSize: 24, color: Colors.white)),
-          const SizedBox(height: 16),
-          const Text("Follow the stick figure's tempo.\nReps will be counted automatically.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, height: 1.5)),
+          Text(_currentMode, style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
+          const SizedBox(height: 12),
+          Text(
+              "Follow the stick figure's tempo.\nReps will be counted automatically.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor, height: 1.5)
+          ),
           const SizedBox(height: 40),
-          ElevatedButton(
-              style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(56), backgroundColor: primary, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-              onPressed: _startAnimationMode,
-              child: const Text("Start Workout", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: FilledButton(
+                style: FilledButton.styleFrom(elevation: 0, backgroundColor: primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                onPressed: _startAnimationMode,
+                child: const Text("Start Workout", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5))
+            ),
           )
         ]
       ],
     );
   }
 
-  Widget _buildActiveSession(Color primary) {
-    // Fake the live progress using ghost progress if camera is off
+  Widget _buildActiveSession(ThemeData theme, Color primary) {
     double simulatedKneeAngle = 180.0 - (_ghostProgress * 90.0);
 
     return Column(
       children: [
-        Text("Clinical $_currentMode", style: const TextStyle(fontFamily: 'Playfair Display', fontSize: 28, color: Colors.white)),
-        Text("Set $_currentSet of ${widget.prescription.sets}", style: TextStyle(color: primary, fontWeight: FontWeight.bold)),
+        Text("Clinical $_currentMode", style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
+        const SizedBox(height: 4),
+        Text("Set $_currentSet of ${widget.prescription.sets}", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: primary, fontWeight: FontWeight.w700)),
         const SizedBox(height: 32),
 
         // BIOFEEDBACK ORB
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.02), shape: BoxShape.circle,
+              color: theme.cardColor.withOpacity(0.5), shape: BoxShape.circle,
               border: Border.all(color: primary.withOpacity(0.3), width: 2),
               boxShadow: [BoxShadow(color: primary.withOpacity(0.05), blurRadius: 40)]
           ),
@@ -507,69 +565,108 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _buildMetricBox("Tempo", "${_modes[_currentMode]!.eccentricMs~/1000}-${_modes[_currentMode]!.isometricMs~/1000}-${_modes[_currentMode]!.concentricMs~/1000}", Colors.white54),
-            _buildMetricBox("Reps", "$_completedReps / ${widget.prescription.targetReps}", primary),
+            _buildMetricBox("Tempo", "${_modes[_currentMode]!.eccentricMs~/1000}-${_modes[_currentMode]!.isometricMs~/1000}-${_modes[_currentMode]!.concentricMs~/1000}", theme),
+            _buildMetricBox("Reps", "$_completedReps / ${widget.prescription.targetReps}", theme, highlightColor: primary),
           ],
         ),
         const SizedBox(height: 32),
 
         if (_useCamera && !_isPoseDetected)
-          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(12)), child: const Text("⚠️ POSE LOST: Step back into frame", style: TextStyle(color: Colors.redAccent))),
+          Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+              child: const Text("⚠️ POSE LOST: Step back into frame", style: TextStyle(fontFamily: kBodyFont, fontSize: 11, fontWeight: FontWeight.w700, color: Colors.redAccent))
+          ),
       ],
     );
   }
 
-  Widget _buildRpeCheck(Color primary) {
+  Widget _buildRpeCheck(ThemeData theme, Color primary) {
     double localRpe = 3;
     return StatefulBuilder(
         builder: (context, setLocalState) {
           return Column(
             children: [
-              const Text("Safety Check", style: TextStyle(fontFamily: 'Playfair Display', fontSize: 28, color: Colors.white)),
+              Text("Safety Check", style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
               const SizedBox(height: 16),
-              const Text("Borg Rate of Perceived Exertion\nHow hard was that set?", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
+              Text("Borg Rate of Perceived Exertion\nHow hard was that set?", textAlign: TextAlign.center, style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor, height: 1.5)),
               const SizedBox(height: 40),
-              Text(localRpe.toStringAsFixed(0), style: TextStyle(fontSize: 64, fontWeight: FontWeight.bold, color: localRpe >= widget.prescription.maxSafeRpe ? Colors.redAccent : primary)),
-              Text(localRpe < 3 ? "Light" : localRpe < 5 ? "Moderate" : localRpe < 7 ? "Hard" : "Very Hard", style: TextStyle(color: Colors.white.withOpacity(0.5))),
+
+              Text(localRpe.toStringAsFixed(0), style: TextStyle(fontFamily: kDisplayFont, fontSize: 36, fontWeight: FontWeight.w700, color: localRpe >= widget.prescription.maxSafeRpe ? Colors.redAccent : primary)),
+              Text(localRpe < 3 ? "Light" : localRpe < 5 ? "Moderate" : localRpe < 7 ? "Hard" : "Very Hard", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
               const SizedBox(height: 20),
-              Slider(value: localRpe, min: 0, max: 10, divisions: 10, activeColor: localRpe >= widget.prescription.maxSafeRpe ? Colors.redAccent : primary, onChanged: (val) => setLocalState(() => localRpe = val)),
+
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(trackHeight: 2, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)),
+                child: Slider(
+                    value: localRpe, min: 0, max: 10, divisions: 10,
+                    activeColor: localRpe >= widget.prescription.maxSafeRpe ? Colors.redAccent : primary,
+                    inactiveColor: theme.dividerColor.withOpacity(0.1),
+                    onChanged: (val) {
+                      if (val != localRpe) HapticFeedback.selectionClick();
+                      setLocalState(() => localRpe = val);
+                    }
+                ),
+              ),
               const SizedBox(height: 40),
-              ElevatedButton(style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(56), backgroundColor: primary, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), onPressed: () => _submitRpeScore(localRpe), child: const Text("Continue"))
+
+              SizedBox(
+                width: double.infinity, height: 50,
+                child: FilledButton(
+                    style: FilledButton.styleFrom(elevation: 0, backgroundColor: primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    onPressed: () => _submitRpeScore(localRpe),
+                    child: const Text("Continue", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5))
+                ),
+              )
             ],
           );
         }
     );
   }
 
-  Widget _buildResting(Color primary) {
+  Widget _buildResting(ThemeData theme, Color primary) {
     return Column(
       children: [
         const SizedBox(height: 40),
-        const Icon(Icons.favorite, size: 80, color: Colors.redAccent),
+        const Icon(Icons.favorite_rounded, size: 64, color: Colors.redAccent),
         const SizedBox(height: 24),
-        const Text("Recovery Time", style: TextStyle(fontFamily: 'Playfair Display', fontSize: 28, color: Colors.white)),
+        Text("Recovery Time", style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
         const SizedBox(height: 32),
-        Text("00:${_restSecondsRemaining.toString().padLeft(2, '0')}", style: const TextStyle(fontSize: 64, fontWeight: FontWeight.bold, color: Colors.white)),
+        Text("00:${_restSecondsRemaining.toString().padLeft(2, '0')}", style: TextStyle(fontFamily: kDisplayFont, fontSize: 40, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
         const SizedBox(height: 16),
-        Text("Get ready for Set ${_currentSet + 1}", style: TextStyle(color: primary, fontSize: 18)),
+        Text("Get ready for Set ${_currentSet + 1}", style: TextStyle(fontFamily: kBodyFont, color: primary, fontSize: 12, fontWeight: FontWeight.w700)),
       ],
     );
   }
 
-  Widget _buildSummary(Color primary) {
+  Widget _buildSummary(ThemeData theme, Color primary) {
     return Column(
       children: [
-        Icon(Icons.check_circle, size: 80, color: primary),
-        const SizedBox(height: 24),
-        const Text("Therapy Complete", style: TextStyle(fontFamily: 'Playfair Display', fontSize: 28, color: Colors.white)),
         const SizedBox(height: 40),
-        ElevatedButton(style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(56), backgroundColor: primary, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), onPressed: () => Navigator.pop(context), child: const Text("Save & Exit", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))
+        Icon(Icons.check_circle_rounded, size: 64, color: primary),
+        const SizedBox(height: 24),
+        Text("Protocol Complete", style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
+        const SizedBox(height: 40),
+        SizedBox(
+          width: double.infinity, height: 50,
+          child: FilledButton(
+              style: FilledButton.styleFrom(elevation: 0, backgroundColor: primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Save & Exit", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5))
+          ),
+        )
       ],
     );
   }
 
-  Widget _buildMetricBox(String label, String val, Color color) {
-    return Column(children: [Text(label, style: const TextStyle(fontSize: 12, color: Colors.white54)), const SizedBox(height: 4), Text(val, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color))]);
+  Widget _buildMetricBox(String label, String val, ThemeData theme, {Color? highlightColor}) {
+    return Column(
+        children: [
+          Text(label, style: TextStyle(fontFamily: kBodyFont, fontSize: 10, fontWeight: FontWeight.w500, color: theme.hintColor)),
+          const SizedBox(height: 4),
+          Text(val, style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: highlightColor ?? theme.colorScheme.onSurface))
+        ]
+    );
   }
 }
 
@@ -600,7 +697,7 @@ class _ClinicalPacerPainter extends CustomPainter {
 
     // 1. Draw Ghost (Target Pacemaker)
     if (useCamera) {
-      final ghostPaint = Paint()..color = Colors.white.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 10..strokeCap = StrokeCap.round;
+      final ghostPaint = Paint()..color = Colors.white.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 8..strokeCap = StrokeCap.round;
       _drawBodyElements(canvas, cx, cy, ghostProgress, ghostPaint, true);
     }
 
@@ -610,10 +707,9 @@ class _ClinicalPacerPainter extends CustomPainter {
     final paint = Paint()..color = primaryColor..style = PaintingStyle.stroke..strokeWidth = 6..strokeCap = StrokeCap.round;
     final fillPaint = Paint()..color = primaryColor..style = PaintingStyle.fill;
 
-    // Draw full body if animation mode. If camera mode, only draw legs to avoid cluttering the face.
     if (!useCamera) {
-      canvas.drawCircle(Offset(cx, cy - 80 + (mode == "Squats" ? userProgress * 50 : 0)), 20, fillPaint); // Head
-      canvas.drawLine(Offset(cx, cy - 60 + (mode == "Squats" ? userProgress * 50 : 0)), Offset(cx, cy + (mode == "Squats" ? userProgress * 50 : 0)), paint..strokeWidth = 8); // Spine
+      canvas.drawCircle(Offset(cx, cy - 80 + (mode == "Squats" ? userProgress * 50 : 0)), 16, fillPaint);
+      canvas.drawLine(Offset(cx, cy - 60 + (mode == "Squats" ? userProgress * 50 : 0)), Offset(cx, cy + (mode == "Squats" ? userProgress * 50 : 0)), paint..strokeWidth = 6);
     }
 
     _drawBodyElements(canvas, cx, cy, userProgress, paint, false);
@@ -626,7 +722,6 @@ class _ClinicalPacerPainter extends CustomPainter {
     bool isLunge = mode == "Lunges";
     double backKneeDrop = 0.0;
 
-    // Movement Math
     if (mode == "Jumping Jacks" || mode == "High Knees") {
       offsetY = -(p * 40);
       legSpread = mode == "Jumping Jacks" ? p * 40 : 0;
@@ -634,17 +729,16 @@ class _ClinicalPacerPainter extends CustomPainter {
       offsetY = p * 50;
       backKneeDrop = p * 40;
     } else {
-      // Squat
       offsetY = p * 50;
       legSpread = p * 10;
       kneeBend = p * 35;
     }
 
-    // ARMS (Only draw arms if full body animation mode)
+    // ARMS
     if (!useCamera || isGhost) {
       double armLift = (isLunge || mode == "Squats") ? (p * 40) : (p * 80);
-      canvas.drawLine(Offset(cx - 25, cy - 50 + offsetY), Offset(cx - 40, cy + 10 + offsetY - armLift), paint);
-      canvas.drawLine(Offset(cx + 25, cy - 50 + offsetY), Offset(cx + 40, cy + 10 + offsetY - armLift), paint);
+      canvas.drawLine(Offset(cx - 20, cy - 50 + offsetY), Offset(cx - 40, cy + 10 + offsetY - armLift), paint);
+      canvas.drawLine(Offset(cx + 20, cy - 50 + offsetY), Offset(cx + 40, cy + 10 + offsetY - armLift), paint);
     }
 
     // LEGS
@@ -652,8 +746,8 @@ class _ClinicalPacerPainter extends CustomPainter {
       bool leftLegForward = repCount % 2 == 0;
 
       void drawForwardLeg(double dir) {
-        canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx + (30 * dir), cy + 50 + offsetY), paint); // Thigh
-        canvas.drawLine(Offset(cx + (30 * dir), cy + 50 + offsetY), Offset(cx + (30 * dir), cy + 110), paint); // Shin
+        canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx + (30 * dir), cy + 50 + offsetY), paint);
+        canvas.drawLine(Offset(cx + (30 * dir), cy + 50 + offsetY), Offset(cx + (30 * dir), cy + 110), paint);
       }
       void drawBackLeg(double dir) {
         canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx + (20 * dir), cy + 50 + offsetY + backKneeDrop), paint);
@@ -665,18 +759,15 @@ class _ClinicalPacerPainter extends CustomPainter {
 
     } else if (mode == "High Knees") {
       bool leftKneeUp = repCount % 2 == 0;
-      // Planted Leg
       canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx + (leftKneeUp ? 20 : -20), cy + 110), paint);
-      // High Knee
-      canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx + (leftKneeUp ? -30 : 30), cy + 50 - (p * 30)), paint); // Thigh up
-      canvas.drawLine(Offset(cx + (leftKneeUp ? -30 : 30), cy + 50 - (p * 30)), Offset(cx + (leftKneeUp ? -30 : 30), cy + 90), paint); // Shin down
+      canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx + (leftKneeUp ? -30 : 30), cy + 50 - (p * 30)), paint);
+      canvas.drawLine(Offset(cx + (leftKneeUp ? -30 : 30), cy + 50 - (p * 30)), Offset(cx + (leftKneeUp ? -30 : 30), cy + 90), paint);
     } else {
-      // Squats & Jumping Jacks
-      canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx - 20 - legSpread - kneeBend, cy + 50 + offsetY), paint); // L Thigh
-      canvas.drawLine(Offset(cx - 20 - legSpread - kneeBend, cy + 50 + offsetY), Offset(cx - 20 - legSpread, cy + 110), paint); // L Shin
+      canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx - 20 - legSpread - kneeBend, cy + 50 + offsetY), paint);
+      canvas.drawLine(Offset(cx - 20 - legSpread - kneeBend, cy + 50 + offsetY), Offset(cx - 20 - legSpread, cy + 110), paint);
 
-      canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx + 20 + legSpread + kneeBend, cy + 50 + offsetY), paint); // R Thigh
-      canvas.drawLine(Offset(cx + 20 + legSpread + kneeBend, cy + 50 + offsetY), Offset(cx + 20 + legSpread, cy + 110), paint); // R Shin
+      canvas.drawLine(Offset(cx, cy + offsetY), Offset(cx + 20 + legSpread + kneeBend, cy + 50 + offsetY), paint);
+      canvas.drawLine(Offset(cx + 20 + legSpread + kneeBend, cy + 50 + offsetY), Offset(cx + 20 + legSpread, cy + 110), paint);
     }
   }
 

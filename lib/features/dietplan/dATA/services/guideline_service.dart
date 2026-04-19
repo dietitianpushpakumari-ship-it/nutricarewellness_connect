@@ -1,7 +1,7 @@
 // lib/services/guideline_service.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/guidelines.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/guidelines.dart';
 
 
 /// Service class for managing Guideline master data in Firestore.

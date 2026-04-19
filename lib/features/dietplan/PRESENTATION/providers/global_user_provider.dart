@@ -1,7 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/core/utils/client_model.dart';
-import 'package:nutricare_connect/new/service/client_service.dart';
-import 'package:nutricare_connect/features/auth/auth_provider.dart';
+import 'package:pure_shift/core/utils/client_model.dart';
+import 'package:pure_shift/new/dashboard/tenant_model.dart';
+import 'package:pure_shift/new/service/client_service.dart';
+import 'package:pure_shift/features/auth/auth_provider.dart';
 
 // 1. The StateNotifier class to manage the ClientModel
 class UserNotifier extends StateNotifier<ClientModel?> {
@@ -35,4 +37,12 @@ class UserNotifier extends StateNotifier<ClientModel?> {
 final globalUserProvider = StateNotifierProvider<UserNotifier, ClientModel?>((ref) {
   final clientService = ref.watch(clientServiceProvider);
   return UserNotifier(clientService);
+});
+
+final tenantProfileProvider = FutureProvider.family<TenantModel?, String>((ref, tenantId) async {
+  final doc = await FirebaseFirestore.instance.collection('tenants').doc(tenantId).get();
+  if (doc.exists && doc.data() != null) {
+    return TenantModel.fromFirestore(doc); // Or .fromJson depending on your model
+  }
+  return null;
 });

@@ -4,19 +4,19 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/new/dashboard/daily_log_logging_screen.dart';
-import 'package:nutricare_connect/core/utils/wellness_tool_model.dart';
-import 'package:nutricare_connect/new/flat_diet_plan_model.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/new/dashboard/daily_log_logging_screen.dart';
+import 'package:pure_shift/core/utils/wellness_tool_model.dart';
+import 'package:pure_shift/new/flat_diet_plan_model.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:collection/collection.dart';
 
 
 
 // Sheets & Data
-import 'package:nutricare_connect/new/dietplan/meal_detail_sheet.dart';
-import 'package:nutricare_connect/new/dietplan/hydration_detail_screen.dart';
+import 'package:pure_shift/new/dietplan/meal_detail_sheet.dart';
+import 'package:pure_shift/new/dietplan/hydration_detail_screen.dart';
 
 import '../FlatClientDietPlanModel.dart';
 
@@ -338,7 +338,7 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
                               color: colorScheme.onSurfaceVariant
                           )

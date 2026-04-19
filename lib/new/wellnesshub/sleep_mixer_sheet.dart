@@ -1,6 +1,11 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Added for haptics
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class SleepMixerSheet extends StatefulWidget {
   const SleepMixerSheet({super.key});
@@ -90,12 +95,14 @@ class _SleepMixerSheetState extends State<SleepMixerSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("SOUNDSCAPE MIXER", style: TextStyle(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                      Text("Clinical Sleep Support", style: TextStyle(color: theme.hintColor, fontSize: 14)),
+                      // 🚀 REFINED HEADER (Max Size 10, w700)
+                      Text("SOUNDSCAPE MIXER", style: TextStyle(fontFamily: kDisplayFont, color: cs.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+                      const SizedBox(height: 2),
+                      Text("Clinical Sleep Support", style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: 12, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
-                IconButton(icon: Icon(Icons.close_rounded, color: theme.hintColor), onPressed: () => Navigator.pop(context))
+                IconButton(icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20), onPressed: () => Navigator.pop(context))
               ],
             ),
           ),
@@ -130,11 +137,18 @@ class _SleepMixerSheetState extends State<SleepMixerSheet> {
           Padding(
             padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 20),
             child: SizedBox(
-              width: double.infinity, height: 56,
+              width: double.infinity, height: 50, // Slightly more compact button
               child: FilledButton(
-                onPressed: () => Navigator.pop(context),
-                style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                child: const Text("Keep Playing & Close", style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context);
+                },
+                style: FilledButton.styleFrom(
+                    elevation: 0, // Flat premium look
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                ),
+                // 🚀 REFINED BUTTON TEXT (Size 12, w700)
+                child: const Text("Keep Playing & Close", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
               ),
             ),
           )
@@ -161,12 +175,18 @@ class _SleepMixerSheetState extends State<SleepMixerSheet> {
               Icon(i, color: active ? c : theme.hintColor, size: 18),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(t, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: active ? theme.colorScheme.onSurface : theme.hintColor)),
-                  Text(s, style: TextStyle(fontSize: 10, color: theme.hintColor)),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 🚀 REFINED TRACK TITLE (Size 12, w700)
+                      Text(t, style: TextStyle(fontFamily: kBodyFont, fontSize: 12, fontWeight: FontWeight.w700, color: active ? theme.colorScheme.onSurface : theme.hintColor)),
+                      const SizedBox(height: 2),
+                      Text(s, style: TextStyle(fontFamily: kBodyFont, fontSize: 10, fontWeight: FontWeight.w500, color: theme.hintColor)),
+                    ]
+                ),
               ),
-              Text("${(v * 100).toInt()}%", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.hintColor)),
+              // 🚀 REFINED PERCENTAGE (Size 10, w700)
+              Text("${(v * 100).toInt()}%", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, color: theme.hintColor)),
             ],
           ),
           SliderTheme(
@@ -175,7 +195,18 @@ class _SleepMixerSheetState extends State<SleepMixerSheet> {
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
             ),
-            child: Slider(value: v, min: 0.0, max: 1.0, activeColor: c, inactiveColor: theme.dividerColor.withOpacity(0.1), onChanged: onC),
+            child: Slider(
+                value: v,
+                min: 0.0,
+                max: 1.0,
+                activeColor: c,
+                inactiveColor: theme.dividerColor.withOpacity(0.1),
+                onChanged: (val) {
+                  // Subtle haptic when slider is moved
+                  if (val == 0.0 || val == 1.0) HapticFeedback.lightImpact();
+                  onC(val);
+                }
+            ),
           ),
         ],
       ),

@@ -1,57 +1,51 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Needed for HapticFeedback
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/core/utils/client_model.dart';
-import 'package:nutricare_connect/core/utils/wellness_reccomender_service.dart';
-import 'package:nutricare_connect/core/utils/wellness_tool_model.dart';
-import 'package:nutricare_connect/features/content/quiz_swipe_screen.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-                                     // FlatClientDietPlanModel
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/new/service/client_service.dart';
-import 'package:collection/collection.dart';
 
-import 'package:nutricare_connect/new/wellnesshub/BalanceLockSheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/BiometricScannerSheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/Co2ToleranceSheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/IsometricBPPacerSheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/SomaticFluidSheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/SomaticPopItSheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/SpineDecompressionSheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/VagusNerveResetSheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/brainwave_pomodoro_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/eft_tapping_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/emdr_pacer_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/stroop_test_sheet.dart';
+import 'package:pure_shift/core/utils/client_model.dart';
+import 'package:pure_shift/core/utils/wellness_reccomender_service.dart';
+import 'package:pure_shift/core/utils/wellness_tool_model.dart';
+import 'package:pure_shift/layout_utils.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 
-// 🎯 LOGIC IMPORTS
-import 'package:nutricare_connect/new/wellnesshub/wellness_tool_registry.dart';
-
-// 🎯 SCREEN IMPORTS
-import 'package:nutricare_connect/new/wellnesshub/breathing_detail_screen.dart';
-import 'package:nutricare_connect/core/utils/mindfullness_config.dart';
-import 'package:nutricare_connect/core/utils/workout_config.dart';
-import 'package:nutricare_connect/new/wellnesshub/workout_player_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/rhythm_pacer_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/eye-yoga_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/meal_pacer_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/neck_and_wrist_relief.dart';
-import 'package:nutricare_connect/new/wellnesshub/posture_trainer_screen.dart';
-import 'package:nutricare_connect/core/utils/kegal_trainer_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/spiritual_healing_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/worry_shreeder_sheet.dart';
-import 'package:nutricare_connect/core/utils/zen_garden_sheet.dart';
-import 'package:nutricare_connect/core/utils/grounding_panic_aid.dart';
-import 'package:nutricare_connect/new/wellnesshub/gratitude_garden_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/focus_grid_sheet.dart';
-import 'package:nutricare_connect/core/utils/isochronic_tapping.dart';
-import 'package:nutricare_connect/new/wellnesshub/sleep_mixer_sheet.dart';
-import 'package:nutricare_connect/new/wellnesshub/sleep_debt_bank.dart';
-
-import 'package:nutricare_connect/features/content/geeta_library_screen.dart';
-
+import 'package:pure_shift/new/wellnesshub/BalanceLockSheet.dart';
+import 'package:pure_shift/new/wellnesshub/BiometricScannerSheet.dart';
+import 'package:pure_shift/new/wellnesshub/Co2ToleranceSheet.dart';
+import 'package:pure_shift/new/wellnesshub/IsometricBPPacerSheet.dart';
+import 'package:pure_shift/new/wellnesshub/SomaticFluidSheet.dart';
+import 'package:pure_shift/new/wellnesshub/SomaticPopItSheet.dart';
+import 'package:pure_shift/new/wellnesshub/SpineDecompressionSheet.dart';
+import 'package:pure_shift/new/wellnesshub/VagusNerveResetSheet.dart';
+import 'package:pure_shift/new/wellnesshub/brainwave_pomodoro_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/eft_tapping_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/emdr_pacer_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/stroop_test_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/wellness_tool_registry.dart';
+import 'package:pure_shift/new/wellnesshub/breathing_detail_screen.dart';
+import 'package:pure_shift/core/utils/mindfullness_config.dart';
+import 'package:pure_shift/core/utils/workout_config.dart';
+import 'package:pure_shift/new/wellnesshub/workout_player_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/rhythm_pacer_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/eye-yoga_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/meal_pacer_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/neck_and_wrist_relief.dart';
+import 'package:pure_shift/new/wellnesshub/spiritual_healing_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/worry_shreeder_sheet.dart';
+import 'package:pure_shift/core/utils/zen_garden_sheet.dart';
+import 'package:pure_shift/core/utils/grounding_panic_aid.dart';
+import 'package:pure_shift/new/wellnesshub/gratitude_garden_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/focus_grid_sheet.dart';
+import 'package:pure_shift/core/utils/isochronic_tapping.dart';
+import 'package:pure_shift/new/wellnesshub/sleep_mixer_sheet.dart';
+import 'package:pure_shift/new/wellnesshub/sleep_debt_bank.dart';
+import 'package:pure_shift/features/content/geeta_library_screen.dart';
 import '../FlatClientDietPlanModel.dart';
+
+// 🎯 GLOBAL FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class WellnessHubScreen extends ConsumerWidget {
   final ClientModel client;
@@ -61,37 +55,27 @@ class WellnessHubScreen extends ConsumerWidget {
     final state = ref.read(activeDietPlanProvider);
     final notifier = ref.read(dietPlanNotifierProvider(client.id).notifier);
 
-    // 🎯 Haptic feedback for a premium, tactile feel
     HapticFeedback.selectionClick();
-
-    // 🎯 ATOMIC FIX: Use the single daily record directly
     final dailyRecord = state.dailyRecord;
 
     switch (routeKey) {
-      case 'quickfit': _showWorkoutMenu(context, Theme.of(context)); break;
+    // 🚀 Pass the client to _showWorkoutMenu to access assignedWorkouts
+      case 'quickfit': _showWorkoutMenu(context, Theme.of(context), client); break;
       case 'cardio': _launchSheet(context, const RhythmPacerSheet()); break;
-      case 'posture': Navigator.push(context, MaterialPageRoute(builder: (_) => const Scaffold(body: PostureTrainerSheet()))); break;
       case 'neck': _launchSheet(context, const NeckWristSheet(isNeck: true)); break;
       case 'wrist': _launchSheet(context, const NeckWristSheet(isNeck: false)); break;
-      case 'kegel': _launchSheet(context, const KegelTrainerSheet()); break;
       case 'bp_hold': _launchSheet(context, const IsometricBPPacerSheet()); break;
       case 'vitals_scan': _launchBiometricScanner(context); break;
-
       case 'glucose_pulse':
         _launchSheet(context, const RhythmPacerSheet(
             prescription: CardioPrescription(
-              sets: 3, targetReps: 20,
-              tempo: ClinicalTempo(eccentricMs: 1500, isometricMs: 500, concentricMs: 1000),
-              maxSafeRpe: 5,
+              sets: 3, targetReps: 20, tempo: ClinicalTempo(eccentricMs: 1500, isometricMs: 500, concentricMs: 1000), maxSafeRpe: 5,
             )
         ));
         break;
-
       case 'balance': _launchSheet(context, const BalanceLockSheet()); break;
       case 'spine_decompression': _launchSheet(context, const SpineDecompressionSheet()); break;
-
       case 'breathing':
-      // 🎯 SAFETY CHECK: Ensure plan exists before opening the menu
         if (state.activePlan != null) {
           _showBreathingMenu(context, notifier, state.activePlan!, dailyRecord, Theme.of(context));
         } else {
@@ -108,266 +92,77 @@ class WellnessHubScreen extends ConsumerWidget {
       case 'stroop': _launchSheet(context, const StroopTestSheet()); break;
       case 'pomodoro': _launchSheet(context, const BrainwavePomodoroSheet()); break;
       case 'eft_tapping': _launchSheet(context, const EftTappingSheet()); break;
-
       case 'mantra': _launchSheet(context, const SpiritualHealingSheet()); break;
-      case 'geeta': Navigator.push(context, MaterialPageRoute(builder: (_) => const GeetaLibraryScreen())); break;
+      case 'geeta': _launchSheet(context, const GeetaLibrarySheet()); break;
       case 'sleep_mix': _launchSheet(context, const SleepMixerSheet()); break;
       case 'gratitude': _launchSheet(context, const GratitudeGardenSheet()); break;
       case 'panic': _launchSheet(context, const GroundingGameSheet()); break;
       case 'sleep_debt': _launchSheet(context, const SleepDebtSheet()); break;
-
-      case 'quiz': Navigator.push(context, MaterialPageRoute(builder: (_) => const QuizSwipeScreen())); break;
       case 'meal_pacer': _launchSheet(context, const MealPacerSheet()); break;
       case 'co2_tolerance': _launchSheet(context, const Co2ToleranceSheet()); break;
       case 'somatic_popit': _launchSheet(context, const SomaticPopItSheet()); break;
       case 'somatic_fluid': _launchSheet(context, const SomaticFluidSheet()); break;
-
       default:
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: const Text("Feature coming soon!"), backgroundColor: Theme.of(context).colorScheme.primary)
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text("Refining this protocol..."), backgroundColor: Theme.of(context).colorScheme.primary));
     }
   }
 
-  // 🎯 Helper to show a snackbar if no diet plan is active
   void _showNoPlanSnippet(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Please activate a diet plan to use this feature.")),
-    );
-  }
-
-  // 🎯 ATOMIC FIX: Update menu helpers to accept FlatClientDietPlanModel
-  void _showBreathingMenu(BuildContext context, DietPlanNotifier notifier, FlatClientDietPlanModel activePlan, ClientLogModel? dailyRecord, ThemeData theme) {
-    showModalBottomSheet(
-      isDismissible: true, // 🎯 Allowed dismissal for better UX
-      isScrollControlled: true,
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => SafeArea(
-        child: Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-          ),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 16),
-                Center(child: Container(width: 48, height: 5, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.5), borderRadius: BorderRadius.circular(3)))),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                  child: Text("Breathing Exercises", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: theme.colorScheme.onSurface)),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      _buildPresetTile(ctx, "Focus & Clarity", "Box Breathing (4-4-4-4)", Icons.crop_square_rounded, Colors.teal, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.box), theme),
-                      _buildPresetTile(ctx, "Sleep & Anxiety", "4-7-8 Technique", Icons.nightlight_round, Colors.indigo, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.relax), theme),
-                      _buildPresetTile(ctx, "Energy Boost", "Rapid Fire Breath", Icons.bolt_rounded, Colors.orange, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.energy), theme),
-                      _buildPresetTile(ctx, "Balance", "Coherence (Heart Sync)", Icons.favorite_rounded, Colors.pink, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.coherence), theme),
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: theme.cardColor,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: theme.dividerColor.withOpacity(0.1)))
-                      ),
-                      child: Text("Cancel", style: TextStyle(color: theme.hintColor, fontWeight: FontWeight.w900)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please activate a diet plan to use this feature.")));
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 🎨 Theme Extraction
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-
     final recommendations = WellnessRecommender.getRecommendations();
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor, // 🎨 Themed Background
-      // 🎯 Added SafeArea so content doesn't hide behind the top notch/status bar
+      extendBody: true,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
+        top: true,
         bottom: false,
         child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                    child: Text("Recommended for You", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colorScheme.onSurface)), // 🎨 Themed Text
-                  ),
+                  SizedBox(height: context.scale(16)),
+                  _buildSectionHeader(context, "RECOMMENDED PROTOCOLS", theme),
                   SizedBox(
-                    height: 140,
+                    height: context.scale(140),
                     child: PageView.builder(
-                      controller: PageController(viewportFraction: 0.9),
+                      physics: const BouncingScrollPhysics(),
+                      controller: PageController(viewportFraction: 0.90),
                       itemCount: recommendations.length,
                       itemBuilder: (context, index) {
-                        final tool = recommendations[index];
-                        return _buildHeroCard(context, tool, () => _handleToolTap(context, tool.routeKey, ref, client));
+                        return _buildHeroCard(context, recommendations[index], () => _handleToolTap(context, recommendations[index].routeKey, ref, client));
                       },
                     ),
                   ),
                 ],
               ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 20)),
-            _buildCategorySection(context, ref, "Move & Energize", WellnessCategory.physical, client, theme, colorScheme, isDark),
-            _buildCategorySection(context, ref, "Calm & Focus", WellnessCategory.mental, client, theme, colorScheme, isDark),
-            _buildCategorySection(context, ref, "Soul & Sleep", WellnessCategory.spiritual, client, theme, colorScheme, isDark),
-            _buildLearningSection(context, ref, client, theme, colorScheme, isDark),
-            const SliverToBoxAdapter(child: SizedBox(height: 180)),
+            SliverToBoxAdapter(child: SizedBox(height: context.scale(24))),
+            _buildCategorySection(context, ref, "MOVE & ENERGIZE", WellnessCategory.physical, client, theme, isDark),
+            _buildCategorySection(context, ref, "CALM & FOCUS", WellnessCategory.mental, client, theme, isDark),
+            _buildCategorySection(context, ref, "SOUL & SLEEP", WellnessCategory.spiritual, client, theme, isDark),
+            SliverToBoxAdapter(child: SizedBox(height: context.scale(170))),
           ],
         ),
       ),
     );
   }
 
-
-  // 🎯 NEW: Helper function to handle async camera fetching
-  Future<void> _launchBiometricScanner(BuildContext context) async {
-    try {
-      // 1. Fetch available physical cameras
-      final cameras = await availableCameras();
-
-      if (cameras.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("No camera hardware found.", style: TextStyle(color: Theme.of(context).colorScheme.onError)), backgroundColor: Theme.of(context).colorScheme.error),
-          );
-        }
-        return;
-      }
-
-      // 2. Open the Clinical Scanner Sheet
-      if (context.mounted) {
-        final int? bpmResult = await showModalBottomSheet<int>(
-          isDismissible: false,
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => BiometricScannerSheet(cameras: cameras),
-        );
-
-        // 3. Handle the returned medical data (Optional: Prompt Intervention)
-        if (bpmResult != null && context.mounted) {
-          _evaluateVitals(context, bpmResult);
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Camera Error: $e", style: TextStyle(color: Theme.of(context).colorScheme.onError)), backgroundColor: Theme.of(context).colorScheme.error),
-        );
-      }
-    }
-  }
-
-  // 🎯 NEW: Clinical Routing Logic based on BPM
-  void _evaluateVitals(BuildContext context, int bpm) {
-    if (bpm > 85) {
-      // Patient is stressed (Sympathetic State)
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            duration: const Duration(seconds: 5),
-            content: Text("High stress detected ($bpm BPM). Vagus Nerve Reset recommended before eating."),
-            action: SnackBarAction(
-              label: "START",
-              textColor: Colors.white,
-              onPressed: () => _launchSheet(context, const VagusNerveResetSheet()),
-            ),
-          )
-      );
-    } else {
-      // Patient is relaxed (Parasympathetic State)
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Vitals Optimal ($bpm BPM). Ready for nutrient absorption."),
-            backgroundColor: Colors.green,
-          )
-      );
-    }
-  }
-
-  Widget _buildCategorySection(BuildContext context, WidgetRef ref, String title, WellnessCategory category, ClientModel client, ThemeData theme, ColorScheme colorScheme, bool isDark) {
-    List<WellnessTool> tools = WellnessRecommender.getByCategory(category);
-    if (category == WellnessCategory.spiritual) {
-      tools.addAll(WellnessRecommender.getByCategory(WellnessCategory.sleep));
-    }
-    if (tools.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-            child: Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: colorScheme.onSurface)), // 🎨 Themed Text
-          ),
-          SizedBox(
-            height: 145,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: tools.length,
-              itemBuilder: (context, index) {
-                final tool = tools[index];
-                return _buildBentoCard(context, tool, () => _handleToolTap(context, tool.routeKey, ref, client), theme, isDark);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLearningSection(BuildContext context, WidgetRef ref, ClientModel client, ThemeData theme, ColorScheme colorScheme, bool isDark) {
-    final tools = WellnessRecommender.getByCategory(WellnessCategory.learning);
-    if (tools.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Daily Learning", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: colorScheme.onSurface)), // 🎨 Themed Text
-            const SizedBox(height: 10),
-            ...tools.map((tool) =>
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _buildWideCard(context, tool, () => _handleToolTap(context, tool.routeKey, ref, client), theme, colorScheme, isDark),
-                )
-            ).toList(),
-          ],
-        ),
+  Widget _buildSectionHeader(BuildContext context, String title, ThemeData theme) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(context.scale(24), context.scale(10), context.scale(24), context.scale(14)),
+      child: Text(
+        title,
+        style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(10), fontWeight: FontWeight.w700, letterSpacing: 1.5, color: theme.hintColor.withOpacity(0.5)),
       ),
     );
   }
@@ -376,12 +171,15 @@ class WellnessHubScreen extends ConsumerWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(right: 10),
-        padding: const EdgeInsets.all(16),
+        margin: EdgeInsets.only(right: context.scale(12)),
+        padding: EdgeInsets.all(context.scale(20)),
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [tool.color, tool.color.withOpacity(0.8)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: tool.color.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
+          gradient: LinearGradient(
+              colors: [tool.color, tool.color.withOpacity(0.8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight
+          ),
+          borderRadius: BorderRadius.circular(context.scale(24)),
         ),
         child: Row(
           children: [
@@ -391,89 +189,85 @@ class WellnessHubScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(6)),
-                    child: const Text("RECOMMENDED", style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                    padding: EdgeInsets.symmetric(horizontal: context.scale(8), vertical: context.scale(4)),
+                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.15), borderRadius: BorderRadius.circular(context.scale(8))),
+                    child: Text("FOR YOU", style: TextStyle(fontFamily: kDisplayFont, color: Colors.white, fontSize: context.scale(8), fontWeight: FontWeight.w700, letterSpacing: 1.2)),
                   ),
-                  const SizedBox(height: 6),
-                  Text(tool.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                  Text(tool.subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  SizedBox(height: context.scale(12)),
+                  Text(tool.title, style: TextStyle(fontFamily: kDisplayFont, color: Colors.white, fontSize: context.scale(16), fontWeight: FontWeight.w700, height: 1.1)),
+                  SizedBox(height: context.scale(4)),
+                  Text(tool.subtitle, style: TextStyle(fontFamily: kBodyFont, color: Colors.white70, fontSize: context.scale(10), fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
-            Icon(tool.icon, color: Colors.white, size: 48),
+            Container(
+              padding: EdgeInsets.all(context.scale(12)),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
+              child: Icon(tool.icon, color: Colors.white, size: context.scale(28)),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBentoCard(BuildContext context, WellnessTool tool, VoidCallback onTap, ThemeData theme, bool isDark) {
-    return Container(
-      width: 125,
-      margin: const EdgeInsets.only(right: 10, bottom: 10, top: 2),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Ink(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: theme.cardColor, // 🎨 Themed Card
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.2)), // 🎨 Subtle border
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.1 : 0.04), blurRadius: 6, offset: const Offset(0, 3))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: tool.color.withOpacity(0.1), shape: BoxShape.circle),
-                  child: Icon(tool.icon, color: tool.color, size: 22),
-                ),
-                const SizedBox(height: 10),
-                Text(tool.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: theme.colorScheme.onSurface)), // 🎨 Themed Text
-                const SizedBox(height: 2),
-                Text(tool.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: theme.hintColor, fontSize: 11)), // 🎨 Themed Hint
-              ],
+  Widget _buildCategorySection(BuildContext context, WidgetRef ref, String title, WellnessCategory category, ClientModel client, ThemeData theme, bool isDark) {
+    List<WellnessTool> tools = WellnessRecommender.getByCategory(category);
+    if (category == WellnessCategory.spiritual) tools.addAll(WellnessRecommender.getByCategory(WellnessCategory.sleep));
+    if (tools.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(context, title, theme),
+          SizedBox(
+            height: context.scale(120),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(horizontal: context.scale(20)),
+              itemCount: tools.length,
+              itemBuilder: (context, index) {
+                return _buildBentoCard(context, tools[index], () => _handleToolTap(context, tools[index].routeKey, ref, client), theme, isDark);
+              },
             ),
           ),
-        ),
+          SizedBox(height: context.scale(8)),
+        ],
       ),
     );
   }
 
-  Widget _buildWideCard(BuildContext context, WellnessTool tool, VoidCallback onTap, ThemeData theme, ColorScheme colorScheme, bool isDark) {
+  Widget _buildBentoCard(BuildContext context, WellnessTool tool, VoidCallback onTap, ThemeData theme, bool isDark) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        width: context.scale(110),
+        margin: EdgeInsets.only(right: context.scale(12), bottom: context.scale(8)),
+        padding: EdgeInsets.all(context.scale(12)),
         decoration: BoxDecoration(
-            color: theme.cardColor, // 🎨 Themed Card
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.dividerColor.withOpacity(0.2)), // 🎨 Subtle border
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.1 : 0.03), blurRadius: 6, offset: const Offset(0, 3))]
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(context.scale(20)),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.08)),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: tool.color.withOpacity(0.1), shape: BoxShape.circle),
-                child: Icon(tool.icon, color: tool.color, size: 20)
+              padding: EdgeInsets.all(context.scale(8)),
+              decoration: BoxDecoration(color: tool.color.withOpacity(0.1), shape: BoxShape.circle),
+              child: Icon(tool.icon, color: tool.color, size: context.scale(16)),
             ),
-            const SizedBox(width: 12),
             Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(tool.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: colorScheme.onSurface)), // 🎨 Themed Text
-                  Text(tool.subtitle, style: TextStyle(color: theme.hintColor, fontSize: 11)) // 🎨 Themed Hint
-                ]
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tool.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, fontSize: context.scale(10), color: theme.colorScheme.onSurface)),
+                SizedBox(height: context.scale(2)),
+                Text(tool.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: context.scale(9), fontWeight: FontWeight.w500)),
+              ],
             ),
-            const Spacer(),
-            Icon(Icons.chevron_right_rounded, color: theme.iconTheme.color?.withOpacity(0.5), size: 18), // 🎨 Themed Icon
           ],
         ),
       ),
@@ -481,106 +275,246 @@ class WellnessHubScreen extends ConsumerWidget {
   }
 
   void _launchSheet(BuildContext context, Widget sheet) {
-    showModalBottomSheet(isDismissible : false,context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => sheet);
+    showModalBottomSheet(isDismissible: false, context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => sheet);
   }
 
-  // 🎯 RESTORED & THEMED: EXPANDED MENUS for Breathing & Quick Fit
+  // 🚀 UPDATED: Parses ClientModel to find assigned workouts dynamically
+  // 🚀 UPDATED: Parses ClientModel to find ALL assigned workouts dynamically
+  void _showWorkoutMenu(BuildContext context, ThemeData theme, ClientModel client) {
+    final isDark = theme.brightness == Brightness.dark;
 
-  void _showWorkoutMenu(BuildContext context, ThemeData theme) {
+    // --- 🏋️ PARSE ALL DIETITIAN ASSIGNED WORKOUTS ---
+    List<WorkoutConfig> prescribedRoutines = [];
+
+    if (client.assignedWorkouts.isNotEmpty) {
+      for (var routine in client.assignedWorkouts) {
+        final Map<String, dynamic> routineJson = routine as Map<String, dynamic>;
+        final List stepsData = routineJson['steps'] ?? [];
+
+        final List<WorkoutStep> parsedSteps = stepsData.map((s) {
+          ExerciseType parsedType = ExerciseType.rest;
+          try {
+            parsedType = ExerciseType.values.byName(s['type']);
+          } catch (_) {}
+
+          return WorkoutStep(
+            type: parsedType,
+            duration: s['duration'] ?? 30,
+            reps: s['reps'] ?? 0,
+            isRepBased: (s['reps'] ?? 0) > 0, // Ensure rep-based flag is set
+            title: parsedType.name.replaceAll(RegExp(r'(?<!^)(?=[A-Z])'), ' ').toUpperCase(),
+            instruction: "Execute with proper form.",
+            icon: Icons.fitness_center_rounded, // Provide a default icon
+          );
+        }).toList();
+
+        prescribedRoutines.add(
+            WorkoutConfig(
+              title: routineJson['title']?.toString().toUpperCase() ?? "CLINICAL PROTOCOL",
+              description: "Scheduled for ${routineJson['scheduledTime'] ?? 'today'}.",
+              color: const Color(0xFF1E1E1E), // Industrial Luxury Black
+              steps: parsedSteps,
+            )
+        );
+      }
+    }
+
     showModalBottomSheet(
-      isDismissible: false,
-      isScrollControlled: true, // 🎯 FIX 1: Allows height adjustment
+      isDismissible: true,
+      isScrollControlled: true,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SafeArea(
         child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.85, // 🎯 Safety constraint
-          ),
           decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+            color: isDark ? const Color(0xFF121826) : Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(ctx.scale(28))),
           ),
-          child: SingleChildScrollView( // 🎯 FIX 2: Prevents overflow
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 🎯 Drag Handle
-                const SizedBox(height: 16),
-                Center(
-                    child: Container(
-                        width: 40, height: 4,
-                        decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.5), borderRadius: BorderRadius.circular(2))
-                    )
-                ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(height: ctx.scale(12)),
+              Center(child: Container(width: ctx.scale(36), height: ctx.scale(4), decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.1), borderRadius: BorderRadius.circular(ctx.scale(2))))),
+              SizedBox(height: ctx.scale(16)),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: ctx.scale(24)),
+                child: Text("QUICK FIT", style: TextStyle(fontFamily: kDisplayFont, fontSize: ctx.scale(10), fontWeight: FontWeight.w700, letterSpacing: 1.5, color: theme.hintColor.withOpacity(0.6))),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(ctx.scale(24), ctx.scale(4), ctx.scale(24), ctx.scale(16)),
+                child: Text("Select a Routine", style: TextStyle(fontFamily: kDisplayFont, fontSize: ctx.scale(16), fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: ctx.scale(20)),
+                child: Column(
+                  children: [
 
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                  child: Text("Quick Workouts", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
-                ),
+                    // 🚀 PREMIUM RENDER: Loop through ALL custom configs
+                    if (prescribedRoutines.isNotEmpty) ...[
+                      ...prescribedRoutines.map((config) => _buildPresetRow(
+                          ctx,
+                          config.title,
+                          "Dietitian Prescribed • ${config.steps.length} Steps",
+                          Icons.verified_user_rounded,
+                          isDark ? Colors.white : Colors.black,
+                              () => _launchWorkout(context, config, client),
+                          theme
+                      )),
 
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      _buildPresetTile(ctx, "Morning Charge", "3 Min Wake Up", Icons.wb_sunny_rounded, Colors.orange, () => _launchWorkout(context, WorkoutConfig.morningStretch), theme),
-                      _buildPresetTile(ctx, "Desk De-Stress", "5 Min Neck & Back", Icons.chair_rounded, Colors.blue, () => _launchWorkout(context, WorkoutConfig.deskRelief), theme),
-                    ],
-                  ),
-                ),
-
-                // 🎯 Cancel Button
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: theme.cardColor,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(color: theme.dividerColor.withOpacity(0.1))
-                          )
+                      // Divider text before standard routines
+                      Padding(
+                        padding: EdgeInsets.symmetric(vertical: ctx.scale(8), horizontal: ctx.scale(16)),
+                        child: Text("STANDARD ROUTINES", style: TextStyle(fontFamily: kDisplayFont, fontSize: ctx.scale(9), fontWeight: FontWeight.w700, letterSpacing: 1.2, color: theme.hintColor.withOpacity(0.5))),
                       ),
-                      child: Text("Cancel", style: TextStyle(color: theme.hintColor, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
+                    ],
+
+                    // Fallback / Standard Routines
+                    _buildPresetRow(ctx, "Morning Charge", "3 Min Wake Up", Icons.wb_sunny_rounded, Colors.orange, () => _launchWorkout(context, WorkoutConfig.morningStretch, client), theme),
+                    _buildPresetRow(ctx, "Desk De-Stress", "5 Min Neck & Back", Icons.chair_rounded, Colors.blueAccent, () => _launchWorkout(context, WorkoutConfig.deskRelief, client), theme),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              SizedBox(height: ctx.scale(32)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  IconData getIcon(ExerciseType type) {
+    switch (type) {
+      case ExerciseType.rest: return Icons.self_improvement_rounded;
+      case ExerciseType.squat:
+      case ExerciseType.lunges: return Icons.airline_seat_legroom_extra_rounded;
+      case ExerciseType.pushup:
+      case ExerciseType.plank: return Icons.fitness_center_rounded;
+      case ExerciseType.highKnees:
+      case ExerciseType.jumpingJack: return Icons.directions_run_rounded;
+      case ExerciseType.pacing: return Icons.directions_walk_rounded;
+      default: return Icons.accessibility_new_rounded;
+    }
+  }
+  void _showBreathingMenu(BuildContext context, DietPlanNotifier notifier, FlatClientDietPlanModel activePlan, ClientLogModel? dailyRecord, ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    showModalBottomSheet(
+      isDismissible: true,
+      isScrollControlled: true,
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF121826) : Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(ctx.scale(28))),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(height: ctx.scale(12)),
+              Center(child: Container(width: ctx.scale(36), height: ctx.scale(4), decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.1), borderRadius: BorderRadius.circular(ctx.scale(2))))),
+              SizedBox(height: ctx.scale(16)),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: ctx.scale(24)),
+                child: Text("RESPIRATORY PROTOCOLS", style: TextStyle(fontFamily: kDisplayFont, fontSize: ctx.scale(10), fontWeight: FontWeight.w700, letterSpacing: 1.5, color: theme.hintColor.withOpacity(0.6))),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(ctx.scale(24), ctx.scale(4), ctx.scale(24), ctx.scale(16)),
+                child: Text("Breathing Exercises", style: TextStyle(fontFamily: kDisplayFont, fontSize: ctx.scale(16), fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: ctx.scale(20)),
+                child: Column(
+                  children: [
+                    _buildPresetRow(ctx, "Focus & Clarity", "Box Breathing (4-4-4-4)", Icons.crop_square_rounded, Colors.teal, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.box), theme),
+                    _buildPresetRow(ctx, "Sleep & Anxiety", "4-7-8 Technique", Icons.nightlight_round, Colors.indigo, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.relax), theme),
+                    _buildPresetRow(ctx, "Energy Boost", "Rapid Fire Breath", Icons.bolt_rounded, Colors.orange, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.energy), theme),
+                    _buildPresetRow(ctx, "Balance", "Coherence (Heart Sync)", Icons.favorite_rounded, Colors.pinkAccent, () => _launchBreathingSheet(context, notifier, activePlan, dailyRecord, BreathingConfig.coherence), theme),
+                  ],
+                ),
+              ),
+              SizedBox(height: ctx.scale(32)),
+            ],
           ),
         ),
       ),
     );
   }
 
+  Widget _buildPresetRow(BuildContext context, String title, String subtitle, IconData icon, Color color, VoidCallback onTap, ThemeData theme) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: EdgeInsets.only(bottom: context.scale(10)),
+        padding: EdgeInsets.symmetric(horizontal: context.scale(16), vertical: context.scale(14)),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(context.scale(16)),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.08)),
+        ),
+        child: Row(
+          children: [
+            Container(
+                padding: EdgeInsets.all(context.scale(10)),
+                decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+                child: Icon(icon, color: color, size: context.scale(16))
+            ),
+            SizedBox(width: context.scale(14)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, fontSize: context.scale(12), color: theme.colorScheme.onSurface)),
+                  SizedBox(height: context.scale(2)),
+                  Text(subtitle, style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: context.scale(10), fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: context.scale(16), color: theme.hintColor.withOpacity(0.4)),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _launchBreathingSheet(BuildContext context, DietPlanNotifier notifier, FlatClientDietPlanModel plan, ClientLogModel? log, BreathingConfig config) {
-    Navigator.pop(context); // 🎯 Close menu first
+    Navigator.pop(context);
     _launchSheet(context, BreathingDetailSheet(notifier: notifier, activePlan: plan, dailyLog: log, config: config));
   }
 
-  void _launchWorkout(BuildContext context, WorkoutConfig config) {
+  // 🚀 UPDATED: Now requires ClientModel to be passed to WorkoutPlayerSheet
+  void _launchWorkout(BuildContext context, WorkoutConfig config, ClientModel client) {
     Navigator.pop(context);
-    _launchSheet(context, WorkoutPlayerSheet(config: config));
+    _launchSheet(context, WorkoutPlayerSheet(config: config, client: client));
   }
 
-  Widget _buildPresetTile(BuildContext context, String title, String subtitle, IconData icon, Color color, VoidCallback onTap, ThemeData theme) {
-    return ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 18)
-        ),
-        title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: theme.colorScheme.onSurface)), // 🎨 Themed Text
-        subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: theme.hintColor)), // 🎨 Themed Hint
-        trailing: Icon(Icons.chevron_right_rounded, size: 16, color: theme.iconTheme.color?.withOpacity(0.5)), // 🎨 Themed Icon
-        onTap: onTap
-    );
+  Future<void> _launchBiometricScanner(BuildContext context) async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) return;
+      if (context.mounted) {
+        final int? bpmResult = await showModalBottomSheet<int>(
+          isDismissible: false, context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => BiometricScannerSheet(cameras: cameras),
+        );
+        if (bpmResult != null && context.mounted) _evaluateVitals(context, bpmResult);
+      }
+    } catch (e) {
+      debugPrint("Scanner Error: $e");
+    }
+  }
+
+  void _evaluateVitals(BuildContext context, int bpm) {
+    if (bpm > 85) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 5),
+            content: Text("High stress detected ($bpm BPM). Reset recommended.", style: TextStyle(fontFamily: kBodyFont, fontSize: context.scale(11))),
+            action: SnackBarAction(label: "START", textColor: Colors.white, onPressed: () => _launchSheet(context, const VagusNerveResetSheet())),
+          )
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Vitals Optimal ($bpm BPM).", style: TextStyle(fontFamily: kBodyFont, fontSize: context.scale(11))), backgroundColor: Colors.green));
+    }
   }
 }

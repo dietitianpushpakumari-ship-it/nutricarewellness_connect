@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/rating_service.dart';
+import 'package:pure_shift/core/utils/rating_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 

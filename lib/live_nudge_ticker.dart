@@ -6,16 +6,16 @@ import 'package:collection/collection.dart';
 import 'package:intl/intl.dart';
 
 // 🎯 Models & Providers
-import 'package:nutricare_connect/new/flat_diet_plan_model.dart';
-import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/new/flat_diet_plan_model.dart';
+import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 
 // 🎯 Sheets & Screens
-import 'package:nutricare_connect/new/dietplan/meal_detail_sheet.dart';
-import 'package:nutricare_connect/new/dietplan/hydration_detail_screen.dart';
-import 'package:nutricare_connect/new/dashboard/daily_log_logging_screen.dart';
+import 'package:pure_shift/new/dietplan/meal_detail_sheet.dart';
+import 'package:pure_shift/new/dietplan/hydration_detail_screen.dart';
+import 'package:pure_shift/new/dashboard/daily_log_logging_screen.dart';
 
 // ===========================================================================
 // 🧠 1. THE NUDGE DATA MODEL
@@ -29,7 +29,7 @@ class TickerNudge {
 }
 
 // ===========================================================================
-// 🚀 2. THE SENSEX TICKER WIDGET
+// 🚀 2. THE LIVE TICKER WIDGET (Fixed Pill Design & Text Clipping)
 // ===========================================================================
 class LiveNudgeTicker extends ConsumerStatefulWidget {
   final String clientId;
@@ -43,15 +43,12 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
   final ScrollController _scrollController = ScrollController();
   Timer? _timer;
 
-  // Animation for the inner glow pulse
   late AnimationController _glowController;
   late Animation<double> _glowAnimation;
 
   @override
   void initState() {
     super.initState();
-
-    // Setup pulse animation mirroring the old SmartNudgeBar
     _glowController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
     _glowAnimation = Tween<double>(begin: 0.0, end: 8.0).animate(CurvedAnimation(parent: _glowController, curve: Curves.easeInOut));
 
@@ -146,34 +143,24 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
     final FlatClientDietPlanModel? plan = state.activePlan;
     final dailyRecord = state.dailyRecord;
     List<TickerNudge> nudges = [];
-    // 🕒 Time-based calculation for Smart Glow (6 AM to 10 PM)
 
-    // 🟣 1. INBOX (High Priority Glow)
-    // 🕒 CIRCADIAN WINDOW: 6 AM to 10 PM
     final now = DateTime.now();
     final double currentHourDouble = now.hour + (now.minute / 60.0);
     const double dayStart = 6.0;
     const double dayEnd = 22.0;
-
-    // Percentage of the active day passed (0.0 to 1.0)
     double dayProgress = ((currentHourDouble - dayStart) / (dayEnd - dayStart)).clamp(0.0, 1.0);
 
-    // 🟣 1. INBOX (Violet High Alert Glow)
     nudges.add(TickerNudge(
         title: "INBOX: You have new clinical messages in your inbox.",
         priority: "high_info",
         onTap: () {
           HapticFeedback.mediumImpact();
-          // Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatListScreen()));
         }
     ));
 
-    // 🟠 2. HYDRATION (Smart Glow Escalation)
     final double currentWater = dailyRecord?.hydrationLiters ?? 0.0;
     final double waterGoal = plan!.dailyWaterGoal > 0 ? plan.dailyWaterGoal : 2.0;
     final double waterProgress = (currentWater / waterGoal).clamp(0.0, 1.0);
-
-    // Escalates to Amber if we are >20% behind the day's expected progress
     String waterPriority = (dayProgress > 0.2 && waterProgress < (dayProgress - 0.2)) ? "medium" : "low";
 
     nudges.add(TickerNudge(
@@ -182,12 +169,9 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
       onTap: () => _launchHydrationSheet(context, state, dailyRecord, currentWater),
     ));
 
-    // 🟢 3. STEPS (Smart Glow Escalation)
     final int currentSteps = dailyRecord?.stepCount ?? 0;
     const int stepGoal = 10000;
     final double stepProgress = (currentSteps / stepGoal).clamp(0.0, 1.0);
-
-    // Escalates to Amber if it's after 4 PM (dayProgress > 0.6) and steps are low
     String stepPriority = (dayProgress > 0.6 && stepProgress < 0.4) ? "medium" : "low";
 
     nudges.add(TickerNudge(
@@ -195,7 +179,6 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
       priority: stepPriority,
     ));
 
-    // 🔴 1. MEDICATION LOGIC
     if (vitalsAsync.value != null && vitalsAsync.value!.isNotEmpty) {
       final sortedVitals = List<VitalsModel>.from(vitalsAsync.value!)..sort((a, b) => b.date.compareTo(a.date));
       if (sortedVitals.isNotEmpty) {
@@ -219,11 +202,8 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
       }
     }
 
-
-
     if (plan == null) return nudges;
 
-    // 🔴 2. MISSED MEAL LOGIC (Queues all missed meals)
     if (plan.allItems.isNotEmpty) {
       final now = TimeOfDay.now();
       final nowDouble = now.hour + now.minute / 60.0;
@@ -264,10 +244,6 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
       }
     }
 
-
-
-
-    // 🟢 6. GENERAL PROGRESS & FOCUS
     final progressData = _calculateGoalProgress(state);
     nudges.add(TickerNudge(
       title: "DAILY PROGRESS: ${progressData['completed']}/${progressData['total']} clinical tasks completed.",
@@ -284,21 +260,17 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
   }
 
   // ===========================================================================
-  // 🎨 Updated Color Engine
+  // 🎨 Priority Colors mapped cleanly
   // ===========================================================================
   Color _getPriorityColor(String priority) {
     switch (priority.toLowerCase()) {
       case 'high': return const Color(0xFFFF3D00); // Neon Red
       case 'medium': return const Color(0xFFFFC107); // Amber
       case 'low': return const Color(0xFF00E676); // Neon Green
-      case 'info': return const Color(0xFFBB86FC); // Premium Violet for Inbox
+      case 'high_info': return const Color(0xFFBB86FC); // Violet
       default: return Colors.blueAccent;
     }
   }
-
-  // ===========================================================================
-  // 🎨 4. VISUAL ENGINE (Clean Inner-Glow Pill Shape)
-
 
   @override
   Widget build(BuildContext context) {
@@ -306,15 +278,9 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
     if (activeNudges.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      height: 40, // Leaner, professional ticker height
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF070A11) : Colors.grey.shade900,
-        border: Border.symmetric(horizontal: BorderSide(color: Colors.white.withOpacity(0.08), width: 1)),
-      ),
+    return SizedBox(
+      height: 38, // Keeps the compact height
       child: AnimatedBuilder(
           animation: _glowAnimation,
           builder: (context, child) {
@@ -327,12 +293,11 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
               itemBuilder: (context, index) {
                 final nudge = activeNudges[index % activeNudges.length];
                 final glowColor = _getPriorityColor(nudge.priority);
-                final isHigh = nudge.priority == 'high';
 
-                // Split the title into Category and Message for the Sensex look
+                // 🚀 THE FIX: Split the string into Title and Message
                 final parts = nudge.title.split(':');
-                final category = parts[0].trim();
-                final message = parts.length > 1 ? parts[1].trim() : "";
+                final String categoryTitle = parts.isNotEmpty ? parts[0].trim() : "";
+                final String subMessage = parts.length > 1 ? parts.sublist(1).join(':').trim() : "";
 
                 return GestureDetector(
                   onPanDown: (_) => _timer?.cancel(),
@@ -344,71 +309,55 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
                     }
                   },
                   child: Container(
-                    margin: const EdgeInsets.only(right: 2), // Tight spacing like a real ticker
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: glowColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(color: glowColor.withOpacity(0.3)),
+                    ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 1. 🚀 THE "STOCK CODE" BOX (Category)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: isHigh
-                                ? glowColor.withOpacity(0.2 + (_glowAnimation.value / 40))
-                                : glowColor.withOpacity(0.1),
-                            border: Border(
-                              left: BorderSide(color: glowColor, width: isHigh ? 3 : 2),
-                              // 🚀 Subtle top glow line
-                              top: BorderSide(color: isHigh ? glowColor.withOpacity(0.5) : Colors.transparent),
-                            ),
-                          ),
-                          child: Text(
-                            category,
-                            style: TextStyle(
-                              color: isHigh ? Colors.white : glowColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
+                        // Animated pulsing icon
+                        Icon(
+                            Icons.auto_awesome_rounded,
+                            color: glowColor.withOpacity(0.6 + (_glowAnimation.value / 20)),
+                            size: 16
                         ),
+                        const SizedBox(width: 8),
 
-                        // 2. 🚀 THE "VALUE" TEXT (Message)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            // Subtle inner glow bleed
-                            gradient: LinearGradient(
-                              colors: [
-                                glowColor.withOpacity(isHigh ? 0.1 : 0.03),
-                                Colors.transparent
-                              ],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            ),
-                            // 🚀 Radioactive bottom glow for high priority
-                            boxShadow: [
-                              if (isHigh)
-                                BoxShadow(
-                                  color: glowColor.withOpacity(0.2),
-                                  blurRadius: 10 + _glowAnimation.value,
-                                  offset: const Offset(0, 2),
-                                  blurStyle: BlurStyle.outer,
-                                ),
-                            ],
-                          ),
-                          child: Row(
+                        // 🚀 THE FIX: RichText allows different styles in the same sentence
+                        RichText(
+                          text: TextSpan(
                             children: [
-                              Text(
-                                message,
+                              // 1. GLOWING TITLE (e.g., "MISSED MEAL")
+                              TextSpan(
+                                text: "$categoryTitle: ",
                                 style: TextStyle(
-                                  color: isHigh ? Colors.white : Colors.white70,
+                                  color: glowColor,
                                   fontSize: 12,
-                                  fontWeight: isHigh ? FontWeight.w600 : FontWeight.w400,
+                                  fontWeight: FontWeight.w900, // Extra bold
                                   letterSpacing: 0.5,
+                                  // This adds the neon glow effect exactly matching the priority color
+                                  shadows: [
+                                    Shadow(
+                                      color: glowColor.withOpacity(0.6),
+                                      blurRadius: 4 + (_glowAnimation.value / 2), // Pulses with the animation!
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 24), // Gap before next card
-                              // Sensex Separator
-                              Container(width: 1, height: 15, color: Colors.white10),
+                              // 2. CLEAN SUB-MESSAGE (e.g., "Tap to log")
+                              TextSpan(
+                                text: subMessage,
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSurface,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.2,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -422,24 +371,7 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
       ),
     );
   }
-  // 🚀 THE FIX: Navigation to Meal Detail Sheet
-  void _launchMealLogger(BuildContext context, String mealName, List<FlatDietPlanItem> mealItems, FlatClientDietPlanModel plan) {
-    final notifier = ref.read(dietPlanNotifierProvider(widget.clientId).notifier);
-    showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => MealDetailSheet(
-            notifier: notifier,
-            mealName: mealName,
-            activePlan: plan,
-            logToEdit: null,
-            plannedItems: mealItems
-        )
-    );
-  }
 
-  // 🚀 THE FIX: Navigation to Hydration Sheet
   void _launchHydrationSheet(BuildContext context, DietPlanState state, ClientLogModel? dailyRecord, double current) {
     final notifier = ref.read(dietPlanNotifierProvider(widget.clientId).notifier);
     showModalBottomSheet(
@@ -455,5 +387,3 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
     );
   }
 }
-
-

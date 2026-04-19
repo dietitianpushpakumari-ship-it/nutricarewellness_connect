@@ -2,11 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
-import 'package:nutricare_connect/core/utils/client_model.dart';
-import 'package:nutricare_connect/features/appointments/appointment_model.dart';
-import 'package:nutricare_connect/core/assigned_package_data.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/payment_model.dart';
+import 'package:pure_shift/core/utils/client_model.dart';
+import 'package:pure_shift/features/appointments/appointment_model.dart';
+import 'package:pure_shift/core/assigned_package_data.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/package_assignment_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/payment_model.dart';
 
 final Logger _logger = Logger();
 final FirebaseFirestore _db = FirebaseFirestore.instance;

@@ -3,8 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart'; // For TimeOfDay
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
-import 'package:nutricare_connect/features/appointments/appointment_model.dart';
-import 'package:nutricare_connect/features/appointments/schedule_meeting_utils.dart';
+import 'package:pure_shift/features/appointments/appointment_model.dart';
+import 'package:pure_shift/features/appointments/schedule_meeting_utils.dart';
 
 final Logger _logger = Logger();
 

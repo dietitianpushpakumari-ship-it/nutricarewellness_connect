@@ -1,15 +1,18 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
-import 'package:nutricare_connect/new/flat_diet_plan_model.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
+import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
+import 'package:pure_shift/new/flat_diet_plan_model.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
 
-class DietPlanViewerScreen extends StatelessWidget {
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
+
+class DietPlanViewerSheet extends StatelessWidget {
   final FlatClientDietPlanModel? plan;
   final VitalsModel? vitals;
 
-  const DietPlanViewerScreen({
+  const DietPlanViewerSheet({
     super.key,
     required this.plan,
     required this.vitals,
@@ -19,74 +22,28 @@ class DietPlanViewerScreen extends StatelessWidget {
   final Color neonGreen = const Color(0xFF00E676);
   final Color alertOrange = const Color(0xFFFF3D00);
   final Color medPink = const Color(0xFFFF4081);
+  final Color habitBlue = const Color(0xFF2979FF);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
-    final bgObsidian = isDark ? const Color(0xFF0B0F19) : theme.scaffoldBackgroundColor;
     final surfaceNavy = isDark ? const Color(0xFF121826) : Colors.white;
 
-    return Scaffold(
-      backgroundColor: bgObsidian,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildEliteHeader(context, theme, surfaceNavy, isDark),
-            Expanded(
-              child: _buildEliteContent(theme, surfaceNavy, isDark),
-            ),
-          ],
-        ),
+    return Container(
+      // Sets the height to 90% of screen
+      height: MediaQuery.of(context).size.height * 0.9,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0B0F19) : theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-    );
-  }
-
-  // ===========================================================================
-  // 1. 🚀 ELITE HEADER
-  // ===========================================================================
-  Widget _buildEliteHeader(BuildContext context, ThemeData theme, Color surfaceColor, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-      child: Row(
+      child: Column(
         children: [
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.of(context).pop();
-            },
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: surfaceColor,
-                shape: BoxShape.circle,
-                border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4)),
-                ],
-              ),
-              child: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: theme.colorScheme.onSurface),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "DIET PROTOCOL",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: theme.colorScheme.onSurface,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              Text(
-                "Your personalized clinical plan",
-                style: TextStyle(fontSize: 12, color: theme.hintColor, fontWeight: FontWeight.w600),
-              ),
-            ],
+          // 🛠️ BOTTOM SHEET HANDLE & CROSS BUTTON
+          _buildSheetHeader(context, theme, surfaceNavy, isDark),
+
+          Expanded(
+            child: _buildEliteContent(theme, surfaceNavy, isDark),
           ),
         ],
       ),
@@ -94,26 +51,78 @@ class DietPlanViewerScreen extends StatelessWidget {
   }
 
   // ===========================================================================
-  // 2. 🚀 MAIN CONTENT
+  // 1. 🚀 SHEET HEADER (Handle + Title + Cross)
+  // ===========================================================================
+  Widget _buildSheetHeader(BuildContext context, ThemeData theme, Color surfaceColor, bool isDark) {
+    return Column(
+      children: [
+        // Subtle Handle
+        const SizedBox(height: 12),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white24 : Colors.black12,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 10, 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "DIET PROTOCOL",
+                    style: TextStyle(
+                      fontFamily: kDisplayFont,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurface,
+                      letterSpacing: 2.0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Your personalized clinical plan",
+                    style: TextStyle(fontFamily: kBodyFont, fontSize: 10, color: theme.hintColor, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              // ❌ CROSS BUTTON
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: Icon(Icons.close_rounded, size: 22, color: theme.hintColor),
+                splashRadius: 24,
+              ),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+      ],
+    );
+  }
+
+  // ===========================================================================
+  // 2. 🚀 MAIN CONTENT (Preserved Logic)
   // ===========================================================================
   Widget _buildEliteContent(ThemeData theme, Color surfaceColor, bool isDark) {
     if (plan == null) {
       return Center(
-        child: Text("No active diet plan found.", style: TextStyle(color: theme.hintColor, fontWeight: FontWeight.w600)),
+        child: Text("No active diet plan found.", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor, fontWeight: FontWeight.w600)),
       );
     }
 
-    final guidelines = vitals?.clinicalGuidelines ?? {};
     final medications = vitals?.medications ?? [];
 
-    // 1. Filter for a single day (usually Day 1)
     List<FlatDietPlanItem> displayItems = [];
     if (plan!.allItems.isNotEmpty) {
       final firstDayId = plan!.allItems.first.dayId;
       displayItems = plan!.allItems.where((i) => i.dayId == firstDayId).toList();
     }
 
-    // 2. Identify Unique Meals
     final uniqueMealIds = displayItems
         .where((i) => i.itemType == DietItemType.primary)
         .map((e) => e.mealId)
@@ -127,16 +136,10 @@ class DietPlanViewerScreen extends StatelessWidget {
     });
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 40), // Adjusted bottom padding for sheet
       physics: const BouncingScrollPhysics(),
       children: [
-        if (guidelines.isNotEmpty) ...[
-          _buildEliteSectionTitle("CLINICAL GUIDELINES", Icons.verified_user_rounded, theme),
-          ...guidelines.entries.map((e) => _buildGuidelineCard(e.key, e.value, theme, surfaceColor, isDark)),
-          const SizedBox(height: 32),
-        ],
-
-        _buildEliteSectionTitle("DAILY ROUTINE", Icons.restaurant_menu_rounded, theme),
+        _buildEliteSectionTitle("DAILY ROUTINE", Icons.restaurant_menu_rounded, theme.colorScheme.primary, theme),
         if (uniqueMealIds.isNotEmpty)
           ...uniqueMealIds.map((mealId) {
             final mealItems = displayItems.where((i) => i.mealId == mealId).toList();
@@ -146,13 +149,13 @@ class DietPlanViewerScreen extends StatelessWidget {
           })
         else
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text("No meals defined.", style: TextStyle(color: theme.hintColor)),
+            padding: const EdgeInsets.only(left: 4, bottom: 24),
+            child: Text("No meals defined.", style: TextStyle(fontFamily: kBodyFont, fontSize: 11, color: theme.hintColor)),
           ),
 
         if (medications.isNotEmpty) ...[
-          const SizedBox(height: 32),
-          _buildEliteSectionTitle("PRESCRIBED MEDICATIONS", Icons.medication_rounded, theme),
+          const SizedBox(height: 8),
+          _buildEliteSectionTitle("PRESCRIBED MEDICATIONS", Icons.medication_rounded, medPink, theme),
           ...medications.map((med) => _buildMedicationCard(med, theme, surfaceColor, isDark)),
         ],
       ],
@@ -160,21 +163,22 @@ class DietPlanViewerScreen extends StatelessWidget {
   }
 
   // ===========================================================================
-  // 3. 🚀 ELITE UI COMPONENTS
+  // 3. 🚀 UI COMPONENTS (Preserved logic & your modified font sizes)
   // ===========================================================================
 
-  Widget _buildEliteSectionTitle(String title, IconData icon, ThemeData theme) {
+  Widget _buildEliteSectionTitle(String title, IconData icon, Color iconColor, ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16, left: 4),
+      padding: const EdgeInsets.only(bottom: 12, left: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: neonGreen),
+          Icon(icon, size: 14, color: iconColor),
           const SizedBox(width: 8),
           Text(
             title,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
+              fontFamily: kDisplayFont,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
               color: theme.hintColor,
               letterSpacing: 1.5,
             ),
@@ -184,43 +188,9 @@ class DietPlanViewerScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildGuidelineCard(String title, String description, ThemeData theme, Color surfaceColor, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 4))],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: neonGreen.withOpacity(0.15), shape: BoxShape.circle),
-            child: Icon(Icons.info_outline_rounded, color: neonGreen, size: 18),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: theme.colorScheme.onSurface)),
-                const SizedBox(height: 4),
-                Text(description, style: TextStyle(fontSize: 13, height: 1.4, color: theme.hintColor)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildMedicationCard(dynamic med, ThemeData theme, Color surfaceColor, bool isDark) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: surfaceColor,
@@ -234,18 +204,18 @@ class DietPlanViewerScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(color: medPink.withOpacity(0.15), shape: BoxShape.circle),
-            child: Icon(Icons.vaccines_rounded, color: medPink, size: 18),
+            child: Icon(Icons.vaccines_rounded, color: medPink, size: 14),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(med.name.toUpperCase(), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: theme.colorScheme.onSurface, letterSpacing: 0.5)),
+                Text(med.name.toUpperCase(), style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, fontSize: 12, color: theme.colorScheme.onSurface, letterSpacing: 0.5)),
                 const SizedBox(height: 4),
-                Text("${med.dosage} • ${med.frequency}", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: medPink)),
+                Text("${med.dosage} • ${med.frequency}", style: TextStyle(fontFamily: kBodyFont, fontSize: 11, fontWeight: FontWeight.w700, color: medPink)),
                 const SizedBox(height: 4),
-                Text(med.instruction, style: TextStyle(fontSize: 12, height: 1.4, color: theme.hintColor)),
+                Text(med.instruction, style: TextStyle(fontFamily: kBodyFont, fontSize: 10, height: 1.4, color: theme.hintColor)),
               ],
             ),
           ),
@@ -256,43 +226,39 @@ class DietPlanViewerScreen extends StatelessWidget {
 
   Widget _buildEliteMealCard(String mealName, List<FlatDietPlanItem> itemsInMeal, ThemeData theme, Color surfaceColor, bool isDark) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.03), blurRadius: 15, offset: const Offset(0, 8))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.03), blurRadius: 12, offset: const Offset(0, 6))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Meal Header
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: isDark ? Colors.white.withOpacity(0.02) : Colors.grey.shade50,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.black12)),
             ),
             child: Row(
               children: [
-                Icon(Icons.restaurant_rounded, size: 16, color: neonGreen),
-                const SizedBox(width: 10),
+                Icon(Icons.restaurant_rounded, size: 14, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
                 Text(
                     mealName.toUpperCase(),
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.0, color: theme.colorScheme.onSurface)
+                    style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 1.0, color: theme.colorScheme.onSurface)
                 ),
               ],
             ),
           ),
-
-          // Meal Items
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: itemsInMeal.where((i) => i.itemType == DietItemType.primary).map<Widget>((primary) {
-
                 final bundleChildren = itemsInMeal.where((i) => i.parentId == primary.id && i.itemType == DietItemType.bundleChild).toList();
                 final alternatives = itemsInMeal.where((i) => i.parentId == primary.id && i.itemType == DietItemType.alternative).toList();
 
@@ -301,45 +267,37 @@ class DietPlanViewerScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 🍲 PRIMARY ITEM
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.only(top: 6, right: 12),
-                            height: 6, width: 6,
-                            decoration: BoxDecoration(color: neonGreen, shape: BoxShape.circle, boxShadow: [BoxShadow(color: neonGreen.withOpacity(0.5), blurRadius: 4)]),
-                          ),
-                          Expanded(
-                              child: Text(
-                                  "${primary.foodItemName} (${primary.quantity} ${primary.unit})",
-                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: theme.colorScheme.onSurface)
-                              )
-                          ),
-                        ],
+                      _buildFoodLine(
+                          name: primary.foodItemName,
+                          qty: primary.quantity.toString(),
+                          unit: primary.unit,
+                          isPrimary: true,
+                          theme: theme
                       ),
-
-                      // 🍱 BUNDLE CHILDREN
                       if (bundleChildren.isNotEmpty)
                         Padding(
-                          padding: const EdgeInsets.only(left: 18, top: 8),
+                          padding: const EdgeInsets.only(left: 14, top: 6),
                           child: Container(
-                            padding: const EdgeInsets.only(left: 12),
-                            decoration: BoxDecoration(border: Border(left: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 2))),
+                            padding: const EdgeInsets.only(left: 10),
+                            decoration: BoxDecoration(border: Border(left: BorderSide(color: isDark ? Colors.white24 : Colors.black12, width: 1.5))),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: bundleChildren.map((bc) => Padding(
                                 padding: const EdgeInsets.only(bottom: 4),
-                                child: Text("${bc.foodItemName} (${bc.quantity} ${bc.unit})", style: TextStyle(fontSize: 13, color: theme.hintColor, fontWeight: FontWeight.w500)),
+                                child: _buildFoodLine(
+                                    name: bc.foodItemName,
+                                    qty: bc.quantity.toString(),
+                                    unit: bc.unit,
+                                    isPrimary: false,
+                                    theme: theme
+                                ),
                               )).toList(),
                             ),
                           ),
                         ),
-
-                      // 🎯 ALTERNATIVES (OR Logic)
                       if (alternatives.isNotEmpty)
                         Padding(
-                          padding: const EdgeInsets.only(left: 18, top: 12),
+                          padding: const EdgeInsets.only(left: 14, top: 10),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: alternatives.map<Widget>((alt) => Padding(
@@ -348,13 +306,20 @@ class DietPlanViewerScreen extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: alertOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
-                                    child: Text("OR", style: TextStyle(fontSize: 9, color: alertOrange, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(color: alertOrange.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+                                    child: Text("OR", style: TextStyle(fontFamily: kDisplayFont, fontSize: 9, color: alertOrange, fontWeight: FontWeight.w700)),
                                   ),
-                                  const SizedBox(width: 10),
+                                  const SizedBox(width: 8),
                                   Expanded(
-                                      child: Text("${alt.foodItemName} (${alt.quantity} ${alt.unit})", style: TextStyle(fontSize: 13, color: theme.hintColor, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600))
+                                      child: _buildFoodLine(
+                                          name: alt.foodItemName,
+                                          qty: alt.quantity.toString(),
+                                          unit: alt.unit,
+                                          isPrimary: false,
+                                          isItalic: true,
+                                          theme: theme
+                                      )
                                   ),
                                 ],
                               ),
@@ -365,6 +330,48 @@ class DietPlanViewerScreen extends StatelessWidget {
                   ),
                 );
               }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFoodLine({
+    required String name,
+    required String qty,
+    required String unit,
+    bool isPrimary = true,
+    bool isItalic = false,
+    required ThemeData theme
+  }) {
+    final String cleanName = name.isNotEmpty
+        ? name[0].toUpperCase() + name.substring(1).toLowerCase()
+        : "";
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          fontFamily: kBodyFont,
+          fontSize: 14,
+          height: 1.3,
+          fontStyle: isItalic ? FontStyle.italic : FontStyle.normal,
+        ),
+        children: [
+          TextSpan(
+            text: cleanName,
+            style: TextStyle(
+              fontWeight: isPrimary ? FontWeight.w800 : FontWeight.w600,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const TextSpan(text: "  "),
+          TextSpan(
+            text: "$qty $unit",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+              color: theme.hintColor.withOpacity(0.6),
             ),
           ),
         ],

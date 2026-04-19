@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/core/localization/language_config.dart';
+import 'package:pure_shift/core/localization/language_config.dart';
 import 'language_provider.dart';
 
 class LanguageSelectorSheet extends ConsumerWidget {

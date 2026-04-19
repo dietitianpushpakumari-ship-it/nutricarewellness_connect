@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.nutricarewellness" "\0"
-            VALUE "FileDescription", "nutricare_connect" "\0"
+            VALUE "FileDescription", "pure_shift" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "nutricare_connect" "\0"
+            VALUE "InternalName", "pure_shift" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.nutricarewellness. All rights reserved." "\0"
-            VALUE "OriginalFilename", "nutricare_connect.exe" "\0"
-            VALUE "ProductName", "nutricare_connect" "\0"
+            VALUE "OriginalFilename", "pure_shift.exe" "\0"
+            VALUE "ProductName", "pure_shift" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum MessageType { text, image, audio, file, request }
+enum MessageType { text, image, audio, file, request ,document}
 enum RequestType { none, appointment, mealQuery, planRevision, labReport, callback, prioritySupport, general }
 enum RequestStatus { pending, approved, rejected, completed }
 enum MessageStatus { sending, sent, failed }
@@ -19,7 +19,7 @@ class ChatMessageModel {
   final String? localFilePath;
   final List<String>? attachmentUrls;
   final List<String>? localFilePaths;
-
+  final bool isRead;
   // Request Data
   final RequestType requestType;
   final RequestStatus requestStatus;
@@ -36,6 +36,7 @@ class ChatMessageModel {
   final String? replyToMessageId;
   final String? replyToMessageText;
   final MessageType? replyToMessageType;
+  final String? replyToAttachmentUrl;
 
   ChatMessageModel({
     required this.id,
@@ -44,6 +45,7 @@ class ChatMessageModel {
     required this.text,
     required this.type,
     required this.timestamp,
+    this.isRead = false,
     this.attachmentUrl,
     this.attachmentName,
     this.localFilePath,
@@ -58,6 +60,7 @@ class ChatMessageModel {
     this.replyToMessageId,
     this.replyToMessageText,
     this.replyToMessageType,
+    this.replyToAttachmentUrl
   });
 
   factory ChatMessageModel.fromFirestore(DocumentSnapshot doc) {
@@ -87,9 +90,10 @@ class ChatMessageModel {
 
       adminComment: data['adminComment'], // 🆕 Mapped here
       ticketId: data['ticketId'],
-
+      isRead: data['isRead'] ?? false,
       replyToMessageId: data['replyToMessageId'],
       replyToMessageText: data['replyToMessageText'],
+      replyToAttachmentUrl: data['replyToAttachmentUrl'],
       replyToMessageType: data['replyToMessageType'] != null ? MessageType.values.firstWhere((e) => e.name == data['replyToMessageType'], orElse: () => MessageType.text) : null,
     );
   }
@@ -106,6 +110,7 @@ class ChatMessageModel {
       'localFilePath': localFilePath,
       'attachmentUrls': attachmentUrls,
       'localFilePaths': localFilePaths,
+      'isRead': isRead,
       'requestType': requestType.name,
       'requestStatus': requestStatus.name,
       'metadata': metadata,
@@ -115,6 +120,7 @@ class ChatMessageModel {
       'replyToMessageId': replyToMessageId,
       'replyToMessageText': replyToMessageText,
       'replyToMessageType': replyToMessageType?.name,
+       'replyToAttachmentUrl':  replyToAttachmentUrl
     };
   }
 }

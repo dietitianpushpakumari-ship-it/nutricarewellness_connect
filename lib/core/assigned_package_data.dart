@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart'; // For describeEnum
-import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart'; // Import dependency
+import 'package:pure_shift/features/dietplan/domain/entities/package_assignment_model.dart'; // Import dependency
 
 enum PaymentFilter { all, fullyPaid, pending, partiallyPaid, notPaid }
 

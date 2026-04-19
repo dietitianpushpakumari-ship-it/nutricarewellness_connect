@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:nutricare_connect/core/utils/geeta_shloka_model.dart';
+import 'package:pure_shift/core/utils/geeta_shloka_model.dart';
 import 'package:path_provider/path_provider.dart';
 
 class GeetaRepository {

@@ -1,181 +1,193 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const String primaryFontFamily = 'Inter';
-  static const String headingFontFamily = 'Playfair Display';
+  static const String kDisplayFont = 'Space Grotesk';
+  static const String kBodyFont = 'Inter';
 
   // ===========================================================================
-  // 1. SAPPHIRE MIDNIGHT (Tech Luxury - Deep Blue & Cyan)
+  // ☀️ PREMIUM LIGHT MODES (Fintech & Apple Style)
   // ===========================================================================
-  static ThemeData get sapphireMidnight {
-    const Color primary = Color(0xFF00E5FF); // Electric Cyan
-    const Color secondary = Color(0xFF3D5AFE); // Deep Royal Blue
-    const Color background = Color(0xFF0B0F19); // Abyss Blue
 
-    return _buildDarkGlassTheme(primary, secondary, background);
-  }
+  static ThemeData get appleHealthLight => _buildPremiumLight(
+    primary: const Color(0xFFFF2D55),
+    background: const Color(0xFFF9F9FB), // Faint wash
+    card: Colors.white,                  // Pure white cards
+    isDark: false,
+  );
 
-  // ===========================================================================
-  // 2. OBSIDIAN EMERALD (Executive Wellness - True Black & Neon Green)
-  // ===========================================================================
-  static ThemeData get obsidianEmerald {
-    const Color primary = Color(0xFF00E676); // Neon Emerald
-    const Color secondary = Color(0xFF00BFA5); // Teal
-    const Color background = Color(0xFF050505); // True Black
+  static ThemeData get socialBlue => _buildPremiumLight(
+    primary: const Color(0xFF1877F2),
+    background: const Color(0xFFF0F2F5),
+    card: Colors.white,
+    isDark: false,
+  );
 
-    return _buildDarkGlassTheme(primary, secondary, background);
-  }
+  static ThemeData get fintechBlurple => _buildPremiumLight(
+    primary: const Color(0xFF635BFF),
+    background: const Color(0xFFF6F9FC),
+    card: Colors.white,
+    isDark: false,
+  );
 
-  // ===========================================================================
-  // 3. AMETHYST AURA (Calming Mystical - Deep Plum & Soft Pink)
-  // ===========================================================================
-  static ThemeData get amethystAura {
-    const Color primary = Color(0xFFFF4081); // Pink/Magenta
-    const Color secondary = Color(0xFF7C4DFF); // Deep Purple
-    const Color background = Color(0xFF120B1A); // Dark Plum
+  static ThemeData get clinicalMint => _buildPremiumLight(
+    primary: const Color(0xFF00A389),
+    background: const Color(0xFFF4F9F8),
+    card: Colors.white,
+    isDark: false,
+  );
 
-    return _buildDarkGlassTheme(primary, secondary, background);
-  }
-
-  // ===========================================================================
-  // 4. IMPERIAL GOLD (Quiet Luxury - Onyx & Liquid Gold)
-  // ===========================================================================
-  static ThemeData get imperialGold {
-    const Color primary = Color(0xFFFFD54F); // Soft Gold
-    const Color secondary = Color(0xFFFF8F00); // Amber
-    const Color background = Color(0xFF141414); // Rich Charcoal
-
-    return _buildDarkGlassTheme(primary, secondary, background);
-  }
+  static ThemeData get editorialMonoLight => _buildPremiumLight(
+    primary: const Color(0xFF000000),
+    background: const Color(0xFFF9FAFB),
+    card: Colors.white,
+    isDark: false,
+  );
 
   // ===========================================================================
-  // 5. CRIMSON ECLIPSE (Energetic / Fitness - Dark Maroon & Ruby)
+  // 🌙 OLED DARK MODES (Pitch Black & Glass Style)
   // ===========================================================================
-  static ThemeData get crimsonEclipse {
-    const Color primary = Color(0xFFFF5252); // Bright Coral/Ruby
-    const Color secondary = Color(0xFFD50000); // Deep Crimson
-    const Color background = Color(0xFF1A0909); // Darkest Maroon
 
-    return _buildDarkGlassTheme(primary, secondary, background);
-  }
+  static ThemeData get appleOled => _buildTheme(
+    primary: const Color(0xFF0A84FF),
+    background: const Color(0xFF000000),
+    card: const Color(0xFF1C1C1E),
+    isDark: true,
+  );
+
+  static ThemeData get spotifyGreen => _buildTheme(
+    primary: const Color(0xFF1DB954),
+    background: const Color(0xFF121212),
+    card: const Color(0xFF181818),
+    isDark: true,
+  );
+
+  static ThemeData get amethystDark => _buildTheme(
+    primary: const Color(0xFFBF5AF2),
+    background: const Color(0xFF0D0B14),
+    card: const Color(0xFF1A1625),
+    isDark: true,
+  );
+
+  static ThemeData get imperialDark => _buildTheme(
+    primary: const Color(0xFFFFD60A),
+    background: const Color(0xFF000000),
+    card: const Color(0xFF1C1C1E),
+    isDark: true,
+  );
+
+  static ThemeData get editorialMonoDark => _buildTheme(
+    primary: const Color(0xFFFFFFFF),
+    background: const Color(0xFF000000),
+    card: const Color(0xFF121212),
+    isDark: true,
+  );
 
   // ===========================================================================
-  // CORE DARK GLASS BUILDER (The Secret Sauce)
+  // 🛠️ THE THEME BUILDER ENGINES
   // ===========================================================================
-  static ThemeData _buildDarkGlassTheme(Color primary, Color secondary, Color background) {
+
+  static ThemeData _buildTheme({
+    required Color primary,
+    required Color background,
+    required Color card,
+    required bool isDark,
+  }) {
+    final Color textColor = isDark ? const Color(0xFFF5F5F7) : const Color(0xFF1C1E21);
+    final Color subTextColor = isDark ? Colors.white60 : Colors.black45;
+
     return ThemeData(
       useMaterial3: true,
-      fontFamily: primaryFontFamily,
-      brightness: Brightness.dark, // 🎯 Forces Dark Mode constraints globally
+      brightness: isDark ? Brightness.dark : Brightness.light,
+      primaryColor: primary,
       scaffoldBackgroundColor: background,
-
-      // 🎯 FIX 1: GLOBALLY FIXES DROPDOWN BUTTONS
-      // Standard DropdownButtons use canvasColor for their menu background.
-      canvasColor: background,
-
-      colorScheme: ColorScheme.dark(
-        primary: primary,
-        secondary: secondary,
-        surface: Colors.white.withOpacity(0.04), // 🎯 Ultra-sheer glass
-        onPrimary: Colors.black, // Text on primary buttons
-        onSurface: Colors.white, // Text on glass cards
+      cardColor: card,
+      fontFamily: kBodyFont,
+      dividerColor: textColor.withOpacity(0.08),
+      colorScheme: isDark
+          ? ColorScheme.dark(primary: primary, surface: card, onSurface: textColor)
+          : ColorScheme.light(primary: primary, surface: card, onSurface: textColor),
+      appBarTheme: AppBarTheme(
+        backgroundColor: background,
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          fontFamily: kDisplayFont,
+          color: textColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 18,
+        ),
+        iconTheme: IconThemeData(color: textColor),
       ),
-      cardTheme: _buildGlassCardTheme(),
-      appBarTheme: _buildPremiumAppBarTheme(),
-      bottomNavigationBarTheme: _buildPremiumBottomNavTheme(primary),
-      iconTheme: const IconThemeData(color: Colors.white),
-      timePickerTheme: _buildPremiumTimePickerTheme(primary, background),
-
-      // 🎯 FIX 2: GLOBALLY FIXES 3-DOT POPUP MENUS
-      popupMenuTheme: _buildPremiumPopupMenuTheme(background),
-    );
-  }
-
-  // ===========================================================================
-  // GLASS COMPONENT STYLING
-  // ===========================================================================
-  static CardThemeData _buildGlassCardTheme() {
-    return CardThemeData(
-      color: Colors.white.withOpacity(0.05), // Frosted dark glass fill
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 0),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24.0),
-        side: BorderSide(
-          color: Colors.white.withOpacity(0.12), // 🎯 Delicate light-catching rim
-          width: 1.0,
+      cardTheme: CardThemeData(
+        color: card,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: textColor.withOpacity(0.05), width: 1),
         ),
       ),
-    );
-  }
-
-  static AppBarTheme _buildPremiumAppBarTheme() {
-    return const AppBarTheme(
-      centerTitle: true,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      backgroundColor: Colors.transparent, // Let the orbs shine through
-      foregroundColor: Colors.white,
-      titleTextStyle: TextStyle(
-        fontFamily: headingFontFamily,
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
-        color: Colors.white,
-        letterSpacing: 0.5,
+      textTheme: TextTheme(
+        displayLarge: TextStyle(fontFamily: kDisplayFont, color: textColor, fontWeight: FontWeight.bold),
+        bodyLarge: TextStyle(fontFamily: kBodyFont, color: textColor),
+        bodyMedium: TextStyle(fontFamily: kBodyFont, color: subTextColor),
       ),
     );
   }
 
-  static BottomNavigationBarThemeData _buildPremiumBottomNavTheme(Color selectedColor) {
-    return BottomNavigationBarThemeData(
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      selectedItemColor: selectedColor,
-      unselectedItemColor: Colors.white38,
-      type: BottomNavigationBarType.fixed,
-    );
-  }
+  static ThemeData _buildPremiumLight({
+    required Color primary,
+    required Color background,
+    required Color card,
+    required bool isDark,
+  }) {
+    const Color charcoal = Color(0xFF1E293B);
+    const Color slateHeader = Color(0xFF0F172A);
+    const Color alertRed = Color(0xFFE11D48);
 
-  // ===========================================================================
-  // PREMIUM TIME PICKER STYLING
-  // ===========================================================================
-  static TimePickerThemeData _buildPremiumTimePickerTheme(Color primary, Color background) {
-    return TimePickerThemeData(
-      backgroundColor: background,
-      hourMinuteColor: Colors.white.withOpacity(0.08),
-      hourMinuteTextColor: Colors.white,
-      hourMinuteTextStyle: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
-      dialBackgroundColor: Colors.white.withOpacity(0.05),
-      dialHandColor: primary,
-      dialTextColor: Colors.white,
-      entryModeIconColor: primary,
-      helpTextStyle: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
-      cancelButtonStyle: TextButton.styleFrom(foregroundColor: Colors.white54),
-      confirmButtonStyle: TextButton.styleFrom(
-        foregroundColor: primary,
-        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      primaryColor: primary,
+      scaffoldBackgroundColor: background,
+      cardColor: card,
+      colorScheme: ColorScheme.light(
+        primary: primary,
+        secondary: primary.withOpacity(0.7),
+        surface: card,
+        onSurface: charcoal,
+        error: alertRed,
       ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24.0),
-        side: BorderSide(color: Colors.white.withOpacity(0.12), width: 1.0),
+      appBarTheme: AppBarTheme(
+        backgroundColor: background,
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: const TextStyle(
+          fontFamily: kDisplayFont,
+          color: slateHeader,
+          fontWeight: FontWeight.w800,
+          fontSize: 18,
+          letterSpacing: -0.7,
+        ),
+        iconTheme: const IconThemeData(color: slateHeader),
       ),
-    );
-  }
-
-  // ===========================================================================
-  // PREMIUM POPUP & DROPDOWN MENU STYLING
-  // ===========================================================================
-  static PopupMenuThemeData _buildPremiumPopupMenuTheme(Color background) {
-
-    return PopupMenuThemeData(
-      color: background, // Solid background prevents transparency clash
-      surfaceTintColor: Colors.transparent, // Stops Material 3 from tinting it purple
-      elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16.0),
-        side: BorderSide(
-          color: Colors.white.withOpacity(0.12), // Delicate glass rim to match cards
-          width: 1.0,
+      cardTheme: CardThemeData(
+        color: card,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: slateHeader.withOpacity(0.04), width: 1.0),
+        ),
+      ),
+      textTheme: TextTheme(
+        displayLarge: const TextStyle(fontFamily: kDisplayFont, color: slateHeader, fontWeight: FontWeight.w800),
+        bodyLarge: const TextStyle(fontFamily: kBodyFont, color: charcoal, fontSize: 16, letterSpacing: -0.2),
+        bodyMedium: TextStyle(fontFamily: kBodyFont, color: charcoal.withOpacity(0.6), fontSize: 14),
+        labelSmall: const TextStyle(
+          fontFamily: kDisplayFont,
+          color: alertRed,
+          fontWeight: FontWeight.w700,
+          fontSize: 10,
+          letterSpacing: 1.0,
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum AdminRole { superAdmin, clinicAdmin, dietitian, staff, doctor }
+
 class AdminTitles {
   static const String doctor = 'Dr.';
   static const String dietitian = 'Dt.';
@@ -10,6 +11,7 @@ class AdminTitles {
 
   static const List<String> all = [doctor, dietitian, mr, ms, mrs];
 }
+
 class AdminProfileModel {
   final String id;
   final String email;
@@ -26,7 +28,7 @@ class AdminProfileModel {
   final String employeeId;
   final AdminRole role;
   final bool isActive;
-  final String department; // 🚀 1. NEW DEPARTMENT FIELD
+  final String department;
   final String designation;
   final List<String> qualifications;
   final List<String> specializations;
@@ -36,7 +38,13 @@ class AdminProfileModel {
   final String companyName;
   final String? regdNo;
   final String companyEmail;
-  final String? tempPassword; // Only used during onboarding
+  final String? tempPassword;
+
+  final String? aboutMe;
+  final String? visitingCardUrl;
+
+  // 🚀 1. NEW FIELD: FCM TOKEN
+  final String? fcmToken;
 
   // Metadata
   final bool isDeleted;
@@ -62,7 +70,7 @@ class AdminProfileModel {
     required this.employeeId,
     required this.role,
     this.isActive = true,
-    this.department = '', // 🚀 2. DEFAULT EMPTY STRING PREVENTS CRASHES ON OLD RECORDS
+    this.department = '',
     required this.designation,
     this.qualifications = const [],
     this.specializations = const [],
@@ -73,6 +81,9 @@ class AdminProfileModel {
     this.regdNo,
     required this.companyEmail,
     this.tempPassword,
+    this.aboutMe,
+    this.visitingCardUrl,
+    this.fcmToken, // 🚀 2. CONSTRUCTOR INITIALIZATION
     this.isDeleted = false,
     required this.createdAt,
     required this.updatedAt,
@@ -83,13 +94,13 @@ class AdminProfileModel {
 
   String get fullName => "$firstName $lastName";
 
-  // 🟢 1. FACTORY: FROM FIRESTORE
+  // 🟢 FACTORY: FROM FIRESTORE
   factory AdminProfileModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return AdminProfileModel.fromMap(data..['id'] = doc.id);
   }
 
-  // 🟢 2. FACTORY: FROM MAP (Required for SharedPreferences Session)
+  // 🟢 FACTORY: FROM MAP
   factory AdminProfileModel.fromMap(Map<String, dynamic> map) {
     return AdminProfileModel(
       id: map['id'] ?? '',
@@ -105,9 +116,9 @@ class AdminProfileModel {
       panNumber: map['panNumber'],
       address: map['address'],
       employeeId: map['employeeId'] ?? '',
-      role: _parseRole(map['role']), // Safely parse the role
+      role: _parseRole(map['role']),
       isActive: map['isActive'] ?? true,
-      department: map['department'] ?? '', // 🚀 3. PARSE FROM DB
+      department: map['department'] ?? '',
       designation: map['designation'] ?? '',
       qualifications: List<String>.from(map['qualifications'] ?? []),
       specializations: List<String>.from(map['specializations'] ?? []),
@@ -119,7 +130,10 @@ class AdminProfileModel {
       companyName: map['companyName'] ?? '',
       regdNo: map['regdNo'],
       companyEmail: map['companyEmail'] ?? '',
-      tempPassword: map['temp_password'], // Note snake_case from DB
+      tempPassword: map['temp_password'],
+      aboutMe: map['aboutMe'],
+      visitingCardUrl: map['visitingCardUrl'],
+      fcmToken: map['fcmToken'] ?? map['fcm_token'], // 🚀 3. READ FROM DB (Fallback added for safety)
       isDeleted: map['isDeleted'] ?? false,
       createdAt: map['createdAt'] is Timestamp ? map['createdAt'] : Timestamp.now(),
       updatedAt: map['updatedAt'] is Timestamp ? map['updatedAt'] : Timestamp.now(),
@@ -134,17 +148,14 @@ class AdminProfileModel {
     if (roleData == null) return AdminRole.dietitian;
     final String roleString = roleData.toString().trim();
 
-    // 1. Super Admin (Only explicitly 'superAdmin')
     if (roleString == 'superAdmin' || roleString == 'super_admin') {
       return AdminRole.superAdmin;
     }
 
-    // 2. Clinic Admin (Previously 'owner', 'admin')
     if (roleString == 'owner' || roleString == 'admin' || roleString == 'clinicAdmin' || roleString == 'clinic_admin') {
       return AdminRole.clinicAdmin;
     }
 
-    // 3. Default Mapping
     return AdminRole.values.firstWhere(
           (e) => e.name == roleString,
       orElse: () => AdminRole.dietitian,
@@ -153,21 +164,17 @@ class AdminProfileModel {
 
   // 🎯 SMART PERMISSIONS
   bool hasAccess(String permission) {
-    // Super Admin has infinite access
     if (role == AdminRole.superAdmin) return true;
 
-    // Clinic Admin has access to almost everything EXCEPT global tenant management
     if (role == AdminRole.clinicAdmin) {
-      // Deny specific Super Admin actions explicitly if checked via permission string
       if (permission == 'manage_tenants' || permission == 'db_migration') return false;
       return true;
     }
 
-    // Others rely on specific permission flags
     return permissions.contains(permission);
   }
 
-  // 🟢 3. TO MAP (For Firestore & SharedPreferences)
+  // 🟢 TO MAP
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -178,14 +185,14 @@ class AdminProfileModel {
       'mobile': mobile,
       'alternateMobile': alternateMobile,
       'gender': gender,
-      'dob': dob, // Firestore handles DateTime, but JSON encoding might need .toIso8601String() for SharedPrefs
+      'dob': dob,
       'aadharNumber': aadharNumber,
       'panNumber': panNumber,
       'address': address,
       'employeeId': employeeId,
       'role': role.name,
       'isActive': isActive,
-      'department': department, // 🚀 4. SAVE TO DB
+      'department': department,
       'designation': designation,
       'qualifications': qualifications,
       'specializations': specializations,
@@ -196,6 +203,9 @@ class AdminProfileModel {
       'regdNo': regdNo,
       'companyEmail': companyEmail,
       'temp_password': tempPassword,
+      'aboutMe': aboutMe,
+      'visitingCardUrl': visitingCardUrl,
+      'fcmToken': fcmToken, // 🚀 4. WRITE TO DB
       'isDeleted': isDeleted,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
@@ -215,14 +225,17 @@ class AdminProfileModel {
     String? aadharNumber,
     String? panNumber,
     String? regdNo,
-    String? department, // 🚀 5. ADD TO COPY WITH
+    String? department,
     String? designation,
     AdminRole? role,
     String? address,
     String? photoUrl,
     List<String>? qualifications,
     List<String>? specializations,
-    String? title
+    String? title,
+    String? aboutMe,
+    String? visitingCardUrl,
+    String? fcmToken, // 🚀 5. ADD TO COPY WITH PARAMS
   }) {
     return AdminProfileModel(
         id: id,
@@ -240,7 +253,7 @@ class AdminProfileModel {
         employeeId: employeeId,
         role: role ?? this.role,
         isActive: isActive,
-        department: department ?? this.department, // 🚀 6. COPY VALUE
+        department: department ?? this.department,
         designation: designation ?? this.designation,
         qualifications: qualifications ?? this.qualifications,
         specializations: specializations ?? this.specializations,
@@ -251,6 +264,9 @@ class AdminProfileModel {
         regdNo: regdNo ?? this.regdNo,
         companyEmail: companyEmail ?? this.companyEmail,
         tempPassword: tempPassword,
+        aboutMe: aboutMe ?? this.aboutMe,
+        visitingCardUrl: visitingCardUrl ?? this.visitingCardUrl,
+        fcmToken: fcmToken ?? this.fcmToken, // 🚀 6. COPY VALUE
         isDeleted: isDeleted,
         createdAt: createdAt,
         updatedAt: Timestamp.now(), // Auto update

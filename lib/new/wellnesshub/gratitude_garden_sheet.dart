@@ -1,44 +1,73 @@
 import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
 
-class GratitudeGardenSheet extends StatefulWidget {
-  const GratitudeGardenSheet({super.key});
-  @override
-  State<GratitudeGardenSheet> createState() => _GratitudeGardenSheetState();
-}
+// 🎯 GLOBAL FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
-class _GratitudeGardenSheetState extends State<GratitudeGardenSheet> {
-  // 🎯 Coordinates are percentages (0.0 to 1.0)
-  final List<Map<String, dynamic>> _seeds = [
+// =================================================================
+// 🚀 THE FIX: RIVERPOD PROVIDER TO SAVE THE GARDEN STATE
+// This keeps your flowers alive even when the sheet is closed!
+// =================================================================
+class GratitudeGardenNotifier extends StateNotifier<List<Map<String, dynamic>>> {
+  GratitudeGardenNotifier() : super([
     {"text": "Family", "x": 0.2, "y": 0.8},    // Close (Large)
     {"text": "Health", "x": 0.7, "y": 0.5},    // Mid (Medium)
     {"text": "Inner Peace", "x": 0.4, "y": 0.2}, // Far (Small)
-  ];
+  ]);
 
+  void plantSeed(String text) {
+    state = [
+      ...state,
+      {
+        "text": text,
+        "x": 0.1 + (Random().nextDouble() * 0.8),
+        "y": 0.15 + (Random().nextDouble() * 0.75),
+      }
+    ];
+  }
+}
+
+final gratitudeGardenProvider = StateNotifierProvider<GratitudeGardenNotifier, List<Map<String, dynamic>>>((ref) {
+  return GratitudeGardenNotifier();
+});
+
+// =================================================================
+// 🌺 THE UI SHEET (Converted to ConsumerStatefulWidget)
+// =================================================================
+class GratitudeGardenSheet extends ConsumerStatefulWidget {
+  const GratitudeGardenSheet({super.key});
+  @override
+  ConsumerState<GratitudeGardenSheet> createState() => _GratitudeGardenSheetState();
+}
+
+class _GratitudeGardenSheetState extends ConsumerState<GratitudeGardenSheet> {
   final TextEditingController _controller = TextEditingController();
   final _audio = WellnessAudioService();
 
   void _plantSeed() {
-    if (_controller.text.trim().isEmpty) return;
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
 
-    setState(() {
-      _seeds.add({
-        "text": _controller.text.trim(),
-        "x": 0.1 + (Random().nextDouble() * 0.8),
-        "y": 0.15 + (Random().nextDouble() * 0.75),
-      });
-    });
+    // 🚀 Save to the global provider instead of local state
+    ref.read(gratitudeGardenProvider.notifier).plantSeed(text);
 
     _controller.clear();
     _audio.playDing();
+    HapticFeedback.mediumImpact(); // Premium haptic feel
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
+    // 🚀 Read the saved seeds from the provider
+    final savedSeeds = ref.watch(gratitudeGardenProvider);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
@@ -51,6 +80,7 @@ class _GratitudeGardenSheetState extends State<GratitudeGardenSheet> {
           const SizedBox(height: 12),
           Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
 
+          // 🚀 THE FIX: Premium Typography in Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Row(
@@ -58,8 +88,12 @@ class _GratitudeGardenSheetState extends State<GratitudeGardenSheet> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("COGNITIVE REFRAMING", style: TextStyle(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                    Text("Infinite Gratitude Meadow", style: TextStyle(color: theme.hintColor, fontSize: 13)),
+                    Text("COGNITIVE REFRAMING",
+                        style: TextStyle(fontFamily: kDisplayFont, color: cs.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)
+                    ),
+                    Text("Infinite Gratitude Meadow",
+                        style: TextStyle(fontFamily: kDisplayFont, color: theme.colorScheme.onSurface, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: -0.5)
+                    ),
                   ],
                 ),
                 const Spacer(),
@@ -72,7 +106,7 @@ class _GratitudeGardenSheetState extends State<GratitudeGardenSheet> {
             child: LayoutBuilder(
                 builder: (context, constraints) {
                   // 🎯 Sort by Y so that flowers in front (higher Y) are drawn last (on top)
-                  final sortedSeeds = List.of(_seeds)..sort((a, b) => a['y'].compareTo(b['y']));
+                  final sortedSeeds = List.of(savedSeeds)..sort((a, b) => a['y'].compareTo(b['y']));
 
                   return Stack(
                     children: [
@@ -93,9 +127,6 @@ class _GratitudeGardenSheetState extends State<GratitudeGardenSheet> {
                       ),
 
                       ...sortedSeeds.map((seed) {
-                        // 🎯 3D DEPTH MATH:
-                        // Higher Y (closer to bottom) = Scale 1.0 (Full size)
-                        // Lower Y (closer to top) = Scale 0.6 (Small & Faded)
                         double depthScale = (0.5 + (seed["y"] * 0.5)).clamp(0.5, 1.0);
                         double depthOpacity = (0.4 + (seed["y"] * 0.6)).clamp(0.4, 1.0);
 
@@ -130,8 +161,11 @@ class _GratitudeGardenSheetState extends State<GratitudeGardenSheet> {
                 Expanded(
                   child: TextField(
                     controller: _controller,
+                    // 🚀 THE FIX: Premium Inter font for input
+                    style: const TextStyle(fontFamily: kBodyFont, fontSize: 10, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
                       hintText: "What are you grateful for?",
+                      hintStyle: TextStyle(fontFamily: kBodyFont, color: theme.hintColor.withOpacity(0.6), fontSize: 12),
                       filled: true,
                       fillColor: theme.scaffoldBackgroundColor,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
@@ -155,8 +189,11 @@ class _GratitudeGardenSheetState extends State<GratitudeGardenSheet> {
     );
   }
 
+  // 🚀 THE FIX: Space Grotesk applied to the Flower Labels
   Widget _buildGrowingFlower(String label, ColorScheme cs, ThemeData theme) {
     return TweenAnimationBuilder<double>(
+      // If you want them to 'pop' instantly if already loaded,
+      // you could adjust this, but the growing animation is nice!
       tween: Tween(begin: 0.0, end: 1.0),
       duration: const Duration(milliseconds: 1200),
       curve: Curves.elasticOut,
@@ -175,7 +212,10 @@ class _GratitudeGardenSheetState extends State<GratitudeGardenSheet> {
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10)],
                   border: Border.all(color: cs.primary.withOpacity(0.2)),
                 ),
-                child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                child: Text(
+                    label,
+                    style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, fontWeight: FontWeight.w800, color: theme.colorScheme.onSurface)
+                ),
               ),
               const SizedBox(height: 4),
               Icon(Icons.spa_rounded, color: cs.primary, size: 32),

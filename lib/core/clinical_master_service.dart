@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:nutricare_connect/new/models/clinical_model.dart'; // Ensure this model exists
+import 'package:pure_shift/new/models/clinical_model.dart'; // Ensure this model exists
 
 class ClinicalMasterService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;

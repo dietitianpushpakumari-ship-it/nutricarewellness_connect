@@ -2,8 +2,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 
 class ActivityTrendChart extends ConsumerStatefulWidget {
   final String clientId;
@@ -58,7 +58,7 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
                   children: [
                     Text(
                       "Step History",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colorScheme.onSurface),
                       maxLines: 1,
                     ),
                     Text(
@@ -92,7 +92,7 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
                             "${days}D",
                             style: TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                                 color: isSelected ? colorScheme.primary : theme.hintColor
                             )
                         ),
@@ -122,7 +122,7 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
                         getTooltipItem: (group, groupIndex, rod, rodIndex) {
                           return BarTooltipItem(
                             "${rod.toY.toInt()}\nSteps",
-                            TextStyle(color: isDark ? theme.scaffoldBackgroundColor : Colors.white, fontWeight: FontWeight.w900),
+                            TextStyle(color: isDark ? theme.scaffoldBackgroundColor : Colors.white, fontWeight: FontWeight.w700),
                           );
                         },
                       ),
@@ -161,7 +161,7 @@ class _ActivityTrendChartState extends ConsumerState<ActivityTrendChart> {
                                 isToday ? "Today" : DateFormat('d/M').format(date),
                                 style: TextStyle(
                                     color: isSelectedDate ? colorScheme.primary : theme.hintColor,
-                                    fontWeight: isSelectedDate ? FontWeight.w900 : FontWeight.bold,
+                                    fontWeight: isSelectedDate ? FontWeight.w700 : FontWeight.bold,
                                     fontSize: 10
                                 ),
                               ),

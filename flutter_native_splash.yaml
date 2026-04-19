@@ -1,0 +1,11 @@
+flutter_native_splash:
+  color: "#F8FAFC"
+  image: assets/images/splash.png
+
+  android_12:
+    color: "#F8FAFC"
+    image: assets/images/splash.png
+    icon_background_color: "#F8FAFC"
+
+  # 🛠 Optional: Add your Nutricare branding at the bottom (Android 12+ only)
+  # branding: assets/images/branding_text.png

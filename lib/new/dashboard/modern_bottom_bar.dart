@@ -1,151 +1,119 @@
-import 'dart:ui'; // 🎯 Required for the frosted glass BackdropFilter
+import 'dart:ui';
 import 'package:flutter/material.dart';
+
+const String kDisplayFont = 'Space Grotesk';
 
 class ModernBottomBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
-  final int unreadChatCount; // 🎯 1. Added unread count variable
+  final int unreadChatCount;
 
   const ModernBottomBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
-    this.unreadChatCount = 0, // 🎯 2. Default to 0
+    this.unreadChatCount = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    // 🎯 Extract glass color and border directly from the AppTheme
-    final Color baseColor = theme.cardTheme.color ?? colorScheme.surface;
-    Color borderColor = isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.4);
+    // 🚀 THE FIX: Reduced to 5 tabs (Discover removed)
+    // This perfectly matches the 5 indices in ClientDashboardScreen widgetOptions
+    final List<Map<String, dynamic>> tabs = [
+      {'icon': Icons.home_rounded, 'label': 'Home'},
+      {'icon': Icons.restaurant_menu_rounded, 'label': 'Plan'},
+      {'icon': Icons.directions_run_rounded, 'label': 'Activity'},
+      {'icon': Icons.spa_rounded, 'label': 'Wellness'},
+      {'icon': Icons.shield_rounded, 'label': 'Team', 'badge': unreadChatCount}, // Index 4
+    ];
 
-    if (theme.cardTheme.shape is RoundedRectangleBorder) {
-      borderColor = (theme.cardTheme.shape as RoundedRectangleBorder).side.color;
-    }
+    return SafeArea(
+      bottom: true,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        height: 64,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF151C2C).withOpacity(0.8) : Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: Colors.white.withOpacity(isDark ? 0.05 : 0.5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.4 : 0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            )
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(tabs.length, (index) {
+                final bool isSelected = currentIndex == index;
+                final tab = tabs[index];
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 24), // Float off the bottom
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          // 🎯 Subtle glowing shadow, adjusted for light/dark mode
-          BoxShadow(
-            color: isDark
-                ? colorScheme.primary.withOpacity(0.05)
-                : colorScheme.primary.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(30),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20), // 🎯 Frosted glass blur effect
-          child: Container(
-            decoration: BoxDecoration(
-              color: baseColor, // Translucent glass fill
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: borderColor, width: 1.5), // Delicate glass rim
-            ),
-            child: NavigationBarTheme(
-              data: NavigationBarThemeData(
-                backgroundColor: Colors.transparent, // 🎯 Must be transparent to let glass show
-                indicatorColor: colorScheme.primary.withOpacity(isDark ? 0.2 : 0.1), // Glowing selection pill
+                return Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onTap(index),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: EdgeInsets.all(isSelected ? 6 : 4),
+                              decoration: BoxDecoration(
+                                color: isSelected ? theme.colorScheme.primary.withOpacity(0.15) : Colors.transparent,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                tab['icon'],
+                                size: isSelected ? 22 : 20,
+                                color: isSelected ? theme.colorScheme.primary : theme.hintColor.withOpacity(0.6),
+                              ),
+                            ),
 
-                // Adaptive Text Styling
-                labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.primary
-                    );
-                  }
-                  return TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface.withOpacity(0.6)
-                  );
-                }),
-
-                // Adaptive Icon Styling
-                iconTheme: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return IconThemeData(color: colorScheme.primary);
-                  }
-                  return IconThemeData(color: colorScheme.onSurface.withOpacity(0.5));
-                }),
-              ),
-              child: NavigationBar(
-                height: 65,
-                elevation: 0,
-                selectedIndex: currentIndex,
-                onDestinationSelected: onTap,
-                backgroundColor: Colors.transparent, // 🎯 Transparent to reveal glass
-                destinations: [ // 🚨 Removed 'const' here so the badge can be dynamic!
-                  const NavigationDestination(
-                    icon: Icon(Icons.grid_view_outlined),
-                    selectedIcon: Icon(Icons.grid_view_rounded),
-                    label: 'Home',
-                  ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.restaurant_menu_outlined),
-                    selectedIcon: Icon(Icons.restaurant_menu_rounded),
-                    label: 'Plan',
-                  ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.directions_run_outlined),
-                    selectedIcon: Icon(Icons.directions_run_rounded),
-                    label: 'Move',
-                  ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.self_improvement_outlined),
-                    selectedIcon: Icon(Icons.self_improvement_rounded),
-                    label: 'Wellness',
-                  ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.rss_feed_rounded),
-                    selectedIcon: Icon(Icons.rss_feed),
-                    label: 'Feed',
-                  ),
-
-                  // 🎯 3. THE NEW CHAT TAB WITH LIVE BADGE
-                  NavigationDestination(
-                    icon: Badge(
-                      isLabelVisible: unreadChatCount > 0,
-                      label: Text(
-                        unreadChatCount > 99 ? '99+' : '$unreadChatCount',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                      backgroundColor: Colors.redAccent,
-                      offset: const Offset(4, -4),
-                      child: const Icon(Icons.chat_bubble_outline_rounded),
+                            if (tab['badge'] != null && tab['badge'] > 0)
+                              Positioned(
+                                top: -2,
+                                right: -4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                                  child: Text(
+                                    tab['badge'] > 9 ? '9+' : '${tab['badge']}',
+                                    style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          tab['label'],
+                          maxLines: 1,
+                          overflow: TextOverflow.visible,
+                          style: TextStyle(
+                            fontFamily: kDisplayFont,
+                            fontSize: 10, // Increased slightly since there is more room with 5 tabs
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                            letterSpacing: 0.2,
+                            color: isSelected ? theme.colorScheme.primary : theme.hintColor.withOpacity(0.6),
+                          ),
+                        ),
+                      ],
                     ),
-                    selectedIcon: Badge(
-                      isLabelVisible: unreadChatCount > 0,
-                      label: Text(
-                        unreadChatCount > 99 ? '99+' : '$unreadChatCount',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                      backgroundColor: Colors.redAccent,
-                      offset: const Offset(4, -4),
-                      child: const Icon(Icons.chat_bubble_rounded),
-                    ),
-                    label: 'Chat',
                   ),
-
-                  const NavigationDestination(
-                    icon: Icon(Icons.support_agent_outlined),
-                    selectedIcon: Icon(Icons.support_agent_rounded),
-                    label: 'Coach',
-                  ),
-                ],
-              ),
+                );
+              }),
             ),
           ),
         ),

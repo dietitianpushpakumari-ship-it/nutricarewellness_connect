@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:nutricare_connect/core/utils/client_goal_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/reminder_config_model.dart';
+import 'package:pure_shift/core/utils/client_goal_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/reminder_config_model.dart';
 
 class AppUserModel {
   final String id;
@@ -47,7 +47,7 @@ class ClientModel {
 
   // 🎯 AUTH FIELDS
   final String? authEmail;
-  final String? authUid; // 🎯 ADDED THIS FIELD
+  final String? authUid;
   final String tenantId;
   final String? coachId;
 
@@ -56,12 +56,16 @@ class ClientModel {
   final int? freeSessionsRemaining;
   final String clientType;
 
-  // 🔔 NEW: PUSH NOTIFICATION TOKEN
+  // 🔔 NOTIFICATIONS & CHAT
   final String? fcmToken;
   final String? lastMessage;
   final Timestamp? lastMessageTime;
   final bool hasPendingRequest;
+  final bool loginAllowed;
+  final bool chatEnabled;
 
+  // 🏋️ WORKOUT FIELDS (Added)
+  final List<dynamic> assignedWorkouts;
 
   ClientModel({
     required this.id,
@@ -86,17 +90,22 @@ class ClientModel {
 
     // 🎯 Auth Params
     this.authEmail,
-    this.authUid, // 🎯 Added to constructor
+    this.authUid,
     this.tenantId = 'guest',
 
     this.dob,
     this.goals = const ClientGoalModel(),
     this.freeSessionsRemaining = 1,
     this.clientType = 'new',
-    this.fcmToken, // 🔔 Added here
+    this.fcmToken,
     this.lastMessage,
     this.lastMessageTime,
     this.hasPendingRequest = false,
+    this.loginAllowed = false,
+    this.chatEnabled = false,
+
+    // 🏋️ Workout Params
+    this.assignedWorkouts = const [], // Default to empty list
   });
 
   factory ClientModel.fromMap(Map<String, dynamic> data) {
@@ -122,7 +131,7 @@ class ClientModel {
 
       // 🎯 READ AUTH FIELDS
       authEmail: data['authEmail'],
-      authUid: data['authUid'], // 🎯 Read from Map
+      authUid: data['authUid'],
       tenantId: data['tenantId'] ?? 'guest',
 
       dob: (data['dob'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -135,10 +144,15 @@ class ClientModel {
           ? ClientGoalModel.fromMap(Map<String, dynamic>.from(data['goals']))
           : ClientGoalModel.defaultGoals(),
       freeSessionsRemaining: data['freeSessionsRemaining'] ?? 0,
-      fcmToken: data['fcmToken']?.toString(), // 🔔 Added here
+      fcmToken: data['fcmToken']?.toString(),
       lastMessage: data['lastMessage'] as String?,
       lastMessageTime: data['lastMessageTime'] as Timestamp?,
       hasPendingRequest: data['hasPendingRequest'] ?? false,
+      loginAllowed: data['loginAllowed'] ?? false,
+      chatEnabled: data['chatEnabled'] ?? false,
+
+      // 🏋️ READ WORKOUT FIELDS
+      assignedWorkouts: data['assignedWorkouts'] ?? [],
     );
   }
 
@@ -166,7 +180,7 @@ class ClientModel {
 
       // 🎯 READ AUTH FIELDS
       authEmail: data['authEmail'],
-      authUid: data['authUid'], // 🎯 Read from Firestore
+      authUid: data['authUid'],
       tenantId: data['tenantId'] ?? 'guest',
 
       dob: (data['dob'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -179,10 +193,15 @@ class ClientModel {
           ? ClientGoalModel.fromMap(Map<String, dynamic>.from(data['goals']))
           : ClientGoalModel.defaultGoals(),
       freeSessionsRemaining: data['freeSessionsRemaining'] ?? 0,
-      fcmToken: data['fcmToken']?.toString(), // 🔔 Added here
+      fcmToken: data['fcmToken']?.toString(),
       lastMessage: data['lastMessage'] as String?,
       lastMessageTime: data['lastMessageTime'] as Timestamp?,
       hasPendingRequest: data['hasPendingRequest'] ?? false,
+      loginAllowed: data['loginAllowed'] ?? false,
+      chatEnabled: data['chatEnabled'] ?? false,
+
+      // 🏋️ READ WORKOUT FIELDS
+      assignedWorkouts: data['assignedWorkouts'] ?? [],
     );
   }
 
@@ -206,7 +225,7 @@ class ClientModel {
 
       // 🎯 SAVE AUTH FIELDS
       'authEmail': authEmail,
-      'authUid': authUid, // 🎯 Save to DB
+      'authUid': authUid,
       'tenantId': tenantId,
 
       'dob': dob,
@@ -216,10 +235,15 @@ class ClientModel {
       'goals': goals.toMap(),
       'coachId': coachId,
       'freeSessionsRemaining': freeSessionsRemaining ?? 0,
-      'fcmToken': fcmToken, // 🔔 Added here
+      'fcmToken': fcmToken,
       'lastMessage': lastMessage,
       'lastMessageTime': lastMessageTime,
       'hasPendingRequest': hasPendingRequest,
+      'loginAllowed': loginAllowed,
+      'chatEnabled': chatEnabled,
+
+      // 🏋️ SAVE WORKOUT FIELDS
+      'assignedWorkouts': assignedWorkouts,
     };
   }
 
@@ -251,11 +275,15 @@ class ClientModel {
     DateTime? dob,
     ClientGoalModel? goals,
     int? freeSessionsRemaining,
-    String? fcmToken, // 🔔 Added to params
+    String? fcmToken,
     String? lastMessage,
     Timestamp? lastMessageTime,
     bool? hasPendingRequest,
+    bool? loginAllowed,
+    bool? chatEnabled,
 
+    // 🏋️ Workout Params
+    List<dynamic>? assignedWorkouts,
   }) {
     return ClientModel(
       id: id ?? this.id,
@@ -286,11 +314,15 @@ class ClientModel {
       photoUrl: photoUrl ?? this.photoUrl,
       goals: goals ?? this.goals,
       freeSessionsRemaining: freeSessionsRemaining ?? this.freeSessionsRemaining,
-      fcmToken: fcmToken ?? this.fcmToken, // 🔔 Added here
-      // 💬 Copy new fields
+      fcmToken: fcmToken ?? this.fcmToken,
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageTime: lastMessageTime ?? this.lastMessageTime,
       hasPendingRequest: hasPendingRequest ?? this.hasPendingRequest,
+      loginAllowed: loginAllowed ?? this.loginAllowed,
+      chatEnabled: chatEnabled ?? this.chatEnabled,
+
+      // 🏋️ Copy Workout Params
+      assignedWorkouts: assignedWorkouts ?? this.assignedWorkouts,
     );
   }
 }

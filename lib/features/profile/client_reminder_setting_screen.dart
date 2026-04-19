@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/core/utils/client_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/reminder_config_model.dart';
-import 'package:nutricare_connect/main.dart';
+import 'package:pure_shift/core/utils/client_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/reminder_config_model.dart';
+import 'package:pure_shift/main.dart';
 
-import 'package:nutricare_connect/new/service/client_service.dart';
-import 'package:nutricare_connect/features/auth/auth_provider.dart' hide clientServiceProvider;
+import 'package:pure_shift/new/service/client_service.dart';
+import 'package:pure_shift/features/auth/auth_provider.dart' hide clientServiceProvider;
 
 class ClientReminderSettingsScreen extends ConsumerStatefulWidget {
   final ClientModel client;

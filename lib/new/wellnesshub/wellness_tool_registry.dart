@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/wellness_tool_model.dart';
+import 'package:pure_shift/core/utils/wellness_tool_model.dart';
 
 class WellnessRegistry {
   static const List<WellnessTool> allTools = [
@@ -45,16 +45,6 @@ class WellnessRegistry {
       category: WellnessCategory.physical,
       priority: 5,
       routeKey: 'cardio',
-    ),
-    WellnessTool(
-      id: 'kegel',
-      title: 'Kegel Trainer',
-      subtitle: 'Core Strength',
-      icon: Icons.accessibility_new,
-      color: Colors.pink,
-      category: WellnessCategory.physical,
-      priority: 8,
-      routeKey: 'kegel',
     ),
     WellnessTool(
       id: 'wrist',

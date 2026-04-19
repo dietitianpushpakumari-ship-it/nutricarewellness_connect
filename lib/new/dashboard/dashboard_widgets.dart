@@ -1,196 +1,280 @@
-import 'dart:math';
+import 'dart:async';
+import 'dart:ui';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/screens/wave_clipper.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:pure_shift/features/dietplan/PRESENTATION/screens/wave_clipper.dart';
+import 'package:pure_shift/layout_utils.dart';
+import 'package:intl/intl.dart';
 
-// 🎨 PREMIUM DESIGN CONSTANTS
-const double kCardRadius = 24.0;
+// 🚀 LUXURY CONSTANTS
+const double kCardRadius = 32.0;
 
-// 🎯 REUSABLE GLASS DECORATION HELPER
-BoxDecoration _getGlassDecoration(BuildContext context, {Color? tint}) {
-  final theme = Theme.of(context);
-  final isDark = theme.brightness == Brightness.dark;
+// =================================================================
+// 💎 REUSABLE LUXURY BENTO BACKGROUND (Now with Pulse Animation!)
+// =================================================================
+class LuxuryBentoBackground extends StatefulWidget {
+  final Color baseGlowColor;
+  final Widget child;
+  final VoidCallback onTap;
+  final bool clipContent;
+  final bool isOverdue; // 🚀 ADDED: Triggers the alert state
 
-  Color baseColor = theme.cardTheme.color ?? theme.colorScheme.surface;
-  if (tint != null) {
-    baseColor = Color.alphaBlend(tint.withOpacity(isDark ? 0.1 : 0.05), baseColor);
+  const LuxuryBentoBackground({
+    super.key,
+    required this.baseGlowColor,
+    required this.child,
+    required this.onTap,
+    this.clipContent = true,
+    this.isOverdue = false,
+  });
+
+  @override
+  State<LuxuryBentoBackground> createState() => _LuxuryBentoBackgroundState();
+}
+
+class _LuxuryBentoBackgroundState extends State<LuxuryBentoBackground> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    // 🚀 A slow, calm heartbeat for overdue items (2 seconds)
+    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
   }
 
-  Color borderColor = isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.4);
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
-  return BoxDecoration(
-    color: baseColor,
-    borderRadius: BorderRadius.circular(kCardRadius),
-    border: Border.all(color: borderColor, width: 1.5),
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // 🚀 THE COLOR SHIFT: Overdue items glow with a warm Coral/Amber
+    final Color activeGlowColor = widget.isOverdue ? const Color(0xFFFF6E40) : widget.baseGlowColor;
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(context.scale(kCardRadius)),
+          boxShadow: [
+            BoxShadow(
+              color: activeGlowColor.withOpacity(isDark ? 0.08 : 0.04),
+              blurRadius: 30, spreadRadius: 0, offset: const Offset(0, 8),
+            )
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(context.scale(kCardRadius)),
+          clipBehavior: widget.clipContent ? Clip.antiAlias : Clip.none,
+          child: Stack(
+            children: [
+              // 🌌 LAYER 1: Deep Base Color
+              Positioned.fill(
+                child: Container(color: isDark ? const Color(0xFF0B0F19) : Colors.white),
+              ),
+
+              // 🌊 LAYER 2: Soft Corner Glow (Animated if Overdue)
+              Positioned(
+                bottom: -30, right: -30,
+                child: AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      // If overdue, the opacity pulses between 0.2 and 0.6
+                      final double opacity = widget.isOverdue
+                          ? (0.2 + (_pulseController.value * 0.4))
+                          : (isDark ? 0.4 : 0.2);
+
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 500), // Smooth color transition
+                        width: context.scale(120), height: context.scale(120),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: activeGlowColor.withOpacity(opacity),
+                        ),
+                      );
+                    }
+                ),
+              ),
+
+              // 🌫️ LAYER 3: Mesh Blur
+              Positioned.fill(
+                child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.transparent)),
+              ),
+
+              // 🪟 LAYER 4: Glass Border & Content Overlay
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.black.withOpacity(0.2) : Colors.white.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(context.scale(kCardRadius)),
+                    border: Border.all(
+                      // The border itself catches a tiny bit of the amber glow if overdue
+                      color: widget.isOverdue
+                          ? activeGlowColor.withOpacity(0.3)
+                          : (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04)),
+                      width: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+
+              // ✨ LAYER 5: The Actual Card Content
+              Positioned.fill(
+                child: widget.child, // 🚀 Changed from just 'child' to 'Positioned.fill'
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 💎 REUSABLE LUXURY LABEL PILL (Now supports Alert Dot)
+Widget _buildLuxuryPill(BuildContext context, String text, IconData icon, Color color, bool isDark, {bool isOverdue = false}) {
+  return Container(
+    padding: EdgeInsets.symmetric(horizontal: context.scale(10), vertical: context.scale(4)),
+    decoration: BoxDecoration(
+      color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
+      borderRadius: BorderRadius.circular(context.scale(16)),
+      border: Border.all(color: isOverdue ? const Color(0xFFFF6E40).withOpacity(0.5) : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.02))),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: context.scale(10), color: isOverdue ? const Color(0xFFFF6E40) : color),
+        SizedBox(width: context.scale(6)),
+        Text(
+          text.toUpperCase(),
+          style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(9), fontWeight: FontWeight.w800, letterSpacing: 2.0, color: isDark ? Colors.white : Colors.black87),
+        ),
+        if (isOverdue) ...[
+          SizedBox(width: context.scale(6)),
+          Container(width: context.scale(4), height: context.scale(4), decoration: const BoxDecoration(color: Color(0xFFFF6E40), shape: BoxShape.circle)),
+        ]
+      ],
+    ),
   );
 }
 
 // =================================================================
-// 1. PREMIUM HYDRATION CARD (WITH SMART TIME-ALERTS)
+// 1. PREMIUM HYDRATION CARD (With Interval Logic)
+// =================================================================
+// =================================================================
+// 1. PREMIUM HYDRATION CARD (With 100% Fill Fix)
 // =================================================================
 class MiniHydrationCard extends StatelessWidget {
   final double currentLiters;
   final double goalLiters;
   final Animation<double> waveAnimation;
-  final Animation<double>? glowAnimation; // 🎯 Pulse Sync
   final VoidCallback onTap;
   final VoidCallback onQuickAdd;
 
-  const MiniHydrationCard({
-    super.key,
-    required this.currentLiters,
-    required this.goalLiters,
-    required this.waveAnimation,
-    this.glowAnimation,
-    required this.onTap,
-    required this.onQuickAdd,
-  });
+  const MiniHydrationCard({super.key, required this.currentLiters, required this.goalLiters, required this.waveAnimation, required this.onTap, required this.onQuickAdd});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final bool isEmpty = currentLiters <= 0;
-    final double progress = (currentLiters / (goalLiters == 0 ? 3.0 : goalLiters)).clamp(0.0, 1.0);
-    final percent = (progress * 100).toInt();
+    final double safeGoal = goalLiters == 0 ? 3.0 : goalLiters;
+    final double progress = (currentLiters / safeGoal).clamp(0.0, 1.0);
+    final Color primaryColor = const Color(0xFF00B0FF);
 
-    // 🎯 SMART ALERT LOGIC: Check if behind schedule (8 AM - 8 PM window)
+    // Time Logic
     final now = DateTime.now();
-    bool isAlert = false;
-    if (now.hour >= 8 && now.hour <= 20) {
-      double expectedProgress = (now.hour - 8) / 12;
-      double expectedLiters = expectedProgress * goalLiters;
-      isAlert = currentLiters < (expectedLiters - 0.3); // Alert if > 300ml behind
-    }
+    double expectedLiters = 0;
+    if (now.hour >= 9) expectedLiters = safeGoal * 0.2;
+    if (now.hour >= 13) expectedLiters = safeGoal * 0.4;
+    final bool isOverdue = currentLiters < expectedLiters;
 
-    return GestureDetector(
+    return LuxuryBentoBackground(
+      baseGlowColor: primaryColor,
+      isOverdue: isOverdue,
       onTap: onTap,
-      child: AnimatedBuilder(
-        animation: glowAnimation ?? waveAnimation,
-        builder: (context, child) {
-          final pulseValue = glowAnimation?.value ?? 0.0;
-
-          return Container(
-            decoration: _getGlassDecoration(context).copyWith(
-              // 🎯 Pulse border and shadow only if in Alert state
-              border: Border.all(
-                color: isAlert
-                    ? colorScheme.error.withOpacity(0.4 + (pulseValue * 0.4))
-                    : colorScheme.primary.withOpacity(0.2),
-                width: isAlert ? 1.5 + (pulseValue * 0.5) : 1.5,
-              ),
-              boxShadow: isAlert ? [
-                BoxShadow(
-                  color: colorScheme.error.withOpacity(0.2 + (pulseValue * 0.2)),
-                  blurRadius: 10 + (pulseValue * 10),
-                  spreadRadius: 1,
-                  blurStyle: BlurStyle.inner, // 🎯 Trapped inside to prevent smudging
-                )
-              ] : null,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
-              children: [
-                // 🌊 Background Wave
-                if (!isEmpty)
-                  Positioned.fill(
-                    child: ClipPath(
-                      clipper: WaveClipper(waveProgress: waveAnimation.value, fillProgress: progress),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomLeft,
-                            end: Alignment.topRight,
-                            colors: [
-                              isAlert ? colorScheme.error.withOpacity(0.5) : colorScheme.secondary.withOpacity(0.6),
-                              isAlert ? colorScheme.error.withOpacity(0.7) : colorScheme.primary.withOpacity(0.7)
-                            ],
-                          ),
-                        ),
-                      ),
+      // 🚀 CRITICAL: We let the background handle the clipping
+      clipContent: true,
+      child: Stack(
+        children: [
+          // 🌊 THE WAVE: Must be Positioned.fill to cover the whole grid area
+          if (!isEmpty)
+            Positioned.fill(
+              child: ClipPath(
+                clipper: WaveClipper(
+                  waveProgress: waveAnimation.value,
+                  // We boost the visual fill slightly to ensure it touches the top
+                  fillProgress: progress >= 0.95 ? 1.0 : progress,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomLeft,
+                      end: Alignment.topRight,
+                      colors: [
+                        primaryColor.withOpacity(0.7),
+                        primaryColor.withOpacity(0.9),
+                      ],
                     ),
-                  ),
-
-                // 📝 Content
-                Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Icon(
-                              isAlert ? Icons.warning_amber_rounded : Icons.water_drop_rounded,
-                              color: progress > 0.4 ? Colors.white : (isAlert ? colorScheme.error : colorScheme.primary),
-                              size: 20
-                          ),
-                          if (isAlert)
-                          // ✅ Correct
-
-                            Text("BEHIND", style: TextStyle(color: progress > 0.4 ? Colors.white : colorScheme.error, fontSize: 9, fontWeight: FontWeight.w900)),
-                        ],
-                      ),
-
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.bottomLeft,
-                          child: isEmpty
-                              ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(context.tr("dashboard_hydrate"), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
-                              const SizedBox(height: 2),
-                              Text("${context.tr("dashboard_goal")}: ${goalLiters}L", style: TextStyle(fontSize: 11, color: colorScheme.onSurface.withOpacity(0.5))),
-                            ],
-                          )
-                              : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              FittedBox(
-                                child: Text("$percent%", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: progress > 0.4 ? Colors.white : colorScheme.onSurface, height: 1.0)),
-                              ),
-                              const SizedBox(height: 2),
-                              Text("${currentLiters.toStringAsFixed(1)}L", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: progress > 0.4 ? Colors.white.withOpacity(0.9) : colorScheme.onSurface.withOpacity(0.6))),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
+              ),
+            ),
 
-                // ➕ Add Button
-                Positioned(
-                  bottom: 8, right: 8,
-                  child: InkWell(
-                    onTap: onQuickAdd,
-                    borderRadius: BorderRadius.circular(30),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: theme.brightness == Brightness.dark ? Colors.white12 : Colors.white.withOpacity(0.8),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+          // 🚀 CONTENT LAYER: Positioned on top of the water
+          Padding(
+            padding: EdgeInsets.all(context.scale(12)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildLuxuryPill(context, "WATER", Icons.water_drop_rounded, progress > 0.4 ? Colors.white : primaryColor, isDark, isOverdue: isOverdue),
+
+                // Use a Column at the bottom for the metrics
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isEmpty ? "Hydrate" : "${(progress * 100).toInt()}%",
+                      style: TextStyle(
+                          fontFamily: 'Space Grotesk',
+                          fontSize: context.scale(20),
+                          fontWeight: FontWeight.w700,
+                          color: progress > 0.4 ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                          letterSpacing: -0.5,
+                          height: 1.1
                       ),
-                      child: Icon(Icons.add, size: 16, color: theme.brightness == Brightness.dark ? Colors.white : (isAlert ? colorScheme.error : colorScheme.primary)),
                     ),
-                  ),
+                    Text(
+                      isOverdue ? "Behind schedule" : (isEmpty ? "Log water" : "${currentLiters.toStringAsFixed(1)}L logged"),
+                      style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: context.scale(10),
+                          fontWeight: FontWeight.w600,
+                          color: isOverdue ? const Color(0xFFFF6E40) : (progress > 0.4 ? Colors.white.withOpacity(0.8) : (isDark ? Colors.white54 : Colors.black54))
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 }
 
 // =================================================================
-// 2. PREMIUM STEP CARD
+// 2. PREMIUM STEP CARD (With Interval Logic)
 // =================================================================
 class MiniStepCard extends StatelessWidget {
   final int steps;
@@ -202,53 +286,52 @@ class MiniStepCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final double progress = (steps / (goal == 0 ? 8000 : goal)).clamp(0.0, 1.0);
-    final Color ringColor = progress >= 1.0 ? const Color(0xFF43A047) : colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    final int safeGoal = goal == 0 ? 8000 : goal;
+    final double progress = (steps / safeGoal).clamp(0.0, 1.0);
+    final bool hasData = steps > 0;
+    final Color primaryColor = const Color(0xFF00E676);
 
-    return GestureDetector(
+    // 🚀 TIME LOGIC: Are they too sedentary today?
+    final now = DateTime.now();
+    int expectedSteps = 0;
+    if (now.hour >= 12) expectedSteps = (safeGoal * 0.3).toInt();
+    if (now.hour >= 16) expectedSteps = (safeGoal * 0.6).toInt();
+    if (now.hour >= 20) expectedSteps = (safeGoal * 0.8).toInt();
+
+    final bool isOverdue = steps < expectedSteps;
+
+    return LuxuryBentoBackground(
+      baseGlowColor: primaryColor,
+      isOverdue: isOverdue,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: _getGlassDecoration(context),
+      child: Padding(
+        padding: EdgeInsets.all(context.scale(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Icon(Icons.directions_run_rounded, color: colorScheme.onSurface.withOpacity(0.4), size: 18),
-                const Spacer(),
-                if (progress >= 1.0) const Icon(Icons.star, color: Colors.amber, size: 14),
-              ],
-            ),
-
+            _buildLuxuryPill(context, "STEPS", Icons.directions_run_rounded, primaryColor, isDark, isOverdue: isOverdue),
             Expanded(
-              child: Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: SizedBox(
-                    height: 55, width: 55,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        CircularProgressIndicator(value: 1.0, strokeWidth: 5, color: colorScheme.onSurface.withOpacity(0.05)),
-                        CircularProgressIndicator(value: progress, strokeWidth: 5, color: ringColor, strokeCap: StrokeCap.round),
-                        Icon(Icons.bolt, size: 16, color: ringColor),
-                      ],
-                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    !hasData ? "Move" : NumberFormat('#,###').format(steps),
+                    style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(20), fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5, height: 1.1),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
                   ),
-                ),
+                  Text(
+                    isOverdue ? "Pacing behind" : (!hasData ? "Track steps" : "${(progress * 100).toInt()}% of goal"),
+                    style: TextStyle(
+                        fontFamily: 'Inter', fontSize: context.scale(10), fontWeight: FontWeight.w600,
+                        color: isOverdue ? const Color(0xFFFF6E40) : (isDark ? Colors.white54 : Colors.black54)
+                    ),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
-            ),
-
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FittedBox(child: Text("$steps", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: colorScheme.onSurface))),
-                Text(context.tr("dashboard_steps"), style: TextStyle(fontSize: 10, color: colorScheme.onSurface.withOpacity(0.5), fontWeight: FontWeight.w500)),
-              ],
             ),
           ],
         ),
@@ -258,7 +341,7 @@ class MiniStepCard extends StatelessWidget {
 }
 
 // =================================================================
-// 3. PREMIUM SLEEP CARD
+// 3. PREMIUM SLEEP CARD (With Interval Logic)
 // =================================================================
 class MiniSleepCard extends StatelessWidget {
   final double hours;
@@ -270,14 +353,22 @@ class MiniSleepCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final bool hasData = hours > 0;
+    final int displayHours = hours.floor();
+    final int displayMinutes = ((hours - displayHours) * 60).round();
+    final Color primaryColor = const Color(0xFF536DFE);
 
-    return GestureDetector(
+    // 🚀 TIME LOGIC: If it is past 10 AM and no sleep is logged, remind them!
+    final now = DateTime.now();
+    final bool isOverdue = now.hour >= 10 && hours == 0;
+
+    return LuxuryBentoBackground(
+      baseGlowColor: primaryColor,
+      isOverdue: isOverdue,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: _getGlassDecoration(context, tint: colorScheme.secondary),
+      child: Padding(
+        padding: EdgeInsets.all(context.scale(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -285,39 +376,54 @@ class MiniSleepCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.bedtime_rounded, color: colorScheme.secondary, size: 18),
-                Text(context.tr("dashboard_sleep"), style: TextStyle(color: colorScheme.secondary, fontSize: 10, fontWeight: FontWeight.w600)),
+                _buildLuxuryPill(context, "SLEEP", Icons.bedtime_rounded, primaryColor, isDark, isOverdue: isOverdue),
+                if (hasData && score > 0)
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: context.scale(6), vertical: context.scale(2)),
+                    decoration: BoxDecoration(color: primaryColor.withOpacity(0.15), borderRadius: BorderRadius.circular(context.scale(6))),
+                    child: Row(
+                      children: [
+                        Icon(Icons.star_rounded, color: primaryColor, size: context.scale(8)),
+                        SizedBox(width: context.scale(2)),
+                        Text("$score", style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(9), fontWeight: FontWeight.w800, color: primaryColor)),
+                      ],
+                    ),
+                  )
               ],
             ),
-
-            if (hasData)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (hasData)
                     FittedBox(
-                      child: RichText(
-                        text: TextSpan(children: [
-                          TextSpan(text: hours.floor().toString(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
-                          TextSpan(text: "h ", style: TextStyle(fontSize: 12, color: colorScheme.onSurface.withOpacity(0.6))),
-                          TextSpan(text: ((hours - hours.floor()) * 60).toInt().toString(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
-                          TextSpan(text: "m", style: TextStyle(fontSize: 12, color: colorScheme.onSurface.withOpacity(0.6))),
-                        ]),
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text("$displayHours", style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(20), fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5, height: 1.1)),
+                          Text("h ", style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(12), fontWeight: FontWeight.w600, color: isDark ? Colors.white54 : Colors.black54)),
+                          Text("$displayMinutes", style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(20), fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5, height: 1.1)),
+                          Text("m", style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(12), fontWeight: FontWeight.w600, color: isDark ? Colors.white54 : Colors.black54)),
+                        ],
                       ),
+                    )
+                  else
+                    Text("Rest", style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(20), fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5, height: 1.1)),
+
+                  Text(
+                    isOverdue ? "Log last night" : (!hasData ? "Log sleep" : "Quality logged"),
+                    style: TextStyle(
+                        fontFamily: 'Inter', fontSize: context.scale(10), fontWeight: FontWeight.w600,
+                        color: isOverdue ? const Color(0xFFFF6E40) : (isDark ? Colors.white54 : Colors.black54)
                     ),
-                    const SizedBox(height: 4),
-                    Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: colorScheme.secondary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                        child: Text("Score: $score", style: TextStyle(color: colorScheme.secondary, fontSize: 10, fontWeight: FontWeight.bold))
-                    ),
-                  ],
-                ),
-              )
-            else
-              Expanded(child: Center(child: Text(context.tr("dashboard_log_rest"), textAlign: TextAlign.center, style: TextStyle(color: colorScheme.onSurface.withOpacity(0.4), fontSize: 12, fontWeight: FontWeight.w600)))),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -326,7 +432,7 @@ class MiniSleepCard extends StatelessWidget {
 }
 
 // =================================================================
-// 4. PREMIUM BREATHING CARD
+// 4. PREMIUM BREATHING CARD (With Interval Logic)
 // =================================================================
 class MiniBreathingCard extends StatelessWidget {
   final int minutesLogged;
@@ -337,46 +443,47 @@ class MiniBreathingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final bool hasData = minutesLogged > 0;
+    final Color primaryColor = const Color(0xFF00BFA5);
 
-    return GestureDetector(
+    // 🚀 TIME LOGIC: If the day is ending (8 PM) and they haven't paused
+    final now = DateTime.now();
+    final bool isOverdue = now.hour >= 20 && minutesLogged == 0;
+
+    return LuxuryBentoBackground(
+      baseGlowColor: primaryColor,
+      isOverdue: isOverdue,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: _getGlassDecoration(context, tint: colorScheme.primary),
+      child: Padding(
+        padding: EdgeInsets.all(context.scale(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(Icons.self_improvement_rounded, color: colorScheme.primary, size: 20),
-                if (minutesLogged > 0) Icon(Icons.check_circle, color: colorScheme.primary, size: 16),
-              ],
-            ),
+            _buildLuxuryPill(context, "BREATH", Icons.air_rounded, primaryColor, isDark, isOverdue: isOverdue),
 
-            const Spacer(),
-
-            if (minutesLogged > 0)
-              Column(
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  FittedBox(child: Text("$minutesLogged", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface, height: 1.0))),
-                  Text(context.tr("dashboard_min_mindful"), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: colorScheme.primary)),
-                ],
-              )
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(context.tr("dashboard_take_a_breath"), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: colorScheme.onSurface, height: 1.1)),
-                  const SizedBox(height: 4),
-                  Text(context.tr("dashboard_start_now"), style: TextStyle(fontSize: 10, color: colorScheme.primary, fontWeight: FontWeight.bold)),
+                  Text(
+                    hasData ? "${minutesLogged}m" : "Focus",
+                    style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(20), fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5, height: 1.1),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    isOverdue ? "Take a moment" : (hasData ? "Mindful time" : "Breathe"),
+                    style: TextStyle(
+                        fontFamily: 'Inter', fontSize: context.scale(10), fontWeight: FontWeight.w600,
+                        color: isOverdue ? const Color(0xFFFF6E40) : (isDark ? Colors.white54 : Colors.black54)
+                    ),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
+            ),
           ],
         ),
       ),

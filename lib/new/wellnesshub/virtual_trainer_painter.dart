@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/workout_config.dart';
+import 'package:pure_shift/core/utils/workout_config.dart';
 
 class VirtualTrainerPainter extends CustomPainter {
   final double progress; // 0.0 to 1.0 (One rep cycle)

@@ -7,31 +7,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equatable/equatable.dart';
 import 'package:collection/collection.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/core/utils/client_model.dart';
+import 'package:pure_shift/core/utils/client_model.dart';
 import 'package:rxdart/rxdart.dart';
 
 // 🎯 Domain & Data Layers
-import 'package:nutricare_connect/core/clinical_master_service.dart';
-import 'package:nutricare_connect/core/package_payment_service.dart';
-import 'package:nutricare_connect/features/appointments/meeting_Service.dart';
-import 'package:nutricare_connect/core/utils/geeta_repository.dart';
-import 'package:nutricare_connect/core/utils/geeta_shloka_model.dart';
-import 'package:nutricare_connect/features/dietplan/dATA/services/admin_profile_service.dart';
-import 'package:nutricare_connect/features/dietplan/dATA/services/guideline_service.dart';
-import 'package:nutricare_connect/features/dietplan/dATA/services/package_service.dart';
-import 'package:nutricare_connect/features/dietplan/dATA/services/vitals_service.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/admin_profile_model.dart';
+import 'package:pure_shift/core/clinical_master_service.dart';
+import 'package:pure_shift/core/package_payment_service.dart';
+import 'package:pure_shift/features/appointments/meeting_Service.dart';
+import 'package:pure_shift/core/utils/geeta_repository.dart';
+import 'package:pure_shift/core/utils/geeta_shloka_model.dart';
+import 'package:pure_shift/features/dietplan/dATA/services/admin_profile_service.dart';
+import 'package:pure_shift/features/dietplan/dATA/services/guideline_service.dart';
+import 'package:pure_shift/features/dietplan/dATA/services/package_service.dart';
+import 'package:pure_shift/features/dietplan/dATA/services/vitals_service.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/admin_profile_model.dart';
 
  // Ensure this provides FlatClientDietPlanModel
-import 'package:nutricare_connect/features/auth/auth_provider.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/guidelines.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/package_assignment_model.dart';
-import 'package:nutricare_connect/features/appointments/schedule_meeting_utils.dart';
-import 'package:nutricare_connect/new/models/lab_test_config_model.dart';
-import 'package:nutricare_connect/new/models/vitals_model.dart';
-import 'package:nutricare_connect/new/service/client_service.dart';
-import 'package:nutricare_connect/features/appointments/appointment_model.dart';
+import 'package:pure_shift/features/auth/auth_provider.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/guidelines.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/package_assignment_model.dart';
+import 'package:pure_shift/features/appointments/schedule_meeting_utils.dart';
+import 'package:pure_shift/new/models/lab_test_config_model.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
+import 'package:pure_shift/new/service/client_service.dart';
+import 'package:pure_shift/features/appointments/appointment_model.dart';
 import '../FlatClientDietPlanModel.dart';
 import '../repositories/diet_repositories.dart';
 
@@ -203,6 +203,7 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
   }
 
 // 🎯 ATOMIC UPDATE LOGIC WITH OPTIMISTIC UI
+// 🎯 ATOMIC UPDATE LOGIC WITH OPTIMISTIC UI
   Future<void> updateDailyRecord({
     required Map<String, dynamic> data,
     List<XFile>? newPhotos,
@@ -212,26 +213,25 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
       final dateId = DateFormat('yyyy-MM-dd').format(state.selectedDate);
 
       // 🔒 Tenant Security Injection
-      final clientProfile = _ref
-          .read(authNotifierProvider)
-          .clientProfile;
+      final clientProfile = _ref.read(authNotifierProvider).clientProfile;
       final tenantId = clientProfile?.tenantId ?? 'guest';
 
       data['tenantId'] = tenantId;
       data['clientId'] = _clientId;
 
       // 1. Upload Photos First
-      if (newPhotos != null && newPhotos.isNotEmpty &&
-          mealNameForPhotos != null) {
+      if (newPhotos != null && newPhotos.isNotEmpty && mealNameForPhotos != null) {
         List<String> uploadedUrls = [];
         for (var photo in newPhotos) {
+
+          // 🚀 THE FIX: Using the strict Multi-Tenant Cloudinary folder structure
           final url = await _clientService.uploadMealPhoto(
-              photo, 'meal_photos/$_clientId/$dateId');
+              photo, 'tenants/$tenantId/clients/$_clientId/meal_images');
+
           if (url != null) uploadedUrls.add(url);
         }
 
-        if (data['mealLogs'] != null &&
-            data['mealLogs'][mealNameForPhotos] != null) {
+        if (data['mealLogs'] != null && data['mealLogs'][mealNameForPhotos] != null) {
           List<String> existingUrls = List<String>.from(
               data['mealLogs'][mealNameForPhotos]['mealPhotoUrls'] ?? []);
           data['mealLogs'][mealNameForPhotos]['mealPhotoUrls'] =
@@ -249,16 +249,13 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
           date: state.selectedDate,
         );
 
-        final updatedMeals = Map<String, MealEntry>.from(
-            currentRecord.mealLogs);
+        final updatedMeals = Map<String, MealEntry>.from(currentRecord.mealLogs);
 
         final safeKey = mealNameForPhotos.trim();
-        updatedMeals[safeKey] =
-            MealEntry.fromMap(data['mealLogs'][mealNameForPhotos]);
+        updatedMeals[safeKey] = MealEntry.fromMap(data['mealLogs'][mealNameForPhotos]);
 
         final optimisticRecord = currentRecord.copyWith(mealLogs: updatedMeals);
-        state = state.copyWith(
-            dailyRecord: optimisticRecord, version: state.version + 1);
+        state = state.copyWith(dailyRecord: optimisticRecord, version: state.version + 1);
       }
 
       // 3. Execute Atomic Merge to Database
@@ -278,12 +275,24 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
       final updatedRecord = await _repository.getDailyRecord(
           _clientId, state.selectedDate, tenantId);
 
-      state = state.copyWith(
-          dailyRecord: updatedRecord, version: state.version + 1);
+      state = state.copyWith(dailyRecord: updatedRecord, version: state.version + 1);
     } catch (e) {
       state = state.copyWith(error: e.toString());
       rethrow;
     }
+  }
+
+  void updateLocalDailyRecordState(Map<String, dynamic> data) {
+    if (state.dailyRecord == null) return;
+
+    // Use your model's copyWith to update the specific fields locally
+    final updatedRecord = state.dailyRecord!.copyWith(
+      sensorStepsBaseline: data['sensorStepsBaseline'] ?? state.dailyRecord!.sensorStepsBaseline,
+      stepCount: data['stepCount'] ?? state.dailyRecord!.stepCount,
+    );
+
+    // Update the Riverpod state
+    state = state.copyWith(dailyRecord: updatedRecord);
   }
 }
 
@@ -371,9 +380,15 @@ final guidelineProvider = FutureProvider.family<List<Guideline>, List<String>>((
   return await service.fetchGuidelinesByIds(guidelineIds);
 });
 
-final assignedPackageProvider = FutureProvider.family<List<PackageAssignmentModel>,String>((ref, clientId) async {
+// 🚀 THE FIX: Changed to StreamProvider and passed the tenantId
+final assignedPackageProvider = StreamProvider.family<List<PackageAssignmentModel>, String>((ref, clientId) {
   final service = PackageService();
-  return await service.getPackageAssignments(clientId);
+
+  // 🔐 Securely fetch the tenantId from your existing provider
+  final tenantId = ref.watch(currentTenantIdProvider);
+
+  // 🔄 Return the real-time stream
+  return service.streamPackageAssignments(clientId, tenantId);
 });
 
 final weeklyLogHistoryProvider = FutureProvider.family<Map<DateTime, ClientLogModel>, String>((ref, clientId) async {
@@ -550,4 +565,25 @@ final dietitianProfileProvider = FutureProvider.family<AdminProfileModel?, Strin
   } catch (e) {
     throw Exception("Failed to load Care Team profile: $e");
   }
+});
+
+final tenantDetailsProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, tenantId) async {
+  if (tenantId.isEmpty) return null;
+  try {
+    final doc = await FirebaseFirestore.instance.collection('tenants').doc(tenantId).get();
+    return doc.exists ? doc.data() : null;
+  } catch (e) {
+    return null;
+  }
+});
+
+final unreadMessageCountProvider = StreamProvider.family<int, String>((ref, clientId) {
+  return FirebaseFirestore.instance
+      .collection('clients')
+      .doc(clientId)
+      .collection('chat')
+      .where('isSenderClient', isEqualTo: false)
+      .where('isRead', isEqualTo: false)
+      .snapshots()
+      .map((snap) => snap.docs.length);
 });

@@ -3,14 +3,44 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nutricare_connect/core/services/tts_service.dart';
-import 'package:nutricare_connect/core/utils/client_model.dart';
-import 'package:nutricare_connect/new/wellnesshub/virtual_trainer_painter.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
-import 'package:nutricare_connect/core/utils/workout_config.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
-// FlatClientDietPlanModel
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:video_player/video_player.dart'; // 🎯 NEW IMPORT
+
+import 'package:pure_shift/core/services/tts_service.dart';
+import 'package:pure_shift/core/utils/client_model.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
+import 'package:pure_shift/core/utils/workout_config.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
+
+// ==========================================================
+// 🚀 THE MAGIC: Tie the local AI video paths directly to the Enum
+// ==========================================================
+extension ExerciseVideoMapper on ExerciseType {
+  String get videoAssetPath {
+    switch (this) {
+      case ExerciseType.squat: return 'assets/videos/squat.mp4';
+      case ExerciseType.pushup: return 'assets/videos/pushup.mp4';
+      case ExerciseType.jumpingJack: return 'assets/videos/jumping_jacks.mp4';
+      case ExerciseType.plank: return 'assets/videos/plank.mp4';
+      case ExerciseType.lunges: return 'assets/videos/lunges.mp4';
+      case ExerciseType.situp: return 'assets/videos/situps.mp4';
+      case ExerciseType.gluteBridge: return 'assets/videos/glute_bridge.mp4';
+      case ExerciseType.highKnees: return 'assets/videos/high_knees1.mp4';
+      case ExerciseType.armCircles: return 'assets/videos/arm_circles1.mp4';
+      case ExerciseType.shoulderShrug: return 'assets/videos/shoulder_shrug.mp4';
+      case ExerciseType.neckRoll: return 'assets/videos/neck_roll1.mp4';
+      case ExerciseType.wristStretch: return 'assets/videos/wrist_stretch.mp4';
+      case ExerciseType.seatedTwist: return 'assets/videos/seated_twist.mp4';
+      case ExerciseType.pacing: return 'assets/videos/pacing.mp4';
+      case ExerciseType.calfRaise: return 'assets/videos/calf_raise.mp4';
+      case ExerciseType.rest: return 'assets/videos/rest_breathing_female.mp4'; // Fallback for rests
+      default: return 'assets/videos/rest_breathing.mp4';
+    }
+  }
+}
 
 class WorkoutPlayerSheet extends ConsumerStatefulWidget {
   final WorkoutConfig config;
@@ -27,37 +57,62 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
   final _audio = WellnessAudioService();
   final _speechService = TextToSpeechService();
 
+  // 🎯 NEW: Video Controller
+  VideoPlayerController? _videoController;
+
   int _currentStepIndex = 0;
   bool _isPaused = false;
   bool _isMuted = false;
   Timer? _timer;
-  late AnimationController _repController;
 
   bool _hasStarted = false;
   bool _isPreparing = false;
   bool _isTimelineMode = false;
 
-  // 🎯 Post-Workout Summary State
   bool _isFinished = false;
-  double _rpeScore = 5.0; // Rate of Perceived Exertion (1-10)
+  double _rpeScore = 5.0;
   String _selectedMood = 'Energized';
-
-  // 🎯 Intensity Multiplier
   double _intensity = 1.0;
 
   final ValueNotifier<int> _secondsLeft = ValueNotifier<int>(0);
 
   @override
-  void initState() {
-    super.initState();
-    _repController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
+  void dispose() {
+    _timer?.cancel();
+    _progressController?.dispose();
+    _speechService.stop();
+    _secondsLeft.dispose();
+    _videoController?.dispose(); // 🎯 Clean up video
+    super.dispose();
+  }
+
+  // 🎯 NEW: Video Initialization Logic
+  void _loadVideoForStep(ExerciseType type) {
+    final oldController = _videoController;
+
+    _videoController = VideoPlayerController.asset(type.videoAssetPath)
+      ..initialize().then((_) {
+        _videoController!.setLooping(true);
+        if (!_isPaused && !_isPreparing) {
+          _videoController!.play();
+        }
+        setState(() {}); // Trigger rebuild to show video
+        oldController?.dispose(); // Dispose old video *after* new one loads
+      }).catchError((error) {
+        debugPrint("Error loading video: $error");
+      });
   }
 
   void _beginWorkout() {
+    HapticFeedback.mediumImpact();
     setState(() {
       _hasStarted = true;
       _isPreparing = true;
     });
+
+    // Pre-load the first video while in the countdown
+    _loadVideoForStep(widget.config.steps[0].type);
+
     _secondsLeft.value = 3;
 
     if (!_isMuted) {
@@ -73,6 +128,7 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
       } else {
         t.cancel();
         setState(() => _isPreparing = false);
+        _videoController?.play(); // Start video when countdown ends
         _startStep(0);
       }
     });
@@ -86,12 +142,16 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
 
     final step = widget.config.steps[index];
 
+    // Load new video if we advanced a step
+    if (_currentStepIndex != index || index == 0) {
+      _loadVideoForStep(step.type);
+    }
+
     setState(() {
       _currentStepIndex = index;
       _isPaused = false;
     });
 
-    // Apply Intensity Multiplier to duration
     final int adjustedDuration = (step.duration * _intensity).toInt();
     _secondsLeft.value = adjustedDuration;
 
@@ -102,11 +162,10 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
       } else {
         _audio.hapticHeavy();
         _audio.playClick();
-        _speechService.speak(text : step.isRepBased ? "${step.reps} ${step.title}. ${step.instruction}" : step.instruction, languageCode: "en-US");
+        _speechService.speak(text: step.isRepBased ? "${step.reps} ${step.title}. ${step.instruction}" : step.instruction, languageCode: "en-US");
       }
     }
 
-    // 🎯 If Rep Based, don't start the timer countdown! Wait for manual "Done" click.
     if (step.isRepBased) return;
 
     _progressController?.dispose();
@@ -118,13 +177,10 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
 
       if (_secondsLeft.value > 0) {
         _secondsLeft.value--;
-
-        // 🎯 Halfway Alert Logic
         if (step.switchSides && _secondsLeft.value == (adjustedDuration / 2).floor() && !_isMuted) {
           _audio.playDing();
           _speechService.speak(text: "Halfway there, switch sides!", languageCode: "en-US");
         }
-
         if (!_isMuted && _secondsLeft.value <= 3 && _secondsLeft.value > 0) _audio.playTick();
       } else {
         t.cancel();
@@ -134,21 +190,29 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
   }
 
   void _togglePause() {
+    HapticFeedback.lightImpact();
     if (!_hasStarted || _isPreparing || widget.config.steps[_currentStepIndex].isRepBased) return;
     setState(() {
       _isPaused = !_isPaused;
-      if (_isPaused) _progressController?.stop();
-      else _progressController?.forward();
+      if (_isPaused) {
+        _progressController?.stop();
+        _videoController?.pause(); // 🎯 Pause video
+      } else {
+        _progressController?.forward();
+        _videoController?.play(); // 🎯 Resume video
+      }
     });
   }
 
   void _skipToNext() {
+    HapticFeedback.selectionClick();
     if (!_hasStarted || _isPreparing) return;
     _timer?.cancel();
     _startStep(_currentStepIndex + 1);
   }
 
   void _skipToPrevious() {
+    HapticFeedback.selectionClick();
     if (!_hasStarted || _isPreparing) return;
     if (_currentStepIndex > 0) {
       _timer?.cancel();
@@ -158,6 +222,7 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
 
   void _showCoolDownScreen() {
     _timer?.cancel();
+    _videoController?.pause();
     if (!_isMuted) {
       _audio.playSuccess();
       _audio.hapticSuccess();
@@ -171,11 +236,9 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
       Navigator.pop(context);
       return true;
     }
-
     _togglePause();
-
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final cs = theme.colorScheme;
 
     final bool? exit = await showDialog(
       context: context,
@@ -183,194 +246,138 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
         filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
         child: AlertDialog(
           backgroundColor: theme.scaffoldBackgroundColor,
-          elevation: 24,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-              side: BorderSide(color: theme.dividerColor.withOpacity(0.2))
-          ),
-          title: Text("End Workout?", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
-          content: Text(
-              "You haven't finished yet. Are you sure you want to quit? Calories won't be saved.",
-              style: TextStyle(color: theme.hintColor, height: 1.4)
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: theme.dividerColor.withOpacity(0.1))),
+          title: Text("End Workout?", style: TextStyle(fontFamily: kDisplayFont, color: cs.onSurface, fontWeight: FontWeight.w700, fontSize: 16)),
+          content: Text("You haven't finished yet. Are you sure you want to quit? Calories won't be saved.", style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: 12, height: 1.5)),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text("Resume", style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold))
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("Resume", style: TextStyle(fontFamily: kDisplayFont, color: cs.primary, fontWeight: FontWeight.w700, fontSize: 12))),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: colorScheme.error.withOpacity(0.1),
-                foregroundColor: colorScheme.error,
-                elevation: 0,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: cs.error.withOpacity(0.1), foregroundColor: cs.error, elevation: 0),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text("Quit", style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text("Quit", style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, fontSize: 12)),
             ),
           ],
         ),
       ),
     );
 
-    if (exit == true) {
-      if (mounted) Navigator.pop(context);
-    } else {
-      _togglePause();
-    }
+    if (exit != true) _togglePause();
+    else if (mounted) Navigator.pop(context);
     return exit ?? false;
   }
 
-  // 🎯 ATOMIC WORKOUT LOGGING
   Future<void> _saveAndClose() async {
+    HapticFeedback.mediumImpact();
     if (widget.client != null) {
       final notifier = ref.read(dietPlanNotifierProvider(widget.client!.id).notifier);
       final state = ref.read(activeDietPlanProvider);
-
-      if (state.activePlan != null) { // 🚀 Will now evaluate against FlatClientDietPlanModel
-        // 1. Calculate stats based on intensity and effort
+      if (state.activePlan != null) {
         final totalDurationSec = widget.config.steps.fold(0, (sum, item) => sum + (item.duration * _intensity).toInt());
-
-        // Calories: 5 kcal/min base * intensity multiplier * RPE adjustment
         final int newWorkoutCalories = ((totalDurationSec / 60) * 5 * _intensity * (_rpeScore / 5)).ceil();
-
-        // 2. 🎯 Use Single Source of Truth
         final dailyRecord = state.dailyRecord;
-        final int currentTotalCalories = dailyRecord?.caloriesBurned ?? 0;
-        final int currentActivityScore = dailyRecord?.activityScore ?? 0;
-
-        // 3. 🎯 Execute Atomic Merge
         await notifier.updateDailyRecord(
           data: {
-            'caloriesBurned': currentTotalCalories + newWorkoutCalories,
-            'activityScore': (currentActivityScore + 20).clamp(0, 100),
+            'caloriesBurned': (dailyRecord?.caloriesBurned ?? 0) + newWorkoutCalories,
+            'activityScore': ((dailyRecord?.activityScore ?? 0) + 20).clamp(0, 100),
             'lastWorkoutMood': _selectedMood,
             'lastWorkoutRPE': _rpeScore,
           },
         );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("Workout Logged: +$newWorkoutCalories kcal 🔥"),
-                backgroundColor: Colors.green.shade600,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              )
-          );
-        }
       }
     }
     if (mounted) Navigator.pop(context);
   }
 
   @override
-  void dispose() {
-    _timer?.cancel();
-    _progressController?.dispose();
-    _repController.dispose();
-    _speechService.stop();
-    _secondsLeft.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    // 🎯 If finished, show the Cooldown / Summary Screen
-    if (_isFinished) return _buildPostWorkoutSummary(theme, colorScheme, isDark);
+    if (_isFinished) return _buildPostWorkoutSummary(theme, cs, isDark);
 
     final step = widget.config.steps[_currentStepIndex];
     final isRest = step.isRest;
     final Color themeColor = isRest ? Colors.green : widget.config.color;
     final nextStep = (_currentStepIndex + 1 < widget.config.steps.length) ? widget.config.steps[_currentStepIndex + 1] : null;
-
     final double overallProgress = _hasStarted && !_isPreparing ? ((_currentStepIndex + 1) / widget.config.steps.length) : 0.0;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.95,
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
+      decoration: BoxDecoration(color: theme.scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
       child: Column(
         children: [
-          // 🎯 OVERALL PROGRESS BAR
-          ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(32)), child: LinearProgressIndicator(value: overallProgress, minHeight: 6, backgroundColor: theme.dividerColor.withOpacity(0.1), valueColor: AlwaysStoppedAnimation(themeColor))),
+          ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(32)), child: LinearProgressIndicator(value: overallProgress, minHeight: 4, backgroundColor: theme.dividerColor.withOpacity(0.1), valueColor: AlwaysStoppedAnimation(themeColor))),
           const SizedBox(height: 12),
-          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.5), borderRadius: BorderRadius.circular(2)))),
+          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
 
-          // 🎯 HEADER
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 10, 0),
+            padding: const EdgeInsets.fromLTRB(24, 12, 12, 0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.config.title.toUpperCase(), style: TextStyle(fontSize: 12, color: theme.hintColor, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
-                    if (_hasStarted && !_isPreparing) Text("Step ${_currentStepIndex + 1} of ${widget.config.steps.length}", style: TextStyle(fontSize: 14, color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
+                    Text(widget.config.title.toUpperCase(), style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, color: theme.hintColor, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+                    if (_hasStarted && !_isPreparing) Text("Step ${_currentStepIndex + 1} of ${widget.config.steps.length}", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: cs.onSurface, fontWeight: FontWeight.w700)),
                   ],
                 ),
                 Row(
                   children: [
-                    if (_hasStarted) IconButton(icon: Icon(_isTimelineMode ? Icons.radio_button_checked_rounded : Icons.format_list_bulleted_rounded, color: colorScheme.primary), onPressed: () => setState(() => _isTimelineMode = !_isTimelineMode)),
-                    IconButton(icon: Icon(_isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: theme.hintColor), onPressed: () => setState(() => _isMuted = !_isMuted)),
-                    IconButton(icon: Icon(Icons.close_rounded, color: theme.hintColor), onPressed: _confirmExit),
+                    if (_hasStarted) IconButton(icon: Icon(_isTimelineMode ? Icons.radio_button_checked_rounded : Icons.format_list_bulleted_rounded, color: cs.primary, size: 20), onPressed: () => setState(() => _isTimelineMode = !_isTimelineMode)),
+                    IconButton(icon: Icon(_isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: theme.hintColor, size: 20), onPressed: () => setState(() => _isMuted = !_isMuted)),
+                    IconButton(icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20), onPressed: _confirmExit),
                   ],
                 )
               ],
             ),
           ),
 
-          // 🎯 DYNAMIC MIDDLE SECTION
           Expanded(
             child: !_hasStarted
-                ? _buildPreWorkoutSettings(theme, colorScheme, themeColor, isDark)
+                ? _buildPreWorkoutSettings(theme, cs, themeColor, isDark)
                 : _isTimelineMode
-                ? _buildTimelineMode(theme, colorScheme, themeColor)
-                : _buildFocusMode(theme, colorScheme, themeColor, step, isRest, nextStep, isDark),
+                ? _buildTimelineMode(theme, cs, themeColor)
+                : _buildFocusMode(theme, cs, themeColor, step, isRest, nextStep, isDark),
           ),
 
-          // 🎯 BOTTOM CONTROLS
           Padding(
-            padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
+            padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 20),
             child: !_hasStarted
                 ? SizedBox(
-              width: double.infinity, height: 64,
+              width: double.infinity, height: 50,
               child: FilledButton.icon(
                 onPressed: _beginWorkout,
-                style: FilledButton.styleFrom(backgroundColor: themeColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
-                icon: const Icon(Icons.play_arrow_rounded, size: 28),
-                label: const Text("Start Workout", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style: FilledButton.styleFrom(backgroundColor: themeColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
+                icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                label: const Text("Start Workout", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
               ),
             )
                 : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                IconButton(icon: const Icon(Icons.skip_previous_rounded), iconSize: 32, color: _currentStepIndex == 0 || _isPreparing ? theme.dividerColor : colorScheme.onSurface, onPressed: _currentStepIndex == 0 || _isPreparing ? null : _skipToPrevious),
+                IconButton(icon: const Icon(Icons.skip_previous_rounded), iconSize: 28, color: _currentStepIndex == 0 || _isPreparing ? theme.dividerColor : cs.onSurface, onPressed: _currentStepIndex == 0 || _isPreparing ? null : _skipToPrevious),
                 const SizedBox(width: 24),
 
-                // 🎯 Dynamic Action Button (Timer vs Reps)
-                (step.isRepBased && !_isPreparing)
-                    ? FloatingActionButton.extended(
-                  backgroundColor: themeColor, foregroundColor: Colors.white, elevation: 4,
-                  onPressed: _skipToNext,
-                  label: const Text("Done", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  icon: const Icon(Icons.check_rounded),
-                )
-                    : FloatingActionButton.large(
-                    backgroundColor: _isPreparing ? theme.disabledColor : themeColor, foregroundColor: Colors.white, elevation: 4, shape: const CircleBorder(),
+                if (step.isRepBased && !_isPreparing)
+                  SizedBox(
+                    height: 50,
+                    child: FloatingActionButton.extended(
+                      backgroundColor: themeColor, foregroundColor: Colors.white, elevation: 0,
+                      onPressed: _skipToNext,
+                      label: const Text("Done", style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, fontSize: 12)),
+                      icon: const Icon(Icons.check_rounded, size: 18),
+                    ),
+                  )
+                else FloatingActionButton(
+                    backgroundColor: _isPreparing ? theme.disabledColor : themeColor, foregroundColor: Colors.white, elevation: 0,
                     onPressed: _isPreparing ? null : _togglePause,
-                    child: Icon(_isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, size: 40)
+                    child: Icon(_isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, size: 24)
                 ),
 
                 const SizedBox(width: 24),
-                IconButton(icon: const Icon(Icons.skip_next_rounded), iconSize: 32, color: _isPreparing ? theme.dividerColor : colorScheme.onSurface, onPressed: _isPreparing ? null : _skipToNext),
+                IconButton(icon: const Icon(Icons.skip_next_rounded), iconSize: 28, color: _isPreparing ? theme.dividerColor : cs.onSurface, onPressed: _isPreparing ? null : _skipToNext),
               ],
             ),
           ),
@@ -379,24 +386,17 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
     );
   }
 
-  // =======================================================================
-  // 1. PRE-WORKOUT SETTINGS (Intensity)
-  // =======================================================================
-  Widget _buildPreWorkoutSettings(ThemeData theme, ColorScheme colorScheme, Color themeColor, bool isDark) {
+  Widget _buildPreWorkoutSettings(ThemeData theme, ColorScheme cs, Color themeColor, bool isDark) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(color: themeColor.withOpacity(0.1), shape: BoxShape.circle),
-          child: Icon(Icons.fitness_center_rounded, size: 80, color: themeColor),
-        ),
+        Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: themeColor.withOpacity(0.1), shape: BoxShape.circle), child: Icon(Icons.fitness_center_rounded, size: 48, color: themeColor)),
         const SizedBox(height: 24),
-        Text(widget.config.title, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-        const SizedBox(height: 12),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 40), child: Text(widget.config.description, textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: theme.hintColor))),
-        const SizedBox(height: 40),
-        Text("SELECT INTENSITY", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: theme.hintColor)),
+        Text(widget.config.title, style: TextStyle(fontFamily: kDisplayFont, fontSize: 20, fontWeight: FontWeight.w700, color: cs.onSurface)),
+        const SizedBox(height: 8),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 40), child: Text(widget.config.description, textAlign: TextAlign.center, style: TextStyle(fontFamily: kBodyFont, fontSize: 11, color: theme.hintColor, height: 1.5))),
+        const SizedBox(height: 32),
+        Text("SELECT INTENSITY", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: theme.hintColor)),
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -415,19 +415,17 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
   Widget _intensityChip(String label, double value, Color activeColor, ThemeData theme, bool isDark) {
     final isSelected = _intensity == value;
     return ChoiceChip(
-      label: Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : theme.colorScheme.onSurface)),
+      label: Text(label, style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, color: isSelected ? Colors.white : theme.colorScheme.onSurface)),
       selected: isSelected,
-      onSelected: (sel) { if (sel) setState(() => _intensity = value); },
+      onSelected: (sel) { if (sel) { HapticFeedback.selectionClick(); setState(() => _intensity = value); } },
       selectedColor: activeColor,
-      backgroundColor: isDark ? Colors.white.withOpacity(0.05) : theme.cardColor,
-      side: BorderSide(color: isSelected ? activeColor : theme.dividerColor.withOpacity(0.2)),
+      backgroundColor: theme.cardColor,
+      side: BorderSide(color: isSelected ? activeColor : theme.dividerColor.withOpacity(0.1)),
     );
   }
 
-  // =======================================================================
-  // 2. POST-WORKOUT SUMMARY (RPE & Mood)
-  // =======================================================================
-  Widget _buildPostWorkoutSummary(ThemeData theme, ColorScheme colorScheme, bool isDark) {
+  Widget _buildPostWorkoutSummary(ThemeData theme, ColorScheme cs, bool isDark) {
+    // [Unchanged from previous code]
     return Container(
       decoration: BoxDecoration(color: theme.scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
       child: SafeArea(
@@ -436,42 +434,42 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(child: Icon(Icons.emoji_events_rounded, color: Colors.amber.shade600, size: 80)),
+              const SizedBox(height: 20),
+              Center(child: Icon(Icons.emoji_events_rounded, color: Colors.amber.shade600, size: 64)),
               const SizedBox(height: 16),
-              Center(child: Text("Workout Complete!", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
-              const SizedBox(height: 40),
+              Center(child: Text("Workout Complete!", style: TextStyle(fontFamily: kDisplayFont, fontSize: 20, fontWeight: FontWeight.w700, color: cs.onSurface))),
+              const SizedBox(height: 32),
 
-              Text("How hard was it? (Effort Level)", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface, fontSize: 16)),
-              Slider(
-                value: _rpeScore, min: 1, max: 10, divisions: 9,
-                activeColor: widget.config.color,
-                label: _rpeScore.toInt().toString(),
-                onChanged: (val) => setState(() => _rpeScore = val),
+              Text("How hard was it? (Effort Level)", style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, color: cs.onSurface, fontSize: 12)),
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(trackHeight: 2, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)),
+                child: Slider(
+                  value: _rpeScore, min: 1, max: 10, divisions: 9,
+                  activeColor: widget.config.color,
+                  onChanged: (val) { HapticFeedback.selectionClick(); setState(() => _rpeScore = val); },
+                ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [Text("Too Easy", style: TextStyle(color: theme.hintColor, fontSize: 12)), Text("Maximum Effort", style: TextStyle(color: theme.hintColor, fontSize: 12))],
-              ),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Too Easy", style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: 10)), Text("Maximum Effort", style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: 10))]),
 
-              const SizedBox(height: 40),
-              Text("How do you feel?", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface, fontSize: 16)),
+              const SizedBox(height: 32),
+              Text("How do you feel?", style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, color: cs.onSurface, fontSize: 12)),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _moodBtn("Exhausted", "😫", theme, isDark),
-                  _moodBtn("Good", "🙂", theme, isDark),
-                  _moodBtn("Energized", "🤩", theme, isDark),
+                  _moodBtn("Exhausted", "😫", theme, isDark, cs),
+                  _moodBtn("Good", "🙂", theme, isDark, cs),
+                  _moodBtn("Energized", "🤩", theme, isDark, cs),
                 ],
               ),
 
               const Spacer(),
               SizedBox(
-                width: double.infinity, height: 60,
+                width: double.infinity, height: 50,
                 child: FilledButton(
                   onPressed: _saveAndClose,
-                  style: FilledButton.styleFrom(backgroundColor: widget.config.color, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                  child: const Text("Save & Close", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: FilledButton.styleFrom(backgroundColor: widget.config.color, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
+                  child: const Text("Save & Close", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
                 ),
               )
             ],
@@ -481,35 +479,36 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
     );
   }
 
-  Widget _moodBtn(String label, String emoji, ThemeData theme, bool isDark) {
+  Widget _moodBtn(String label, String emoji, ThemeData theme, bool isDark, ColorScheme cs) {
+    // [Unchanged from previous code]
     final isSelected = _selectedMood == label;
     return GestureDetector(
-      onTap: () => setState(() => _selectedMood = label),
+      onTap: () { HapticFeedback.selectionClick(); setState(() => _selectedMood = label); },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: BoxDecoration(
-          color: isSelected ? widget.config.color.withOpacity(0.1) : (isDark ? Colors.white.withOpacity(0.05) : theme.cardColor),
+          color: isSelected ? widget.config.color.withOpacity(0.1) : theme.cardColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? widget.config.color : theme.dividerColor.withOpacity(0.2)),
+          border: Border.all(color: isSelected ? widget.config.color : theme.dividerColor.withOpacity(0.1)),
         ),
         child: Column(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 28)),
+            Text(emoji, style: const TextStyle(fontSize: 24)),
             const SizedBox(height: 8),
-            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? widget.config.color : theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, color: isSelected ? widget.config.color : cs.onSurface)),
           ],
         ),
       ),
     );
   }
 
-  // =======================================================================
-  // 3. FOCUS MODE (Timer / Rep Counter)
-  // =======================================================================
-  Widget _buildFocusMode(ThemeData theme, ColorScheme colorScheme, Color themeColor, WorkoutStep step, bool isRest, WorkoutStep? nextStep, bool isDark) {
+  // 🎯 REVAMPED UI: The Video Player Card
+  Widget _buildFocusMode(ThemeData theme, ColorScheme cs, Color themeColor, WorkoutStep step, bool isRest, WorkoutStep? nextStep, bool isDark) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final double mediaSize = (constraints.maxHeight * 0.45).clamp(180.0, 300.0);
+        // Adjust the video container size dynamically
+        final double videoHeight = (constraints.maxHeight * 0.45).clamp(200.0, 300.0);
+
         return SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: ConstrainedBox(
@@ -517,39 +516,93 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+
+                // 🚀 THE NEW VIDEO CONTAINER
                 Container(
-                  width: mediaSize, height: mediaSize,
+                  height: videoHeight,
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(horizontal: 24),
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
                     color: theme.cardColor,
-                    border: Border.all(color: themeColor.withOpacity(isDark ? 0.3 : 0.1), width: 4),
-                    boxShadow: [BoxShadow(color: themeColor.withOpacity(isDark ? 0.15 : 0.1), blurRadius: 40, spreadRadius: 5)],
+                    borderRadius: BorderRadius.circular(32),
+                    border: Border.all(color: themeColor.withOpacity(0.2), width: 2),
+                    boxShadow: [
+                      BoxShadow(color: themeColor.withOpacity(0.1), blurRadius: 30, offset: const Offset(0, 10))
+                    ],
                   ),
-                  child: (_isPreparing || isRest || step.isRepBased)
-                      ? Center(
-                      child: _isPreparing || isRest
-                          ? ValueListenableBuilder<int>(valueListenable: _secondsLeft, builder: (ctx, sec, _) => Text("$sec", style: TextStyle(fontSize: mediaSize * 0.35, fontWeight: FontWeight.w900, color: themeColor)))
-                          : Text("X ${step.reps}", style: TextStyle(fontSize: mediaSize * 0.25, fontWeight: FontWeight.w900, color: themeColor))
-                  )
-                      : AnimatedBuilder(animation: _repController, builder: (ctx, child) => CustomPaint(painter: VirtualTrainerPainter(progress: _repController.value, type: step.type, color: themeColor), size: Size.infinite)),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // The Video
+                        if (_videoController != null && _videoController!.value.isInitialized)
+                          SizedBox.expand(
+                            child: FittedBox(
+                              fit: BoxFit.cover,
+                              child: SizedBox(
+                                width: _videoController!.value.size.width,
+                                height: _videoController!.value.size.height,
+                                child: VideoPlayer(_videoController!),
+                              ),
+                            ),
+                          )
+                        else
+                          CircularProgressIndicator(color: themeColor), // Loading state
+
+                        // Overlay for "Rest" or "Prep" to dim the video slightly and show the timer
+                        if (_isPreparing || isRest)
+                          Container(color: Colors.black.withOpacity(0.6)), // Dimmer
+
+                        if (_isPreparing || isRest)
+                          ValueListenableBuilder<int>(
+                              valueListenable: _secondsLeft,
+                              builder: (ctx, sec, _) => Text(
+                                  "$sec",
+                                  style: TextStyle(fontFamily: kDisplayFont, fontSize: 80, fontWeight: FontWeight.w700, color: Colors.white, shadows: [Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 20)])
+                              )
+                          ),
+
+                        // Overlay for "Rep Based" exercises so users know it's not timed
+                        if (step.isRepBased && !_isPreparing)
+                          Positioned(
+                            bottom: 16, right: 16,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(16)),
+                              child: Text("x${step.reps}", style: const TextStyle(fontFamily: kDisplayFont, fontSize: 24, fontWeight: FontWeight.w700, color: Colors.white)),
+                            ),
+                          )
+                      ],
+                    ),
+                  ),
                 ),
 
+                // Timer Display (Only if it's an active, timed exercise)
                 if (!_isPreparing && !isRest && !step.isRepBased)
-                  Padding(padding: const EdgeInsets.only(top: 24), child: ValueListenableBuilder<int>(valueListenable: _secondsLeft, builder: (ctx, sec, _) => Text("$sec", style: TextStyle(fontSize: 56, fontWeight: FontWeight.w900, color: themeColor, height: 1)))),
+                  Padding(
+                      padding: const EdgeInsets.only(top: 24),
+                      child: ValueListenableBuilder<int>(
+                          valueListenable: _secondsLeft,
+                          builder: (ctx, sec, _) => Text("$sec", style: TextStyle(fontFamily: kDisplayFont, fontSize: 48, fontWeight: FontWeight.w700, color: themeColor))
+                      )
+                  ),
+
                 if (step.isRepBased && !_isPreparing)
-                  Padding(padding: const EdgeInsets.only(top: 24), child: Text("REPS", style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: theme.hintColor, letterSpacing: 2, height: 1))),
+                  Padding(padding: const EdgeInsets.only(top: 24), child: Text("REPS", style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: theme.hintColor, letterSpacing: 2))),
 
                 const SizedBox(height: 16),
-                Text(_isPreparing ? "GET READY" : isRest ? "REST" : step.title, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colorScheme.onSurface), textAlign: TextAlign.center),
+                Text(_isPreparing ? "GET READY" : isRest ? "REST" : step.title, style: TextStyle(fontFamily: kDisplayFont, fontSize: 24, fontWeight: FontWeight.w700, color: cs.onSurface), textAlign: TextAlign.center),
                 const SizedBox(height: 8),
-                Padding(padding: const EdgeInsets.symmetric(horizontal: 40), child: Text(_isPreparing ? "Starting with ${step.title}" : step.instruction, textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: theme.hintColor, height: 1.4))),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 40), child: Text(_isPreparing ? "Starting with ${step.title}" : step.instruction, textAlign: TextAlign.center, style: TextStyle(fontFamily: kBodyFont, fontSize: 13, color: theme.hintColor, height: 1.5))),
 
+                // Up Next Bar
                 if (nextStep != null && !_isPreparing)
                   Container(
                     margin: const EdgeInsets.only(top: 32, left: 24, right: 24),
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                    decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.05) : theme.cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: theme.dividerColor.withOpacity(0.1))),
-                    child: Row(children: [Text("Up Next: ", style: TextStyle(fontWeight: FontWeight.bold, color: theme.hintColor)), Expanded(child: Text(nextStep.title, style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface), overflow: TextOverflow.ellipsis)), Text(nextStep.isRepBased ? "${nextStep.reps} Reps" : "${nextStep.duration}s", style: TextStyle(color: theme.hintColor, fontWeight: FontWeight.bold))]),
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                    decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: theme.dividerColor.withOpacity(0.1))),
+                    child: Row(children: [Text("Up Next: ", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, color: theme.hintColor)), Expanded(child: Text(nextStep.title, style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, color: cs.onSurface), overflow: TextOverflow.ellipsis)), Text(nextStep.isRepBased ? "${nextStep.reps} Reps" : "${nextStep.duration}s", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, color: theme.hintColor, fontWeight: FontWeight.w700))]),
                   ),
               ],
             ),
@@ -559,13 +612,11 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
     );
   }
 
-  // =======================================================================
-  // 4. TIMELINE MODE (List View)
-  // =======================================================================
-  Widget _buildTimelineMode(ThemeData theme, ColorScheme colorScheme, Color themeColor) {
+  Widget _buildTimelineMode(ThemeData theme, ColorScheme cs, Color themeColor) {
+    // [Unchanged from previous code]
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
       itemCount: widget.config.steps.length,
       itemBuilder: (context, index) {
         final step = widget.config.steps[index];
@@ -576,20 +627,20 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
           return Container(
             margin: const EdgeInsets.only(bottom: 16, top: 4),
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: themeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(24), border: Border.all(color: themeColor.withOpacity(0.3), width: 2), boxShadow: [BoxShadow(color: themeColor.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 4))]),
+            decoration: BoxDecoration(color: themeColor.withOpacity(0.05), borderRadius: BorderRadius.circular(24), border: Border.all(color: themeColor.withOpacity(0.2), width: 1.5)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: themeColor.withOpacity(0.2), shape: BoxShape.circle), child: Icon(step.icon, color: themeColor)),
-                    const SizedBox(width: 16),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("ACTIVE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Colors.redAccent)), Text(step.isRest ? "Rest" : step.title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onSurface))])),
-                    if (!_isPreparing && !step.isRepBased) ValueListenableBuilder<int>(valueListenable: _secondsLeft, builder: (ctx, sec, _) => Text("${sec}s", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: themeColor)))
-                    else if (!_isPreparing && step.isRepBased) Text("x${step.reps}", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: themeColor))
+                    Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: themeColor.withOpacity(0.1), shape: BoxShape.circle), child: Icon(step.icon, color: themeColor, size: 18)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("ACTIVE", style: TextStyle(fontFamily: kDisplayFont, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.redAccent)), Text(step.isRest ? "Rest" : step.title, style: TextStyle(fontFamily: kDisplayFont, fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface))])),
+                    if (!_isPreparing && !step.isRepBased) ValueListenableBuilder<int>(valueListenable: _secondsLeft, builder: (ctx, sec, _) => Text("${sec}s", style: TextStyle(fontFamily: kDisplayFont, fontSize: 18, fontWeight: FontWeight.w700, color: themeColor)))
+                    else if (!_isPreparing && step.isRepBased) Text("x${step.reps}", style: TextStyle(fontFamily: kDisplayFont, fontSize: 18, fontWeight: FontWeight.w700, color: themeColor))
                   ],
                 ),
-                if (step.instruction.isNotEmpty && !step.isRest) ...[const SizedBox(height: 12), Text(step.instruction, style: TextStyle(color: colorScheme.onSurface.withOpacity(0.8), height: 1.4))]
+                if (step.instruction.isNotEmpty && !step.isRest) ...[const SizedBox(height: 12), Text(step.instruction, style: TextStyle(fontFamily: kBodyFont, fontSize: 11, color: cs.onSurface, height: 1.5))]
               ],
             ),
           );
@@ -601,14 +652,14 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
           decoration: BoxDecoration(color: isPast ? Colors.transparent : theme.cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: isPast ? Colors.transparent : theme.dividerColor.withOpacity(0.1))),
           child: Row(
             children: [
-              Container(width: 40, height: 40, decoration: BoxDecoration(color: isPast ? Colors.green.withOpacity(0.1) : theme.dividerColor.withOpacity(0.1), shape: BoxShape.circle), child: Icon(isPast ? Icons.check_rounded : step.icon, color: isPast ? Colors.green : theme.hintColor, size: 20)),
+              Container(width: 36, height: 36, decoration: BoxDecoration(color: isPast ? Colors.green.withOpacity(0.1) : theme.dividerColor.withOpacity(0.1), shape: BoxShape.circle), child: Icon(isPast ? Icons.check_rounded : step.icon, color: isPast ? Colors.green : theme.hintColor, size: 16)),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(step.isRest ? "Rest" : step.title, style: TextStyle(fontWeight: FontWeight.bold, color: isPast ? theme.hintColor : colorScheme.onSurface, decoration: isPast ? TextDecoration.lineThrough : null)),
-                    Text(step.isRepBased ? "${step.reps} Reps" : "${step.duration} sec", style: TextStyle(fontSize: 12, color: theme.hintColor)),
+                    Text(step.isRest ? "Rest" : step.title, style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, color: isPast ? theme.hintColor : cs.onSurface, decoration: isPast ? TextDecoration.lineThrough : null)),
+                    Text(step.isRepBased ? "${step.reps} Reps" : "${step.duration} sec", style: TextStyle(fontFamily: kBodyFont, fontSize: 10, color: theme.hintColor, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),

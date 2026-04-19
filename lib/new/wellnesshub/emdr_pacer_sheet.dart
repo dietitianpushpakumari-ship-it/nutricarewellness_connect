@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
+import 'package:flutter/services.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class EmdrPacerSheet extends StatefulWidget {
   const EmdrPacerSheet({super.key});
@@ -28,6 +33,7 @@ class _EmdrPacerSheetState extends State<EmdrPacerSheet> with SingleTickerProvid
   }
 
   void _togglePlayback() {
+    HapticFeedback.lightImpact();
     _audio.playClick();
     setState(() {
       _isPlaying = !_isPlaying;
@@ -37,6 +43,7 @@ class _EmdrPacerSheetState extends State<EmdrPacerSheet> with SingleTickerProvid
 
   void _updateSpeed(String speed) {
     if (_currentSpeed == speed) return;
+    HapticFeedback.selectionClick();
     _audio.playClick();
     setState(() {
       _currentSpeed = speed;
@@ -59,121 +66,135 @@ class _EmdrPacerSheetState extends State<EmdrPacerSheet> with SingleTickerProvid
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       decoration: BoxDecoration(color: theme.scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
-      child: Column(
-        children: [
-          const SizedBox(height: 12),
-          Center(child: Container(width: 32, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+      // 🚀 STRICT SAFE AREA HANDLING
+      child: SafeArea(
+        top: true,
+        bottom: true,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Center(child: Container(width: 32, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
 
-          // 🎯 COMPACT MINIMALIST HEADER
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("EMDR PACER", style: TextStyle(color: colorScheme.primary, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
-                    Text(_isPlaying ? "Active Session" : "Ready to Start", style: TextStyle(color: theme.hintColor, fontSize: 13)),
-                  ],
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                  constraints: const BoxConstraints(),
-                  padding: const EdgeInsets.all(8),
-                )
-              ],
-            ),
-          ),
-          Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
-
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+            // 🎯 COMPACT MINIMALIST HEADER
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
+              child: Row(
                 children: [
-                  const Spacer(),
-                  Text("Follow the sphere with your eyes", textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: colorScheme.onSurface, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 40),
-
-                  // 🎾 COMPACT PACER TRACK
-                  Container(
-                    height: 60,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: theme.cardColor,
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 🚀 REFINED HEADER (Max Size 10, w700)
+                        Text("EMDR PACER", style: TextStyle(fontFamily: kDisplayFont, color: colorScheme.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+                        const SizedBox(height: 2),
+                        // 🚀 REFINED SUBTITLE (Max Size 12, w700)
+                        Text(_isPlaying ? "Active Session" : "Ready to Start", style: TextStyle(fontFamily: kBodyFont, color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: AnimatedBuilder(
-                      animation: _pacerAnimation,
-                      builder: (context, _) => Align(
-                        alignment: Alignment(_pacerAnimation.value, 0),
-                        child: Container(
-                          width: 48, height: 48,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: colorScheme.primary,
-                            boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.3), blurRadius: 12, spreadRadius: 1)],
-                            gradient: RadialGradient(colors: [Colors.white.withOpacity(0.5), colorScheme.primary], center: const Alignment(-0.3, -0.3)),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.pop(context);
+                    },
+                  )
+                ],
+              ),
+            ),
+            Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
+
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Spacer(),
+                    // 🚀 REFINED INSTRUCTION TEXT (Max Size 12, w500)
+                    Text("Follow the sphere with your eyes", textAlign: TextAlign.center, style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: colorScheme.onSurface, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 40),
+
+                    // 🎾 COMPACT PACER TRACK
+                    Container(
+                      height: 60,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: AnimatedBuilder(
+                        animation: _pacerAnimation,
+                        builder: (context, _) => Align(
+                          alignment: Alignment(_pacerAnimation.value, 0),
+                          child: Container(
+                            width: 48, height: 48,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: colorScheme.primary,
+                              boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.3), blurRadius: 12, spreadRadius: 1)],
+                              gradient: RadialGradient(colors: [Colors.white.withOpacity(0.5), colorScheme.primary], center: const Alignment(-0.3, -0.3)),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
 
-                  const Spacer(),
+                    const Spacer(),
 
-                  // 🎛️ COMPACT SEGMENTED SPEED CONTROL
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: theme.dividerColor.withOpacity(0.1))),
-                    child: Row(
-                      children: _speedOptions.keys.map((speed) {
-                        bool isSel = _currentSpeed == speed;
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: () => _updateSpeed(speed),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isSel ? colorScheme.primary : Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
+                    // 🎛️ COMPACT SEGMENTED SPEED CONTROL
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: theme.dividerColor.withOpacity(0.1))),
+                      child: Row(
+                        children: _speedOptions.keys.map((speed) {
+                          bool isSel = _currentSpeed == speed;
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () => _updateSpeed(speed),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSel ? colorScheme.primary : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                // 🚀 REFINED SEGMENT TEXT (Max Size 11, w700)
+                                child: Text(speed, textAlign: TextAlign.center, style: TextStyle(fontFamily: kDisplayFont, color: isSel ? Colors.white : theme.hintColor, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.5)),
                               ),
-                              child: Text(speed, textAlign: TextAlign.center, style: TextStyle(color: isSel ? Colors.white : theme.hintColor, fontWeight: FontWeight.bold, fontSize: 13)),
                             ),
-                          ),
-                        );
-                      }).toList(),
+                          );
+                        }).toList(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
-              ),
-            ),
-          ),
-
-          // 🎯 MINIMALIST ACTION BUTTON
-          Padding(
-            padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 20),
-            child: SizedBox(
-              width: double.infinity, height: 54,
-              child: FilledButton(
-                onPressed: _togglePlayback,
-                style: FilledButton.styleFrom(
-                  backgroundColor: _isPlaying ? Colors.red.withOpacity(0.1) : colorScheme.primary,
-                  foregroundColor: _isPlaying ? Colors.red : Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    const SizedBox(height: 32),
+                  ],
                 ),
-                child: Text(_isPlaying ? "Stop Session" : "Start Tracking", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
-          ),
-        ],
+
+            // 🎯 MINIMALIST ACTION BUTTON
+            Padding(
+              padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 20),
+              child: SizedBox(
+                width: double.infinity, height: 50, // 🚀 Standardized to 50 for compact premium feel
+                child: FilledButton(
+                  onPressed: _togglePlayback,
+                  style: FilledButton.styleFrom(
+                    elevation: 0, // 🚀 Flat premium look
+                    backgroundColor: _isPlaying ? Colors.red.withOpacity(0.1) : colorScheme.primary,
+                    foregroundColor: _isPlaying ? Colors.red : Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  // 🚀 REFINED BUTTON TEXT (Max Size 12, w700)
+                  child: Text(_isPlaying ? "Stop Session" : "Start Tracking", style: const TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

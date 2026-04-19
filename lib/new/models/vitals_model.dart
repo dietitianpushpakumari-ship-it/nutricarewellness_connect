@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:nutricare_connect/new/models/prescription_model.dart';
+import 'package:pure_shift/new/models/prescription_model.dart';
 
 class VitalsModel {
   final String id;

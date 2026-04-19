@@ -2,17 +2,17 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:nutricare_connect/new/FlatClientDietPlanModel.dart';
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
  // Ensure this points to FlatClientDietPlanModel
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 
 // Detail Sheets
-import 'package:nutricare_connect/new/dietplan/hydration_detail_screen.dart';
-import 'package:nutricare_connect/new/dietplan/movement_Details_sheet.dart';
-import 'package:nutricare_connect/new/dietplan/sleep_details_screen.dart';
-import 'package:nutricare_connect/new/wellnesshub/breathing_detail_screen.dart';
-import 'package:nutricare_connect/core/utils/mindfullness_config.dart';
+import 'package:pure_shift/new/dietplan/hydration_detail_screen.dart';
+import 'package:pure_shift/new/dietplan/movement_Details_sheet.dart';
+import 'package:pure_shift/new/dietplan/sleep_details_screen.dart';
+import 'package:pure_shift/new/wellnesshub/breathing_detail_screen.dart';
+import 'package:pure_shift/core/utils/mindfullness_config.dart';
 
 class DailyGoalsLoggingScreen extends ConsumerStatefulWidget {
   final String clientId;
@@ -89,7 +89,7 @@ class _DailyGoalsLoggingScreenState extends ConsumerState<DailyGoalsLoggingScree
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Daily Targets", style: TextStyle(fontWeight: FontWeight.w900, color: colorScheme.onSurface)),
+            Text("Daily Targets", style: TextStyle(fontWeight: FontWeight.w700, color: colorScheme.onSurface)),
             Text(DateFormat.yMMMd().format(state.selectedDate), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.hintColor)),
           ],
         ),
@@ -142,7 +142,7 @@ class _DailyGoalsLoggingScreenState extends ConsumerState<DailyGoalsLoggingScree
                     ),
                     Text(
                       "${(progress * 100).toInt()}%",
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
                     ),
                   ],
                 ),
@@ -151,7 +151,7 @@ class _DailyGoalsLoggingScreenState extends ConsumerState<DailyGoalsLoggingScree
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Overall Progress", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                      const Text("Overall Progress", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
                       const SizedBox(height: 4),
                       Text("$completedItems of $totalItems goals met", style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500)),
                     ],
@@ -162,7 +162,7 @@ class _DailyGoalsLoggingScreenState extends ConsumerState<DailyGoalsLoggingScree
           ),
           const SizedBox(height: 32),
 
-          Text("Performance Goals", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: colorScheme.onSurface)),
+          Text("Performance Goals", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: colorScheme.onSurface)),
           const SizedBox(height: 16),
 
           _buildMetricTile(
@@ -190,7 +190,7 @@ class _DailyGoalsLoggingScreenState extends ConsumerState<DailyGoalsLoggingScree
 
           // 2. HABITS CHECKLIST
           if (habits.isNotEmpty) ...[
-            Text("Daily Rituals", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: colorScheme.onSurface)),
+            Text("Daily Rituals", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: colorScheme.onSurface)),
             const SizedBox(height: 16),
             ...habits.map((task) {
               final isDone = completedHabits.contains(task);
@@ -278,7 +278,7 @@ class _DailyGoalsLoggingScreenState extends ConsumerState<DailyGoalsLoggingScree
           decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
           child: Icon(icon, color: color, size: 26),
         ),
-        title: Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: colorScheme.onSurface, fontSize: 16)),
+        title: Text(title, style: TextStyle(fontWeight: FontWeight.w700, color: colorScheme.onSurface, fontSize: 16)),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(status, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.hintColor)),

@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 🚀 Added for Haptics
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class SleepDebtSheet extends StatefulWidget {
   const SleepDebtSheet({super.key});
@@ -30,119 +35,134 @@ class _SleepDebtSheetState extends State<SleepDebtSheet> {
         color: theme.scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
-      child: Column(
-        children: [
-          // 🎯 Header
-          const SizedBox(height: 12),
-          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("CIRCADIAN ANALYSIS", style: TextStyle(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                      Text("Sleep Debt & Recovery", style: TextStyle(color: theme.hintColor, fontSize: 14)),
-                    ],
-                  ),
-                ),
-                IconButton(icon: Icon(Icons.close_rounded, color: theme.hintColor), onPressed: () => Navigator.pop(context))
-              ],
-            ),
-          ),
-          Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
-
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
+      child: SafeArea(
+        child: Column(
+          children: [
+            // 🎯 Header
+            const SizedBox(height: 12),
+            Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
+        
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
+              child: Row(
                 children: [
-                  // 🎯 THE DEBT GAUGE (Glassmorphism Card)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: debtColor.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: debtColor.withOpacity(0.2)),
-                    ),
+                  Expanded(
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Weekly Deficit", style: TextStyle(color: debtColor, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text("${weeklyDebt.toStringAsFixed(1)}", style: TextStyle(fontSize: 56, fontWeight: FontWeight.w900, color: debtColor)),
-                            const SizedBox(width: 4),
-                            Text("HRS", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: debtColor.withOpacity(0.5))),
-                          ],
-                        ),
-                        Text(
-                          _getMedicalAdvice(weeklyDebt),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: debtColor.withOpacity(0.8), fontSize: 12, height: 1.4),
-                        ),
+                        // 🚀 REFINED HEADER (Max Size 10, w700)
+                        Text("CIRCADIAN ANALYSIS", style: TextStyle(fontFamily: kDisplayFont, color: cs.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+                        const SizedBox(height: 2),
+                        Text("Sleep Debt & Recovery", style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: 12, fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 32),
-
-                  // 🎯 INPUT SLIDERS
-                  _buildMedicalSlider(
-                    "Ideal Requirement",
-                    "Based on your age & activity",
-                    _ideal,
-                    Icons.star_rounded,
-                        (v) => setState(() => _ideal = v),
-                    cs.primary,
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  _buildMedicalSlider(
-                    "Actual Average",
-                    "Last 7 days average",
-                    _actual,
-                    Icons.bedtime_rounded,
-                        (v) => setState(() => _actual = v),
-                    Colors.indigoAccent,
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // 🎯 RECOVERY INSIGHT
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline_rounded, color: cs.primary, size: 20),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            "Recovery Tip: Repay debt by adding 30-60 mins of extra sleep per night. Avoid oversleeping on weekends as it resets your body clock.",
-                            style: TextStyle(fontSize: 11, height: 1.4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  IconButton(
+                      icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context);
+                      }
+                  )
                 ],
               ),
             ),
-          ),
-        ],
+            Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
+        
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    // 🎯 THE DEBT GAUGE (Glassmorphism Card)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: debtColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: debtColor.withOpacity(0.2)),
+                      ),
+                      child: Column(
+                        children: [
+                          // 🚀 REFINED GAUGE LABEL (Size 12, w700)
+                          Text("Weekly Deficit", style: TextStyle(fontFamily: kDisplayFont, color: debtColor, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              // 🚀 REFINED GAUGE NUMBER (Capped at 24 for proportion, w700)
+                              Text(weeklyDebt.toStringAsFixed(1), style: TextStyle(fontFamily: kDisplayFont, fontSize: 24, fontWeight: FontWeight.w700, color: debtColor)),
+                              const SizedBox(width: 4),
+                              Text("HRS", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, color: debtColor.withOpacity(0.5))),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          // 🚀 REFINED ADVICE TEXT (Size 11, w500)
+                          Text(
+                            _getMedicalAdvice(weeklyDebt),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontFamily: kBodyFont, color: debtColor.withOpacity(0.8), fontSize: 11, fontWeight: FontWeight.w500, height: 1.4),
+                          ),
+                        ],
+                      ),
+                    ),
+        
+                    const SizedBox(height: 32),
+        
+                    // 🎯 INPUT SLIDERS
+                    _buildMedicalSlider(
+                      "Ideal Requirement",
+                      "Based on your age & activity",
+                      _ideal,
+                      Icons.star_rounded,
+                          (v) => setState(() => _ideal = v),
+                      cs.primary,
+                    ),
+        
+                    const SizedBox(height: 20),
+        
+                    _buildMedicalSlider(
+                      "Actual Average",
+                      "Last 7 days average",
+                      _actual,
+                      Icons.bedtime_rounded,
+                          (v) => setState(() => _actual = v),
+                      Colors.indigoAccent,
+                    ),
+        
+                    const SizedBox(height: 32),
+        
+                    // 🎯 RECOVERY INSIGHT
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, color: cs.primary, size: 18),
+                          const SizedBox(width: 12),
+                          // 🚀 REFINED INSIGHT TEXT (Size 11, w500)
+                          const Expanded(
+                            child: Text(
+                              "Recovery Tip: Repay debt by adding 30-60 mins of extra sleep per night. Avoid oversleeping on weekends as it resets your body clock.",
+                              style: TextStyle(fontFamily: kBodyFont, fontSize: 11, fontWeight: FontWeight.w500, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -163,23 +183,31 @@ class _SleepDebtSheetState extends State<SleepDebtSheet> {
           children: [
             Icon(icon, size: 16, color: color),
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            // 🚀 REFINED SLIDER LABEL (Size 12, w700)
+            Text(label, style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
             const Spacer(),
-            Text("${val.toStringAsFixed(1)} h", style: TextStyle(fontWeight: FontWeight.w900, color: color, fontSize: 16)),
+            // 🚀 REFINED SLIDER VALUE (Size 12, w700)
+            Text("${val.toStringAsFixed(1)} h", style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, color: color, fontSize: 12)),
           ],
         ),
-        Text(sub, style: TextStyle(fontSize: 11, color: theme.hintColor)),
+        const SizedBox(height: 2),
+        // 🚀 REFINED SLIDER SUBTITLE (Size 10, w500)
+        Text(sub, style: TextStyle(fontFamily: kBodyFont, fontSize: 10, fontWeight: FontWeight.w500, color: theme.hintColor)),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             trackHeight: 2,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6), // Slightly smaller thumb
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
           ),
           child: Slider(
             value: val,
             min: 4, max: 12,
             divisions: 16,
-            onChanged: onChanged,
+            onChanged: (newVal) {
+              // 🚀 Premium haptic tick when dragging slider step-by-step
+              if (val != newVal) HapticFeedback.selectionClick();
+              onChanged(newVal);
+            },
             activeColor: color,
             inactiveColor: theme.dividerColor.withOpacity(0.1),
           ),

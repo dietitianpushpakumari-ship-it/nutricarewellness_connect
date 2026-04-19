@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/core/utils/wellness_audio_service.dart';
-import 'package:nutricare_connect/features/dietplan/PRESENTATION/providers/tts_service.dart';
-import 'package:nutricare_connect/main.dart';
+import 'package:flutter/services.dart';
+import 'package:pure_shift/core/utils/wellness_audio_service.dart';
+import 'package:pure_shift/features/dietplan/PRESENTATION/providers/tts_service.dart';
+import 'package:pure_shift/main.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../../core/utils/spiritual_mantra_model.dart';
+
+// 🎯 GLOBAL PREMIUM FONTS
+const String kDisplayFont = 'Space Grotesk';
+const String kBodyFont = 'Inter';
 
 class SpiritualHealingSheet extends StatefulWidget {
   const SpiritualHealingSheet({super.key});
@@ -17,7 +22,6 @@ class _SpiritualHealingSheetState extends State<SpiritualHealingSheet> {
   int _activeTabIndex = 0;
   SpiritualMantraModel? _selectedMantra;
 
-  // 🎯 FIX: Picker now has access to the correct state scope
   void _showMantraPicker(BuildContext context, List<SpiritualMantraModel> mantras) {
     showModalBottomSheet(
       context: context,
@@ -34,26 +38,33 @@ class _SpiritualHealingSheetState extends State<SpiritualHealingSheet> {
             Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
             const Padding(
               padding: EdgeInsets.all(24.0),
-              child: Text("Mantra Library", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              child: Text(
+                  "Mantra Library",
+                  style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700)
+              ),
             ),
             Expanded(
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: mantras.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (ctx, i) {
                   final m = mantras[i];
                   bool isSelected = m.id == _selectedMantra?.id;
                   return ListTile(
                     onTap: () {
+                      HapticFeedback.lightImpact();
                       setState(() => _selectedMantra = m);
                       Navigator.pop(context);
                     },
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     tileColor: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.1) : Theme.of(context).cardColor,
-                    leading: Icon(Icons.spa_rounded, color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey),
-                    title: Text(m.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-                    trailing: isSelected ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 20) : null,
+                    leading: Icon(Icons.spa_rounded, color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey, size: 20),
+                    title: Text(
+                        m.name,
+                        style: TextStyle(fontFamily: kBodyFont, fontSize: 12, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)
+                    ),
+                    trailing: isSelected ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 18) : null,
                   );
                 },
               ),
@@ -83,7 +94,7 @@ class _SpiritualHealingSheetState extends State<SpiritualHealingSheet> {
               final mantras = snapshot.data!.docs.map((d) => SpiritualMantraModel.fromFirestore(d)).toList();
               if (mantras.isEmpty) return const Center(child: Text("Library Empty"));
               _selectedMantra ??= mantras.first;
-        
+
               return Column(
                 children: [
                   _buildCompactHeader(theme, cs),
@@ -94,7 +105,7 @@ class _SpiritualHealingSheetState extends State<SpiritualHealingSheet> {
                       children: [
                         MantraChanterWidget(
                           mantra: _selectedMantra!,
-                          onOpenPicker: () => _showMantraPicker(context, mantras), // 🎯 Pass callback
+                          onOpenPicker: () => _showMantraPicker(context, mantras),
                         ),
                         MantraGuideWidget(
                           selectedMantra: _selectedMantra!,
@@ -112,7 +123,6 @@ class _SpiritualHealingSheetState extends State<SpiritualHealingSheet> {
     );
   }
 
-  // ... (Header and Toggle buttons remain same as your code)
   Widget _buildCompactHeader(ThemeData theme, ColorScheme cs) {
     return Column(
       children: [
@@ -126,12 +136,13 @@ class _SpiritualHealingSheetState extends State<SpiritualHealingSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("VAGUS NERVE STIMULATION", style: TextStyle(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                    Text("Spiritual Sanctuary", style: TextStyle(color: theme.hintColor, fontSize: 13)),
+                    Text("VAGUS NERVE STIMULATION", style: TextStyle(fontFamily: kDisplayFont, color: cs.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.0)),
+                    const SizedBox(height: 2),
+                    Text("Spiritual Sanctuary", style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: 12, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
-              IconButton(icon: Icon(Icons.close_rounded, color: theme.hintColor), onPressed: () => Navigator.pop(context))
+              IconButton(icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 20), onPressed: () => Navigator.pop(context))
             ],
           ),
         ),
@@ -159,11 +170,18 @@ class _SpiritualHealingSheetState extends State<SpiritualHealingSheet> {
   Widget _toggleBtn(String label, bool isSel, VoidCallback onTap, ColorScheme cs) {
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(color: isSel ? cs.primary : Colors.transparent, borderRadius: BorderRadius.circular(12)),
-          child: Text(label, textAlign: TextAlign.center, style: TextStyle(color: isSel ? Colors.white : Colors.grey, fontWeight: FontWeight.bold, fontSize: 13)),
+          child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: kDisplayFont, color: isSel ? Colors.white : Colors.grey, fontWeight: FontWeight.w600, fontSize: 11)
+          ),
         ),
       ),
     );
@@ -172,7 +190,7 @@ class _SpiritualHealingSheetState extends State<SpiritualHealingSheet> {
 
 class MantraChanterWidget extends StatefulWidget {
   final SpiritualMantraModel mantra;
-  final VoidCallback onOpenPicker; // 🎯 Added callback
+  final VoidCallback onOpenPicker;
   const MantraChanterWidget({super.key, required this.mantra, required this.onOpenPicker});
 
   @override
@@ -197,7 +215,6 @@ class _MantraChanterWidgetState extends State<MantraChanterWidget> with SingleTi
     if (_isLotusBlooming) return;
     _beadController.forward().then((_) => _beadController.reverse());
 
-    // Syllabic Rhythmic Feedback
     if (_script == "Sanskrit") {
       _audio.hapticMedium();
       Future.delayed(const Duration(milliseconds: 80), () => _audio.hapticMedium());
@@ -236,16 +253,20 @@ class _MantraChanterWidgetState extends State<MantraChanterWidget> with SingleTi
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    SizedBox(width: 180, height: 180, child: CircularProgressIndicator(value: 1.0, strokeWidth: 8, color: theme.dividerColor.withOpacity(0.05))),
-                    SizedBox(width: 180, height: 180, child: CircularProgressIndicator(value: _isLotusBlooming ? 1.0 : progress, strokeWidth: 8, strokeCap: StrokeCap.round, valueColor: AlwaysStoppedAnimation<Color>(cs.primary))),
+                    SizedBox(width: 180, height: 180, child: CircularProgressIndicator(value: 1.0, strokeWidth: 4, color: theme.dividerColor.withOpacity(0.05))),
+                    SizedBox(width: 180, height: 180, child: CircularProgressIndicator(value: _isLotusBlooming ? 1.0 : progress, strokeWidth: 4, strokeCap: StrokeCap.round, valueColor: AlwaysStoppedAnimation<Color>(cs.primary))),
                     Container(
                       width: 150, height: 150,
-                      decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: cs.primary.withOpacity(progress * 0.2), blurRadius: 35)]),
+                      decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: cs.primary.withOpacity(progress * 0.1), blurRadius: 35)]),
                       child: _isLotusBlooming
-                          ? const Icon(Icons.spa_rounded, color: Colors.pinkAccent, size: 70)
+                          ? const Icon(Icons.spa_rounded, color: Colors.pinkAccent, size: 40)
                           : (showBreathPrompt
-                          ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.air_rounded, color: cs.primary), const Text("BREATH", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))])
-                          : Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text("$_count", style: TextStyle(fontSize: 54, fontWeight: FontWeight.bold, color: cs.primary)), const Text("OF 108", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))])),
+                          ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.air_rounded, color: cs.primary, size: 24), const SizedBox(height: 4), Text("BREATH", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700))])
+                          : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Text("$_count", style: TextStyle(fontFamily: kDisplayFont, fontSize: 24, fontWeight: FontWeight.w700, color: cs.primary)),
+                        const SizedBox(height: 2),
+                        Text("OF 108", style: TextStyle(fontFamily: kDisplayFont, fontSize: 9, fontWeight: FontWeight.w600, color: theme.hintColor))
+                      ])),
                     ),
                   ],
                 ),
@@ -273,19 +294,30 @@ class _MantraChanterWidgetState extends State<MantraChanterWidget> with SingleTi
                 _scriptToggle("English"),
                 const Spacer(),
                 IconButton(
-                  icon: Icon(Icons.volume_up_rounded, color: cs.primary, size: 20),
+                  icon: Icon(Icons.volume_up_rounded, color: cs.primary, size: 18),
                   onPressed: () => ttsService.speak(
                     text: _script == "Sanskrit" ? (widget.mantra.sanskritText ?? widget.mantra.name) : widget.mantra.meaning,
                     languageCode: _script == "Sanskrit" ? "hi-IN" : "en-US",
                     rate: 0.35,
                   ),
                 ),
-                IconButton(icon: Icon(Icons.grid_view_rounded, color: theme.hintColor, size: 20), onPressed: widget.onOpenPicker),
+                IconButton(icon: Icon(Icons.grid_view_rounded, color: theme.hintColor, size: 18), onPressed: widget.onOpenPicker),
               ],
             ),
-            const Divider(height: 24),
-            Expanded(child: Center(child: SingleChildScrollView(child: Text(_script == "Sanskrit" ? (widget.mantra.sanskritText ?? widget.mantra.name) : widget.mantra.meaning, textAlign: TextAlign.center, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: cs.onSurface, height: 1.6, fontFamily: 'Serif'))))),
-            Text("SESSION ROUNDS: $_rounds", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: theme.hintColor)),
+            const Divider(height: 16),
+            Expanded(
+                child: Center(
+                    child: SingleChildScrollView(
+                        child: Text(
+                            _script == "Sanskrit" ? (widget.mantra.sanskritText ?? widget.mantra.name) : widget.mantra.meaning,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontFamily: kBodyFont, fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurface, height: 1.6)
+                        )
+                    )
+                )
+            ),
+            const SizedBox(height: 12),
+            Text("SESSION ROUNDS: $_rounds", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, color: theme.hintColor, letterSpacing: 1.0)),
           ],
         ),
       ),
@@ -294,7 +326,16 @@ class _MantraChanterWidgetState extends State<MantraChanterWidget> with SingleTi
 
   Widget _scriptToggle(String s) {
     bool isSel = _script == s;
-    return GestureDetector(onTap: () => setState(() => _script = s), child: Padding(padding: const EdgeInsets.only(right: 16), child: Text(s, style: TextStyle(color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey, fontWeight: isSel ? FontWeight.bold : FontWeight.normal))));
+    return GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          setState(() => _script = s);
+        },
+        child: Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Text(s, style: TextStyle(fontFamily: kDisplayFont, color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey, fontSize: 11, fontWeight: isSel ? FontWeight.w700 : FontWeight.w500))
+        )
+    );
   }
 
   @override
@@ -310,7 +351,6 @@ class _MantraChanterWidgetState extends State<MantraChanterWidget> with SingleTi
   void dispose() { _beadController.dispose(); super.dispose(); }
 }
 
-// ... (MantraGuideWidget remains same as your code)
 class MantraGuideWidget extends StatefulWidget {
   final SpiritualMantraModel selectedMantra;
   final List<SpiritualMantraModel> allMantras;
@@ -349,14 +389,17 @@ class _MantraGuideWidgetState extends State<MantraGuideWidget> {
       children: [
         ClipRRect(borderRadius: BorderRadius.circular(20), child: YoutubePlayer(controller: _ytController)),
         const SizedBox(height: 24),
-        Text("PLAYLIST", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.hintColor, letterSpacing: 1.5)),
-        const SizedBox(height: 12),
+        Text("PLAYLIST", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, color: theme.hintColor, letterSpacing: 1.5)),
+        const SizedBox(height: 8),
         ...widget.allMantras.map((m) => ListTile(
-          onTap: () => widget.onMantraChanged(m),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            widget.onMantraChanged(m);
+          },
           contentPadding: EdgeInsets.zero,
-          leading: Icon(m.id == widget.selectedMantra.id ? Icons.play_circle_filled : Icons.play_circle_outline, color: m.id == widget.selectedMantra.id ? theme.colorScheme.primary : Colors.grey),
-          title: Text(m.name, style: TextStyle(fontSize: 14, fontWeight: m.id == widget.selectedMantra.id ? FontWeight.bold : FontWeight.normal)),
-          subtitle: Text(m.meaning, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
+          leading: Icon(m.id == widget.selectedMantra.id ? Icons.play_circle_filled : Icons.play_circle_outline, color: m.id == widget.selectedMantra.id ? theme.colorScheme.primary : Colors.grey, size: 22),
+          title: Text(m.name, style: TextStyle(fontFamily: kBodyFont, fontSize: 12, fontWeight: m.id == widget.selectedMantra.id ? FontWeight.w700 : FontWeight.w500)),
+          subtitle: Text(m.meaning, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: kBodyFont, fontSize: 10, color: theme.hintColor)),
         )),
       ],
     );

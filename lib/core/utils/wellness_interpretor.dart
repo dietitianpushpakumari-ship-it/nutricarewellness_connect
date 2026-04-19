@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nutricare_connect/features/dietplan/domain/entities/client_log_model.dart';
+import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 
 class WellnessInsight {
   final String title;

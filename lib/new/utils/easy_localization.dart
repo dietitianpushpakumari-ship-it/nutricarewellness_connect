@@ -37,7 +37,7 @@ class PremiumLanguageSheet extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            Text("APP LOCALIZATION", style: TextStyle(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+            Text("APP LOCALIZATION", style: TextStyle(color: cs.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
             const SizedBox(height: 4),
             Text("Select Language", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.onSurface)),
             const SizedBox(height: 8),

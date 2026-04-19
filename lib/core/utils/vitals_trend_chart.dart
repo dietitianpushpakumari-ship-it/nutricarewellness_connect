@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
 
-import 'package:nutricare_connect/new/models/vitals_model.dart';
+import 'package:pure_shift/new/models/vitals_model.dart';
 // 🔥 Ensure this points to where your labTestConfigsProvider is defined
-import 'package:nutricare_connect/new/provider/diet_plan_provider.dart';
+import 'package:pure_shift/new/provider/diet_plan_provider.dart';
 
 class VitalsTrendChart extends ConsumerStatefulWidget {
   final List<VitalsModel> history;

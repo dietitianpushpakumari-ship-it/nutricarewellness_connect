@@ -7,12 +7,12 @@ enum FeedContentType {
   articleLink,
   recipe,
   advertisement,
-  socialPost,
+  socialPost, article,
 }
 
 class FeedItemModel {
   final String id;
-  final String title;
+  final dynamic title;
   final String description;
   final FeedContentType type;
 
