@@ -1,0 +1,67 @@
+name: Nutricare_Client Auto-Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_and_upload:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/cirruslabs/flutter:stable
+
+    steps:
+      - name: Get my code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # 🔐 Step A: Recreate the Keystore file from your Secret
+      - name: Recreate Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\n\r ' | base64 --decode > android/app/nutricare-release.jks
+
+      # 🏗️ Step B: Build Both Variants
+      - name: Build APKs
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          # 1. Build Signed Release APK
+          flutter build apk --release
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/client-signed.apk
+
+          # 2. Build Unsigned Debug APK
+          flutter build apk --debug
+          mv build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/client-unsigned.apk
+
+      # 🚀 Step C: Upload Signed version
+      - name: Upload Signed to Cloudinary
+        env:
+          CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
+        run: |
+          curl https://api.cloudinary.com/v1_1/$CLOUD_NAME/raw/upload \
+            -X POST \
+            -F "file=@build/app/outputs/flutter-apk/client-signed.apk" \
+            -F "upload_preset=$UPLOAD_PRESET" \
+            -F "folder=nutricare/client_app" \
+            -F "public_id=client_latest_signed" \
+            -F "overwrite=true"
+
+      # 🚀 Step D: Upload Unsigned version
+      - name: Upload Unsigned to Cloudinary
+        env:
+          CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
+        run: |
+          curl https://api.cloudinary.com/v1_1/$CLOUD_NAME/raw/upload \
+            -X POST \
+            -F "file=@build/app/outputs/flutter-apk/client-unsigned.apk" \
+            -F "upload_preset=$UPLOAD_PRESET" \
+            -F "folder=nutricare/client_app" \
+            -F "public_id=client_latest_unsigned" \
+            -F "overwrite=true"

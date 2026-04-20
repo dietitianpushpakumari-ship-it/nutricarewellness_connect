@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:video_player/video_player.dart';
 import 'package:pure_shift/core/utils/wellness_audio_service.dart';
 
 // 🎯 GLOBAL PREMIUM FONTS
@@ -37,7 +38,7 @@ class CardioPrescription {
   });
 }
 
-enum CardioSessionState { calibrating, active, rpeCheck, resting, summary }
+enum CardioSessionState { calibrating, countdown, active, rpeCheck, resting, summary }
 
 // ============================================================================
 // 2. MAIN WIDGET
@@ -56,7 +57,7 @@ class RhythmPacerSheet extends StatefulWidget {
 
 class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerProviderStateMixin {
   final _audio = WellnessAudioService();
-
+  Timer? _videoLoopTimer;
   // Clinical State
   CardioSessionState _currentState = CardioSessionState.calibrating;
   late int _currentSet;
@@ -64,17 +65,25 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   int _restSecondsRemaining = 30;
   Timer? _restTimer;
 
+  // Countdown Timer
+  int _countdownSeconds = 3;
+  Timer? _countdownTimer;
+
   // Workout Modes
   final Map<String, ClinicalTempo> _modes = {
     "Squats": const ClinicalTempo(eccentricMs: 2000, isometricMs: 500, concentricMs: 1500),
     "Lunges": const ClinicalTempo(eccentricMs: 2000, isometricMs: 1000, concentricMs: 1500),
     "Jumping Jacks": const ClinicalTempo(eccentricMs: 400, isometricMs: 0, concentricMs: 400),
     "High Knees": const ClinicalTempo(eccentricMs: 300, isometricMs: 0, concentricMs: 300),
+    "Push-Ups": const ClinicalTempo(eccentricMs: 1500, isometricMs: 500, concentricMs: 1000),
   };
   String _currentMode = "Squats";
 
   // Mode Tracking
   bool _useCamera = false;
+
+  // Instructor Mode (Video)
+  VideoPlayerController? _videoController;
 
   // AI Camera & ML Kit
   CameraController? _cameraController;
@@ -86,7 +95,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   double _liveKneeAngle = 180.0;
   bool _isAtBottom = false;
 
-  // Pacemaker Animation
+  // Pacemaker Timer
   late AnimationController _ghostController;
   double _ghostProgress = 0.0;
   DateTime? _repStartTime;
@@ -95,19 +104,80 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   void initState() {
     super.initState();
     _currentSet = 1;
+    _initVideo(_currentMode);
     _initializeAICamera();
 
     _ghostController = AnimationController(vsync: this, duration: const Duration(days: 1))..forward();
     _ghostController.addListener(_updateGhostPacemaker);
   }
 
-  @override
   void dispose() {
     _restTimer?.cancel();
+    _countdownTimer?.cancel();
+    _videoLoopTimer?.cancel(); // <--- ADD THIS
     _ghostController.dispose();
     _cameraController?.dispose();
     _poseDetector?.close();
+    _videoController?.dispose();
     super.dispose();
+  }
+
+  // ============================================================================
+  // 🚀 VIDEO ENGINE (FIXED)
+  // ============================================================================
+  String _getVideoPath(String mode) {
+    switch (mode) {
+      case "Squats": return 'assets/videos/squat.mp4';
+      case "Lunges": return 'assets/videos/lunges2.mp4';
+      case "Jumping Jacks": return 'assets/videos/jumping_jacks.mp4';
+      case "High Knees": return 'assets/videos/high_knees1.mp4';
+      case "Push-Ups": return 'assets/videos/pushup.mp4';
+      default: return 'assets/videos/squat.mp4';
+    }
+  }
+
+// ============================================================================
+  // 🚀 VIDEO ENGINE (BULLETPROOF LOOPING FIX)
+  // ============================================================================
+// Replace your _initVideo method with this:
+  void _initVideo(String mode) {
+    final oldController = _videoController;
+
+    // Cancel any existing loop timers
+    _videoLoopTimer?.cancel();
+
+    _videoController = VideoPlayerController.asset(_getVideoPath(mode));
+
+    _videoController!.initialize().then((_) {
+      if (!mounted) return;
+
+      _videoController!.setVolume(0.0);
+      _videoController!.setLooping(true); // Keep this as a fallback
+
+      // If we are in instructor mode, play immediately
+      if (!_useCamera) {
+        _videoController!.play();
+
+        // 🚀 THE MICRO-VIDEO LOOP FIX
+        // Since your video is 168ms, we will forcefully seek it to 0 and play it every 150ms.
+        // This prevents the MediaCodec from ever reaching "playback complete" and freezing.
+        _videoLoopTimer = Timer.periodic(const Duration(milliseconds: 150), (timer) {
+          if (mounted && _videoController != null && _videoController!.value.isInitialized) {
+            if (!_videoController!.value.isPlaying) {
+              _videoController!.seekTo(Duration.zero);
+              _videoController!.play();
+            }
+          }
+        });
+      }
+
+      setState(() {});
+
+      Future.delayed(const Duration(milliseconds: 200), () {
+        oldController?.dispose();
+      });
+
+    }).catchError((e) => debugPrint("Video load error: $e"));
   }
 
   void _changeMode(String mode) {
@@ -117,6 +187,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
       _currentMode = mode;
       _completedReps = 0;
     });
+    _initVideo(mode);
   }
 
   // ============================================================================
@@ -151,12 +222,12 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
 
     setState(() {
       if (elapsed <= t.eccentricMs) {
-        _ghostProgress = elapsed / t.eccentricMs; // Eccentric (Down)
+        _ghostProgress = elapsed / t.eccentricMs;
       } else if (elapsed <= t.eccentricMs + t.isometricMs) {
-        _ghostProgress = 1.0; // Isometric (Hold)
+        _ghostProgress = 1.0;
       } else {
         final upElapsed = elapsed - (t.eccentricMs + t.isometricMs);
-        _ghostProgress = 1.0 - (upElapsed / t.concentricMs); // Concentric (Up)
+        _ghostProgress = 1.0 - (upElapsed / t.concentricMs);
       }
     });
   }
@@ -189,7 +260,8 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
     if (_cameraController == null) return;
 
     _cameraController!.startImageStream((CameraImage image) async {
-      if (!_useCamera || _isProcessingImage || _currentState == CardioSessionState.resting || _currentState == CardioSessionState.rpeCheck) return;
+      if (!_useCamera || _isProcessingImage || _currentState == CardioSessionState.resting || _currentState == CardioSessionState.rpeCheck || _currentState == CardioSessionState.countdown) return;
+
       _isProcessingImage = true;
 
       try {
@@ -225,12 +297,9 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
             if (mounted) {
               setState(() {
                 _liveKneeAngle = angle;
+                _isPoseDetected = true;
 
-                if (_currentState == CardioSessionState.calibrating) {
-                  _isPoseDetected = true;
-                  _currentState = CardioSessionState.active;
-                  _repStartTime = DateTime.now();
-                } else if (_currentState == CardioSessionState.active) {
+                if (_currentState == CardioSessionState.active) {
                   _processRepLogic(angle);
                 }
               });
@@ -272,19 +341,42 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   }
 
   // ============================================================================
-  // SESSION WORKFLOW LOGIC
+  // 🚀 SESSION WORKFLOW LOGIC (FIXED VIDEO PLAYBACK)
   // ============================================================================
-  void _startAnimationMode() {
+  void _startWorkoutPhase() {
     HapticFeedback.mediumImpact();
+
+    // 1. Force the video to play immediately as the countdown starts
+    if (!_useCamera) _videoController?.play();
+
     setState(() {
-      _useCamera = false;
-      _currentState = CardioSessionState.active;
-      _repStartTime = DateTime.now();
+      _currentState = CardioSessionState.countdown;
+      _countdownSeconds = 3;
+    });
+
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_countdownSeconds > 1) {
+        setState(() => _countdownSeconds--);
+        _audio.playTick();
+      } else {
+        timer.cancel();
+        _audio.playDing();
+
+        setState(() {
+          _currentState = CardioSessionState.active;
+          _repStartTime = DateTime.now();
+        });
+
+        // 2. Force the video to keep playing when transitioning to active
+        if (!_useCamera) _videoController?.play();
+      }
     });
   }
 
   void _handleSetComplete() {
     _repStartTime = null;
+    _videoController?.pause();
     _audio.playSuccess();
     HapticFeedback.heavyImpact();
     if (_currentSet < widget.prescription.sets) {
@@ -317,6 +409,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
             _currentState = CardioSessionState.active;
             _repStartTime = DateTime.now();
           });
+          if (!_useCamera) _videoController?.play();
         }
       });
     }
@@ -354,7 +447,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
     final cs = theme.colorScheme;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: MediaQuery.of(context).size.height * 0.90,
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
@@ -368,7 +461,6 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
             const SizedBox(height: 12),
             Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2)))),
 
-            // 🚀 STANDARD HEADER
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
               child: Row(
@@ -412,17 +504,93 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
   Widget _buildStateContent(ThemeData theme, Color primary) {
     switch (_currentState) {
       case CardioSessionState.calibrating: return _buildCalibration(theme, primary);
-      case CardioSessionState.active: return _buildActiveSession(theme, primary);
+      case CardioSessionState.countdown:
+      case CardioSessionState.active: return _buildActiveWorkout(theme, primary);
       case CardioSessionState.rpeCheck: return _buildRpeCheck(theme, primary);
       case CardioSessionState.resting: return _buildResting(theme, primary);
       case CardioSessionState.summary: return _buildSummary(theme, primary);
     }
   }
 
+  // 🚀 UNIVERSAL MEDIA CARD: Added ObjectKey to prevent video freezing during rebuilds
+  Widget _buildMediaCard(Color primary) {
+    return Container(
+      height: 300,
+      width: double.infinity,
+      decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: primary.withOpacity(0.3), width: 2),
+          boxShadow: [BoxShadow(color: primary.withOpacity(0.05), blurRadius: 40)]
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.center,
+          children: [
+            // INSTRUCTOR MODE: Loop MP4 File
+            if (!_useCamera && _videoController != null && _videoController!.value.isInitialized)
+              SizedBox.expand(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _videoController!.value.size.width,
+                    height: _videoController!.value.size.height,
+                    // 🚀 ADDED KEY to prevent Flutter from re-initializing and freezing the video
+                    child: VideoPlayer(
+                        key: ObjectKey(_videoController!),
+                        _videoController!
+                    ),
+                  ),
+                ),
+              ),
+
+            // AI MODE: Show Camera Feed
+            if (_useCamera && _cameraController?.value.isInitialized == true)
+              Transform.scale(scaleX: -1, child: CameraPreview(_cameraController!)),
+
+            // SKELETON GHOST (Only active in AI Mode)
+            if (_useCamera && (_currentState == CardioSessionState.active || _currentState == CardioSessionState.calibrating))
+              AnimatedBuilder(
+                animation: _ghostController,
+                builder: (context, child) => CustomPaint(
+                  painter: _ClinicalPacerPainter(
+                    mode: _currentMode,
+                    repCount: _completedReps,
+                    ghostProgress: _ghostProgress,
+                    liveProgress: _liveKneeAngle,
+                    primaryColor: primary,
+                  ),
+                ),
+              ),
+
+            // COUNTDOWN OVERLAY (Darkens the video/camera and pulses numbers)
+            if (_currentState == CardioSessionState.countdown)
+              Container(
+                  color: Colors.black.withOpacity(0.4),
+                  child: Center(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                        child: Text(
+                            "$_countdownSeconds",
+                            key: ValueKey<int>(_countdownSeconds),
+                            style: const TextStyle(fontFamily: kDisplayFont, fontSize: 120, fontWeight: FontWeight.w800, color: Colors.white)
+                        ),
+                      )
+                  )
+              )
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCalibration(ThemeData theme, Color primary) {
     return Column(
       children: [
-        // 🚨 MODE TOGGLE (AI Camera vs Animation)
+        // 🚨 MODE TOGGLE (AI Camera vs Instructor)
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: theme.dividerColor.withOpacity(0.1))),
@@ -430,7 +598,7 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: () { HapticFeedback.selectionClick(); setState(() => _useCamera = true); },
+                  onTap: () { HapticFeedback.selectionClick(); setState(() => _useCamera = true); _videoController?.pause(); },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(color: _useCamera ? primary.withOpacity(0.2) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
@@ -440,11 +608,15 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
               ),
               Expanded(
                 child: GestureDetector(
-                  onTap: () { HapticFeedback.selectionClick(); setState(() => _useCamera = false); },
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _useCamera = false);
+                    _videoController?.play(); // Resume video on switch
+                  },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(color: !_useCamera ? primary.withOpacity(0.2) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
-                    child: Center(child: Text("Animation", style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, color: !_useCamera ? primary : theme.hintColor, fontWeight: FontWeight.w700))),
+                    child: Center(child: Text("Instructor", style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, color: !_useCamera ? primary : theme.hintColor, fontWeight: FontWeight.w700))),
                   ),
                 ),
               ),
@@ -476,48 +648,42 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
             }).toList(),
           ),
         ),
-        const SizedBox(height: 48),
+        const SizedBox(height: 32),
+
+        // 🚀 LIVE PREVIEW
+        _buildMediaCard(primary),
+
+        const SizedBox(height: 24),
 
         if (_useCamera) ...[
-          if (_cameraController?.value.isInitialized == true)
-            Container(
-              height: 160, width: 160,
-              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.orangeAccent.withOpacity(0.5), width: 4)),
-              child: ClipOval(child: Transform.scale(scaleX: -1, child: CameraPreview(_cameraController!))),
-            ),
-          const SizedBox(height: 24),
           const Text("Align Camera", style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: Colors.orangeAccent)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text("Step back until your entire body\n(Head to ankles) is visible.", textAlign: TextAlign.center, style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor, height: 1.5)),
-          const SizedBox(height: 40),
-          const CircularProgressIndicator(color: Colors.orangeAccent),
         ] else ...[
-          Icon(Icons.animation_rounded, size: 64, color: primary.withOpacity(0.5)),
-          const SizedBox(height: 24),
           Text(_currentMode, style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
-              "Follow the stick figure's tempo.\nReps will be counted automatically.",
+              "Follow the instructor's form.\nReps will be counted automatically.",
               textAlign: TextAlign.center,
               style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor, height: 1.5)
           ),
-          const SizedBox(height: 40),
-          SizedBox(
-            width: double.infinity, height: 50,
-            child: FilledButton(
-                style: FilledButton.styleFrom(elevation: 0, backgroundColor: primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                onPressed: _startAnimationMode,
-                child: const Text("Start Workout", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5))
-            ),
-          )
-        ]
+        ],
+
+        const SizedBox(height: 32),
+        SizedBox(
+          width: double.infinity, height: 50,
+          child: FilledButton(
+              style: FilledButton.styleFrom(elevation: 0, backgroundColor: primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              onPressed: _startWorkoutPhase,
+              child: const Text("Start Workout", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5))
+          ),
+        )
       ],
     );
   }
 
-  Widget _buildActiveSession(ThemeData theme, Color primary) {
-    double simulatedKneeAngle = 180.0 - (_ghostProgress * 90.0);
-
+  // 🚀 SHARED WORKOUT & COUNTDOWN SCREEN
+  Widget _buildActiveWorkout(ThemeData theme, Color primary) {
     return Column(
       children: [
         Text("Clinical $_currentMode", style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
@@ -525,58 +691,29 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
         Text("Set $_currentSet of ${widget.prescription.sets}", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: primary, fontWeight: FontWeight.w700)),
         const SizedBox(height: 32),
 
-        // BIOFEEDBACK ORB
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-              color: theme.cardColor.withOpacity(0.5), shape: BoxShape.circle,
-              border: Border.all(color: primary.withOpacity(0.3), width: 2),
-              boxShadow: [BoxShadow(color: primary.withOpacity(0.05), blurRadius: 40)]
-          ),
-          child: SizedBox(
-            height: 220, width: 220,
-            child: ClipOval(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (_useCamera && _cameraController?.value.isInitialized == true)
-                    Transform.scale(scaleX: -1, child: CameraPreview(_cameraController!)),
+        _buildMediaCard(primary),
 
-                  AnimatedBuilder(
-                    animation: _ghostController,
-                    builder: (context, child) => CustomPaint(
-                      painter: _ClinicalPacerPainter(
-                        mode: _currentMode,
-                        repCount: _completedReps,
-                        ghostProgress: _ghostProgress,
-                        liveProgress: _useCamera ? _liveKneeAngle : simulatedKneeAngle,
-                        primaryColor: primary,
-                        useCamera: _useCamera,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+        const SizedBox(height: 32),
+
+        if (_currentState == CardioSessionState.active) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildMetricBox("Tempo", "${_modes[_currentMode]!.eccentricMs~/1000}-${_modes[_currentMode]!.isometricMs~/1000}-${_modes[_currentMode]!.concentricMs~/1000}", theme),
+              _buildMetricBox("Reps", "$_completedReps / ${widget.prescription.targetReps}", theme, highlightColor: primary),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          if (_useCamera && !_isPoseDetected)
+            Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                child: const Text("⚠️ POSE LOST: Step back into frame", style: TextStyle(fontFamily: kBodyFont, fontSize: 11, fontWeight: FontWeight.w700, color: Colors.redAccent))
             ),
-          ),
-        ),
-        const SizedBox(height: 32),
-
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildMetricBox("Tempo", "${_modes[_currentMode]!.eccentricMs~/1000}-${_modes[_currentMode]!.isometricMs~/1000}-${_modes[_currentMode]!.concentricMs~/1000}", theme),
-            _buildMetricBox("Reps", "$_completedReps / ${widget.prescription.targetReps}", theme, highlightColor: primary),
-          ],
-        ),
-        const SizedBox(height: 32),
-
-        if (_useCamera && !_isPoseDetected)
-          Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-              child: const Text("⚠️ POSE LOST: Step back into frame", style: TextStyle(fontFamily: kBodyFont, fontSize: 11, fontWeight: FontWeight.w700, color: Colors.redAccent))
-          ),
+        ] else ...[
+          Text("GET READY", style: TextStyle(fontFamily: kDisplayFont, fontSize: 18, fontWeight: FontWeight.w700, color: theme.hintColor, letterSpacing: 2)),
+        ]
       ],
     );
   }
@@ -645,14 +782,19 @@ class _RhythmPacerSheetState extends State<RhythmPacerSheet> with SingleTickerPr
         const SizedBox(height: 40),
         Icon(Icons.check_circle_rounded, size: 64, color: primary),
         const SizedBox(height: 24),
-        Text("Protocol Complete", style: TextStyle(fontFamily: kDisplayFont, fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
+        Text("Workout Complete", style: TextStyle(fontFamily: kDisplayFont, fontSize: 24, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
+        const SizedBox(height: 12),
+        Text("Great job completing your protocol.", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor)),
         const SizedBox(height: 40),
         SizedBox(
           width: double.infinity, height: 50,
           child: FilledButton(
               style: FilledButton.styleFrom(elevation: 0, backgroundColor: primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Save & Exit", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5))
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.pop(context);
+              },
+              child: const Text("Close", style: TextStyle(fontFamily: kDisplayFont, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.5))
           ),
         )
       ],
@@ -679,7 +821,6 @@ class _ClinicalPacerPainter extends CustomPainter {
   final double ghostProgress;
   final double liveProgress;
   final Color primaryColor;
-  final bool useCamera;
 
   _ClinicalPacerPainter({
     required this.mode,
@@ -687,31 +828,18 @@ class _ClinicalPacerPainter extends CustomPainter {
     required this.ghostProgress,
     required this.liveProgress,
     required this.primaryColor,
-    required this.useCamera
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-    final cy = size.height * 0.45; // Center Y
+    final cy = size.height * 0.55;
 
-    // 1. Draw Ghost (Target Pacemaker)
-    if (useCamera) {
-      final ghostPaint = Paint()..color = Colors.white.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 8..strokeCap = StrokeCap.round;
-      _drawBodyElements(canvas, cx, cy, ghostProgress, ghostPaint, true);
-    }
+    final ghostPaint = Paint()..color = Colors.white.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 8..strokeCap = StrokeCap.round;
+    _drawBodyElements(canvas, cx, cy, ghostProgress, ghostPaint, true);
 
-    // 2. Draw Live User Body (Neon lines)
     double userProgress = (180.0 - liveProgress.clamp(90.0, 180.0)) / 90.0;
-
     final paint = Paint()..color = primaryColor..style = PaintingStyle.stroke..strokeWidth = 6..strokeCap = StrokeCap.round;
-    final fillPaint = Paint()..color = primaryColor..style = PaintingStyle.fill;
-
-    if (!useCamera) {
-      canvas.drawCircle(Offset(cx, cy - 80 + (mode == "Squats" ? userProgress * 50 : 0)), 16, fillPaint);
-      canvas.drawLine(Offset(cx, cy - 60 + (mode == "Squats" ? userProgress * 50 : 0)), Offset(cx, cy + (mode == "Squats" ? userProgress * 50 : 0)), paint..strokeWidth = 6);
-    }
-
     _drawBodyElements(canvas, cx, cy, userProgress, paint, false);
   }
 
@@ -734,14 +862,12 @@ class _ClinicalPacerPainter extends CustomPainter {
       kneeBend = p * 35;
     }
 
-    // ARMS
-    if (!useCamera || isGhost) {
-      double armLift = (isLunge || mode == "Squats") ? (p * 40) : (p * 80);
+    if (isGhost) {
+      double armLift = (isLunge || mode == "Squats" || mode == "Push-Ups") ? (p * 40) : (p * 80);
       canvas.drawLine(Offset(cx - 20, cy - 50 + offsetY), Offset(cx - 40, cy + 10 + offsetY - armLift), paint);
       canvas.drawLine(Offset(cx + 20, cy - 50 + offsetY), Offset(cx + 40, cy + 10 + offsetY - armLift), paint);
     }
 
-    // LEGS
     if (isLunge) {
       bool leftLegForward = repCount % 2 == 0;
 

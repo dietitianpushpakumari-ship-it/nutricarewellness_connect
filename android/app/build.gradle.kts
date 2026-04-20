@@ -47,6 +47,28 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePasswordValue = System.getenv("KEYSTORE_PASSWORD")
+            val keyAliasValue = System.getenv("KEY_ALIAS")
+            val keyPasswordValue = System.getenv("KEY_PASSWORD")
+
+            // Only apply signing if the passwords exist (prevents local crashes)
+            if (keystorePasswordValue != null && keyAliasValue != null) {
+                storeFile = file("nutricare-release.jks")
+                storePassword = keystorePasswordValue
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

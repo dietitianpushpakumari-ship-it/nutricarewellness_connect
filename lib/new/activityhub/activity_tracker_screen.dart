@@ -147,7 +147,7 @@ class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> w
         }
 
         _stepDebounceTimer = Timer(const Duration(seconds: 3), () {
-          _syncStepsToDatabase(latestSteps);
+      //    _syncStepsToDatabase(latestSteps);
         });
       }
     });
