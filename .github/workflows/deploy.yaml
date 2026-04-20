@@ -18,28 +18,44 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # 🕵️ THE QUALITY INSPECTOR: Checks for messy code and crash risks
+      - name: Analyze Dart Code
+        run: flutter analyze
+
+      # 🛡️ THE SECURITY GUARD: Checks for known hacker vulnerabilities
+      - name: Run OSV Vulnerability Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v1.9.0
+        with:
+          scan-args: |-
+            -r
+            ./
+
       # 🔐 Step A: Recreate the Keystore file from your Secret
       - name: Recreate Keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\n\r ' | base64 --decode > android/app/nutricare-release.jks
 
-      # 🏗️ Step B: Build Both Variants
-      - name: Build APKs
+      # 🏗️ Step B: Build All Three Variants
+      - name: Build Variants
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # 1. Build Signed Release APK
+          # 1. Build Signed Release APK (For Direct Download)
           flutter build apk --release
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/client-signed.apk
 
-          # 2. Build Unsigned Debug APK
+          # 2. Build Unsigned Debug APK (For Testing)
           flutter build apk --debug
           mv build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/client-unsigned.apk
 
-      # 🚀 Step C: Upload Signed version
-      - name: Upload Signed to Cloudinary
+          # 3. Build Signed Release AAB (For Google Play Store)
+          flutter build appbundle --release
+          mv build/app/outputs/bundle/release/app-release.aab build/app/outputs/bundle/release/client-signed.aab
+
+      # 🚀 Step C: Upload Signed APK to Cloudinary
+      - name: Upload Signed APK to Cloudinary
         env:
           CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
@@ -52,8 +68,8 @@ jobs:
             -F "public_id=client_latest_signed" \
             -F "overwrite=true"
 
-      # 🚀 Step D: Upload Unsigned version
-      - name: Upload Unsigned to Cloudinary
+      # 🚀 Step D: Upload Unsigned APK to Cloudinary
+      - name: Upload Unsigned APK to Cloudinary
         env:
           CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
@@ -64,4 +80,18 @@ jobs:
             -F "upload_preset=$UPLOAD_PRESET" \
             -F "folder=nutricare/client_app" \
             -F "public_id=client_latest_unsigned" \
+            -F "overwrite=true"
+
+      # 🚀 Step E: Upload AAB (App Bundle) to Cloudinary
+      - name: Upload AAB to Cloudinary
+        env:
+          CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
+        run: |
+          curl https://api.cloudinary.com/v1_1/$CLOUD_NAME/raw/upload \
+            -X POST \
+            -F "file=@build/app/outputs/bundle/release/client-signed.aab" \
+            -F "upload_preset=$UPLOAD_PRESET" \
+            -F "folder=nutricare/client_app" \
+            -F "public_id=client_latest_playstore_bundle" \
             -F "overwrite=true"
