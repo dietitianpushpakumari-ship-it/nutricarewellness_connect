@@ -1,6 +1,7 @@
 // lib/features/dietplan/PRESENTATION/providers/diet_plan_provider.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +33,7 @@ import 'package:pure_shift/new/models/lab_test_config_model.dart';
 import 'package:pure_shift/new/models/vitals_model.dart';
 import 'package:pure_shift/new/service/client_service.dart';
 import 'package:pure_shift/features/appointments/appointment_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../FlatClientDietPlanModel.dart';
 import '../repositories/diet_repositories.dart';
 
@@ -39,8 +41,11 @@ import '../repositories/diet_repositories.dart';
 // --- 1. State Definition (Atomic Structure) ---
 // =========================================================================
 
+// =========================================================================
+// --- 1. State Definition (Atomic Structure) ---
+// =========================================================================
+
 class DietPlanState extends Equatable {
-  // 🚀 THE FIX: Strongly typed to Flat Model
   final FlatClientDietPlanModel? activePlan;
   final VitalsModel? clinicalVitals;
   final ClientLogModel? dailyRecord;
@@ -60,9 +65,10 @@ class DietPlanState extends Equatable {
   });
 
   DietPlanState copyWith({
-    FlatClientDietPlanModel? activePlan, // 🚀 Flat Model
+    FlatClientDietPlanModel? activePlan,
     VitalsModel? clinicalVitals,
     ClientLogModel? dailyRecord,
+    bool clearDailyRecord = false, // 🚀 THE FIX: A flag to force the wipe
     bool? isLoading,
     Object? error = const Object(),
     DateTime? selectedDate,
@@ -71,7 +77,8 @@ class DietPlanState extends Equatable {
     return DietPlanState(
       activePlan: activePlan ?? this.activePlan,
       clinicalVitals: clinicalVitals ?? this.clinicalVitals,
-      dailyRecord: dailyRecord ?? this.dailyRecord,
+      // 🚀 THE FIX: If the flag is true, force it to null. Otherwise, act normal.
+      dailyRecord: clearDailyRecord ? null : (dailyRecord ?? this.dailyRecord),
       isLoading: isLoading ?? this.isLoading,
       error: error is String ? error : (error == null ? null : this.error),
       selectedDate: selectedDate ?? this.selectedDate,
@@ -93,6 +100,9 @@ class DietPlanState extends Equatable {
   ];
 }
 
+// =========================================================================
+// --- 2. Notifier (ViewModel/Controller) ---
+// =========================================================================
 // =========================================================================
 // --- 2. Notifier (ViewModel/Controller) ---
 // =========================================================================
@@ -141,12 +151,17 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
     }
   }
 
-  Future<void> loadInitialData(DateTime date) async {
-    state = state.copyWith(isLoading: true, error: null);
+  // 🚀 THE FIX: We added `clearDailyRecord` parameter.
+  // It forces the provider to drop the old record while loading the new date.
+  Future<void> loadInitialData(DateTime date, {bool clearDailyRecord = false}) async {
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+      selectedDate: date,
+      clearDailyRecord: clearDailyRecord, // <-- This finally kills the ghost state!
+    );
 
-    final clientProfile = _ref
-        .read(authNotifierProvider)
-        .clientProfile;
+    final clientProfile = _ref.read(authNotifierProvider).clientProfile;
     final tenantId = clientProfile?.tenantId;
 
     if (clientProfile == null || tenantId == null || tenantId.isEmpty) {
@@ -156,14 +171,13 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
     }
 
     try {
-      FlatClientDietPlanModel? plan; // 🚀 Flat Model
+      FlatClientDietPlanModel? plan;
       VitalsModel? vitals;
 
       final session = await _repository.getLatestSession(_clientId, tenantId);
 
       if (session != null) {
         if (session.linkedDietPlanId != null) {
-          // ⚠️ NOTE: Make sure your repository methods return FlatClientDietPlanModel
           plan = await _repository.getPlanById(session.linkedDietPlanId!, tenantId);
         }
         if (session.linkedVitalsId != null) {
@@ -178,15 +192,15 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
         vitals = await _repository.getLatestVitals(_clientId, tenantId);
       }
 
-      final dailyRecord = await _repository.getDailyRecord(
-          _clientId, date, tenantId);
+      // Fetch the record for the SPECIFIC DATE
+      final dailyRecord = await _repository.getDailyRecord(_clientId, date, tenantId);
 
       state = state.copyWith(
         activePlan: plan,
         clinicalVitals: vitals,
+        // 🚀 THE FIX: This will be the new data, OR null if the database has nothing for this day
         dailyRecord: dailyRecord,
         isLoading: false,
-        selectedDate: date,
         version: state.version + 1,
       );
     } catch (e) {
@@ -198,12 +212,13 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
     if (newDate.day != state.selectedDate.day ||
         newDate.month != state.selectedDate.month ||
         newDate.year != state.selectedDate.year) {
-      loadInitialData(newDate);
+
+      // 🚀 THE FIX: Explicitly tell loadInitialData to wipe the old dailyRecord
+      loadInitialData(newDate, clearDailyRecord: true);
     }
   }
 
-// 🎯 ATOMIC UPDATE LOGIC WITH OPTIMISTIC UI
-// 🎯 ATOMIC UPDATE LOGIC WITH OPTIMISTIC UI
+  // 🎯 ATOMIC UPDATE LOGIC WITH OPTIMISTIC UI
   Future<void> updateDailyRecord({
     required Map<String, dynamic> data,
     List<XFile>? newPhotos,
@@ -219,15 +234,29 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
       data['tenantId'] = tenantId;
       data['clientId'] = _clientId;
 
+      final now = DateTime.now();
+      final bool isLoggingForToday =
+          state.selectedDate.year == now.year &&
+              state.selectedDate.month == now.month &&
+              state.selectedDate.day == now.day;
+
+      if (isLoggingForToday) {
+        final prefs = await SharedPreferences.getInstance();
+        final int? calculatedSteps = prefs.getInt('steps_today');
+
+        if (calculatedSteps != null && calculatedSteps > 0) {
+          data['stepCount'] = calculatedSteps;
+          data['lastStepSync'] = FieldValue.serverTimestamp();
+          debugPrint("🛡️ Silent Sync: Injected $calculatedSteps steps into ${mealNameForPhotos ?? 'log'} update.");
+        }
+      }
+
       // 1. Upload Photos First
       if (newPhotos != null && newPhotos.isNotEmpty && mealNameForPhotos != null) {
         List<String> uploadedUrls = [];
         for (var photo in newPhotos) {
-
-          // 🚀 THE FIX: Using the strict Multi-Tenant Cloudinary folder structure
           final url = await _clientService.uploadMealPhoto(
               photo, 'tenants/$tenantId/clients/$_clientId/meal_images');
-
           if (url != null) uploadedUrls.add(url);
         }
 
@@ -239,9 +268,8 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
         }
       }
 
-      // 🚀 2. OPTIMISTIC UI UPDATE
-      if (mealNameForPhotos != null && data['mealLogs'] != null &&
-          data['mealLogs'][mealNameForPhotos] != null) {
+      // 2. OPTIMISTIC UI UPDATE
+      if (mealNameForPhotos != null && data['mealLogs'] != null && data['mealLogs'][mealNameForPhotos] != null) {
         final currentRecord = state.dailyRecord ?? ClientLogModel(
           clientId: _clientId,
           tenantId: tenantId,
@@ -253,8 +281,10 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
 
         final safeKey = mealNameForPhotos.trim();
         updatedMeals[safeKey] = MealEntry.fromMap(data['mealLogs'][mealNameForPhotos]);
-
-        final optimisticRecord = currentRecord.copyWith(mealLogs: updatedMeals);
+        final optimisticRecord = currentRecord.copyWith(
+            mealLogs: updatedMeals,
+            stepCount: isLoggingForToday ? data['stepCount'] : currentRecord.stepCount
+        );
         state = state.copyWith(dailyRecord: optimisticRecord, version: state.version + 1);
       }
 
@@ -267,7 +297,6 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
       );
 
       if (mealNameForPhotos != null) {
-        // Do not await this so it doesn't slow down the UI update
         _notifyAdmin(mealNameForPhotos, clientProfile);
       }
 
@@ -285,13 +314,11 @@ class DietPlanNotifier extends StateNotifier<DietPlanState> {
   void updateLocalDailyRecordState(Map<String, dynamic> data) {
     if (state.dailyRecord == null) return;
 
-    // Use your model's copyWith to update the specific fields locally
     final updatedRecord = state.dailyRecord!.copyWith(
       sensorStepsBaseline: data['sensorStepsBaseline'] ?? state.dailyRecord!.sensorStepsBaseline,
       stepCount: data['stepCount'] ?? state.dailyRecord!.stepCount,
     );
 
-    // Update the Riverpod state
     state = state.copyWith(dailyRecord: updatedRecord);
   }
 }

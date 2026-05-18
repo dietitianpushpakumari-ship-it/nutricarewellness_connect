@@ -7,6 +7,7 @@ import 'package:flutter/services.dart'; // 🚀 Added for Haptics
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pure_shift/core/string_extension.dart';
+import 'package:pure_shift/core/utils/background_sync_service.dart';
 
 import 'package:pure_shift/core/utils/client_model.dart';
 import 'package:pure_shift/features/dietplan/PRESENTATION/providers/global_user_provider.dart';
@@ -14,13 +15,12 @@ import 'package:pure_shift/health_permission_service.dart';
 import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
 import 'package:pure_shift/new/coach/coach_tab.dart';
 import 'package:pure_shift/features/auth/auth_provider.dart';
-import 'package:pure_shift/new/feed/feed_tab.dart';
+
 import 'package:pure_shift/new/dashboard/modern_bottom_bar.dart';
 import 'package:pure_shift/core/utils/sync_manager.dart';
 import 'package:pure_shift/new/wellnesshub/wellness_hub_screen.dart';
 import 'package:pure_shift/new/activityhub/activity_tracker_screen.dart' hide vitalsHistoryProvider;
 import 'package:pure_shift/new/dashboard/home_screen.dart';
-import 'package:pure_shift/new/dietplan/plan_screen.dart' hide PlanScreen;
 import 'package:pure_shift/new/repositories/diet_repositories.dart';
 import 'package:pure_shift/plan_focus_area.dart';
 import 'package:pure_shift/shared/permission_sequence_service.dart';
@@ -69,6 +69,8 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
 
       await PermissionSequenceService().runWelcomeSequence(context);
+
+      scheduleClinicalSync(widget.client.id!);
     if (widget.showWelcomeSheet) {
       final String clientName = widget.client.name ?? "Guest";
 

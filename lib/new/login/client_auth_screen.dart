@@ -148,7 +148,7 @@ class _ClientAuthScreenState extends ConsumerState<ClientAuthScreen> with Single
         ref.invalidate(clientProfileFutureProvider);
 
         if (profiles.isNotEmpty) {
-          scheduleClinicalSync(profiles.first.patientId!);
+          scheduleClinicalSync(profiles.first.id!);
           ref.read(globalUserProvider.notifier).setUser(profiles.first);
           Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => ClientDashboardScreen(client: profiles.first, showWelcomeSheet: true)), (route) => false);
         }
@@ -441,8 +441,6 @@ class _ClientAuthScreenState extends ConsumerState<ClientAuthScreen> with Single
           SizedBox(height: context.scale(16)),
           _buildModernTextField(controller: _regConfirmPinController, label: "CONFIRM PIN", icon: Icons.lock_outline_rounded, isPassword: true, keyboardType: TextInputType.number, maxLength: 4),
           SizedBox(height: context.scale(24)),
-          // 🚀 Shortened Button Text
-          _buildModernButton(_isResetFlow ? "UPDATE PIN" : "SET PIN", _isProcessing, _completeActivation),
         ],
       ),
     );

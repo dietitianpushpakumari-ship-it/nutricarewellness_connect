@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart'; // For kIsWeb and TargetPlatform
@@ -11,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:android_intent_plus/android_intent.dart'; // Samsung Bridge
 
 import 'package:pure_shift/core/utils/client_model.dart';
+import 'package:pure_shift/core/utils/performance_utils.dart';
 import 'package:pure_shift/core/utils/sync_manager.dart';
 import 'package:pure_shift/new/activityhub/client_vitals_history_screen.dart';
 import 'package:pure_shift/features/dietplan/PRESENTATION/screens/log_vitals_screen.dart';
@@ -19,7 +21,7 @@ import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.da
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:intl/intl.dart' hide TextDirection;
-
+import 'package:google_fonts/google_fonts.dart';
 // 🎯 GLOBAL PREMIUM FONTS
 const String kDisplayFont = 'Space Grotesk';
 const String kBodyFont = 'Inter';
@@ -33,7 +35,7 @@ class ActivityTrackerScreen extends ConsumerStatefulWidget {
 }
 
 class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> with WidgetsBindingObserver {
-
+  bool _isProcessingPermission = false;
   bool _hasPermissions = false;
   bool _isSyncing = false;
   // Add this near your _pedometerSubscription
@@ -82,50 +84,67 @@ class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> w
   // 🏃 DUAL-ENGINE STEP SYNC LOGIC
   // ==========================================
   Future<void> _initHealthKit() async {
-    // 1. WEB CHECK
-    if (kIsWeb) {
-      if (mounted) setState(() => _activeStepEngine = "Manual Entry (Web)");
-      return;
-    }
+    if (_isProcessingPermission) return;
+    _isProcessingPermission = true;
 
-    // 2. LOAD LOCAL TRUTH FIRST (Matches Home Screen)
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _liveSteps = prefs.getInt('steps_today') ?? 0;
-      });
-    }
+    try {
+      if (kIsWeb) {
+        if (mounted) setState(() => _activeStepEngine = "Manual Entry (Web)");
+        return;
+      }
 
-    // 3. HARDWARE PERMISSION & REAL-TIME UI
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      final activityStatus = await Permission.activityRecognition.status;
+      final prefs = await SharedPreferences.getInstance();
+      if (mounted) {
+        setState(() {
+          _liveSteps = prefs.getInt('steps_today') ?? 0;
+        });
+      }
 
-      if (activityStatus.isGranted) {
-        // ALWAYS start the live sensor so the UI ticks!
-        _initLivePedometerUI();
-      } else {
-        // Request it if not granted yet
-        final requestStatus = await Permission.activityRecognition.request();
-        if (!mounted) return;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final activityStatus = await Permission.activityRecognition.status;
 
-        if (requestStatus.isGranted) {
+        if (activityStatus.isGranted) {
+          // 🚀 UPDATE THE FLAG
+          if (mounted) setState(() => _hasPermissions = true);
           _initLivePedometerUI();
         } else {
-          setState(() => _activeStepEngine = "Permission Denied");
+          final requestStatus = await Permission.activityRecognition.request();
+          if (!mounted) return;
+
+          if (requestStatus.isGranted) {
+            // 🚀 UPDATE THE FLAG
+            setState(() {
+              _hasPermissions = true;
+              _activeStepEngine = "Live Hardware Sensor";
+            });
+            _initLivePedometerUI();
+          } else {
+            setState(() {
+              _hasPermissions = false;
+              _activeStepEngine = "Permission Denied";
+            });
+          }
         }
       }
-    }
 
-    // 4. BACKGROUND HEALTH CONNECT (For historical sync, doesn't block UI)
-    _tryInitHealthConnect();
+      // This stays as a background task
+      _tryInitHealthConnect();
+    } catch (e) {
+      debugPrint("Health Init Error: $e");
+    } finally {
+      _isProcessingPermission = false;
+    }
   }
   void _initLivePedometerUI() {
     if (!mounted) return;
 
     setState(() => _activeStepEngine = "Live Hardware Sensor");
+    final duration = PerformanceManager.isLowEndDevice
+        ? const Duration(seconds: 2)
+        : const Duration(milliseconds: 500);
 
     // 🚀 PASSIVE LISTENER: Check the shared memory twice a second
-    _passiveUiTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+    _passiveUiTimer = Timer.periodic( duration, (timer) async {
       if (!mounted) {
         timer.cancel();
         return;
@@ -269,7 +288,7 @@ class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> w
             SliverToBoxAdapter(child: _buildHeader(theme, colorScheme)),
 
             // 🚀 THE SAMSUNG BRIDGE (Only appears on Android if steps are 0)
-            _buildSamsungBridgeCard(theme, displaySteps),
+            _buildGlobalHealthBridge(theme, displaySteps),
 
             _buildMetricsRow(theme, colorScheme, state.dailyRecord, stepGoal),
 
@@ -314,7 +333,8 @@ class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> w
   // ==========================================
   // 🚀 THE SAMSUNG HEALTH SYNC BRIDGE
   // ==========================================
-  Widget _buildSamsungBridgeCard(ThemeData theme, int displaySteps) {
+  Widget _buildGlobalHealthBridge(ThemeData theme, int displaySteps) {
+    // If we are on Web or already have steps, hide it.
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android || displaySteps > 0) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
@@ -324,50 +344,65 @@ class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> w
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.05),
+          color: const Color(0xFF059669).withOpacity(0.05), // Use your Clinical Green
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.blue.withOpacity(0.2)),
+          border: Border.all(color: const Color(0xFF059669).withOpacity(0.2)),
         ),
         child: Column(
           children: [
             Row(
               children: [
-                const Icon(Icons.sync_problem_rounded, color: Colors.blue),
+                const Icon(Icons.sync_rounded, color: Color(0xFF059669)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    "Samsung Health Sync",
-                    style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w800, fontSize: 14, color: theme.brightness == Brightness.dark ? Colors.blueAccent : Colors.blue.shade900),
+                    "Sync Vital Activity", // 🚀 Generic, professional title
+                    style: GoogleFonts.spaceGrotesk(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: const Color(0xFF0F172A)
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              "To see your steps, link your Samsung Health data to our clinical engine. (Tap below, then allow Write permissions)",
-              style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor),
+              "To track your progress, link your phone's activity data (Mi Fitness, Google Fit, etc.) to our clinical engine.",
+              style: GoogleFonts.inter(fontSize: 12, color: theme.hintColor),
             ),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
-              height: 44,
+              height: 48,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                ),
                 onPressed: () async {
                   HapticFeedback.mediumImpact();
                   try {
-                    // 🚀 THE FIX: Use the official system-level action, NOT the hardcoded app package
-                    const intent = AndroidIntent(
+                    // This opens the system settings where they can
+                    // allow Mi Fitness to talk to Health Connect
+                    final intent = AndroidIntent(
                       action: 'androidx.health.ACTION_HEALTH_CONNECT_SETTINGS',
+                      flags: [Flag.FLAG_ACTIVITY_NEW_TASK],
                     );
                     await intent.launch();
                   } catch (e) {
-                    debugPrint("System intent failed, falling back to install prompt: $e");
-                    // Fallback: If they literally don't have it (older phone), open Play Store
                     await Health().installHealthConnect();
                   }
                 },
-                child: const Text("LINK SAMSUNG HEALTH", style: TextStyle(fontFamily: kDisplayFont, color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+                child: Text(
+                    "ACTIVATE STEP SYNC",
+                    style: GoogleFonts.spaceGrotesk(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0
+                    )
+                ),
               ),
             ),
           ],
@@ -575,7 +610,7 @@ class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> w
                       SizedBox(
                         height: 120, // Slightly taller to fit labels
                         width: double.infinity,
-                        child: ClipRect(
+                        child: RepaintBoundary(
                           child: CustomPaint(
                             painter: TrendLinePainter(
                               data: values,
@@ -747,7 +782,7 @@ class TrendLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (data.isEmpty) return;
-
+    final bool isLiteMode = PerformanceManager.isLowEndDevice;
     final double width = size.width;
     final double height = size.height - 30;
     const double bottomOffset = 30.0;
@@ -816,14 +851,25 @@ class TrendLinePainter extends CustomPainter {
 
     fillPath.lineTo(points.last.dx, size.height);
     fillPath.close();
+    if (!isLiteMode) {
+      final Gradient gradient = LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [primaryColor.withOpacity(0.3), primaryColor.withOpacity(0.0)],
+      );
 
-    final Gradient gradient = LinearGradient(
-      begin: Alignment.topCenter, end: Alignment.bottomCenter,
-      colors: [primaryColor.withOpacity(0.3), primaryColor.withOpacity(0.0)],
-    );
-    canvas.drawPath(fillPath, Paint()..shader = gradient.createShader(Rect.fromLTWH(0, 0, width, size.height)));
+      canvas.drawPath(fillPath, Paint()
+        ..shader = gradient.createShader(
+            Rect.fromLTWH(0, 0, width, size.height)));
+      // Draw path shadows only on high-end
+      canvas.drawShadow(path, primaryColor.withOpacity(0.2), 3.0, false);
+    }
 
-    final Paint linePaint = Paint()..color = primaryColor..strokeWidth = 2.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+    final Paint linePaint = Paint()
+      ..color = primaryColor
+      ..strokeWidth = isLiteMode ? 1.5 : 2.5 // 🚀 Thinner line is cheaper to render
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(path, linePaint);
     canvas.drawPath(path, linePaint);
 
     for (int i = 0; i < points.length; i++) {

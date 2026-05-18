@@ -1,3 +1,15 @@
+import java.util.Properties
+import java.io.FileInputStream
+
+// 1. Initialize the properties objects
+val keystorePropertiesFile = rootProject.projectDir.resolve("key.properties")
+val keystoreProperties = Properties()
+
+// 2. Load the file if it exists
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -49,31 +61,31 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePasswordValue = System.getenv("KEYSTORE_PASSWORD")
-            val keyAliasValue = System.getenv("KEY_ALIAS")
-            val keyPasswordValue = System.getenv("KEY_PASSWORD")
-
-            // Only apply signing if the passwords exist (prevents local crashes)
-            if (keystorePasswordValue != null && keyAliasValue != null) {
-                storeFile = file("nutricare-release.jks")
-                storePassword = keystorePasswordValue
-                keyAlias = keyAliasValue
-                keyPassword = keyPasswordValue
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
             }
         }
     }
 
     buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("release")
+        debug {
+            isMinifyEnabled = false
         }
-    }
 
-    buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
+            // ✅ USE RELEASE SIGNING
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

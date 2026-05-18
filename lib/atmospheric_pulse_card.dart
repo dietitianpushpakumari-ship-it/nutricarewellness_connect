@@ -82,7 +82,23 @@ class _AtmosphericPulseCardState extends State<AtmosphericPulseCard> with Ticker
 
     return GestureDetector(
       onTap: focusAction.onAction,
-      child: Container(
+      // 🚀 BULLETPROOF SWIPE LOGIC
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity < -300) {
+          // Swiped Left -> Move Forward
+          HapticFeedback.selectionClick();
+          setState(() {
+            _selectedIndex = (_selectedIndex + 1) % widget.actions.length;
+          });
+        } else if (velocity > 300) {
+          // Swiped Right -> Move Backward
+          HapticFeedback.selectionClick();
+          setState(() {
+            _selectedIndex = (_selectedIndex - 1 + widget.actions.length) % widget.actions.length;
+          });
+        }
+      },  child: Container(
         margin: EdgeInsets.symmetric(horizontal: context.scale(20)),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(context.scale(32)),
@@ -166,29 +182,67 @@ class _AtmosphericPulseCardState extends State<AtmosphericPulseCard> with Ticker
                     ),
                     SizedBox(height: context.scale(12)),
 
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      child: Column(
-                        key: ValueKey(focusAction.title),
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            focusAction.title,
-                            style: TextStyle(fontFamily: 'Space Grotesk', fontSize: context.scale(22), fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5, height: 1.1),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: SizedBox( // 🚀 THE FIX: Lock the height of this middle section!
+                      key: ValueKey(focusAction.title),
+                      height: context.scale(96), // 90px fits BOTH the gallery and the 2-line text perfectly
+                      width: double.infinity,
+                        child: SizedBox(
+                          key: ValueKey(focusAction.title),
+                          height: context.scale(96),
+                          width: double.infinity,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (focusAction.state == PulseState.feed) ...[
+                                // 🎴 FEED LAYOUT
+                                Text(
+                                  focusAction.title,
+                                  maxLines: 1, // 🚀 FORCE 1 LINE
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontFamily: 'Space Grotesk',
+                                      fontSize: context.scale(18),
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                      height: 1.1
+                                  ),
+                                ),
+                                SizedBox(height: context.scale(8)), // Tighter gap
+                                if (focusAction.customContent != null) focusAction.customContent!,
+                              ] else ...[
+                                // 📝 STANDARD LAYOUT
+                                Text(
+                                  focusAction.title,
+                                  maxLines: 1, // 🚀 FORCE 1 LINE
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontFamily: 'Space Grotesk',
+                                      fontSize: context.scale(22),
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                      height: 1.1
+                                  ),
+                                ),
+                                SizedBox(height: context.scale(4)),
+                                Text(
+                                  focusAction.subtitle,
+                                  maxLines: 2, // 🚀 MAX 2 LINES
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: context.scale(13),
+                                      fontWeight: FontWeight.w500,
+                                      color: isDark ? Colors.white60 : Colors.black54
+                                  ),
+                                ),
+                              ]
+                            ],
                           ),
-                          SizedBox(height: context.scale(4)),
-                          Text(
-                            focusAction.subtitle,
-                            style: TextStyle(fontFamily: 'Inter', fontSize: context.scale(13), fontWeight: FontWeight.w500, color: isDark ? Colors.white60 : Colors.black54),
-                          ),
-                          // 🚀 INJECT CUSTOM CONTENT (THE GALLERY) HERE
-                          if (focusAction.customContent != null) ...[
-                            SizedBox(height: context.scale(16)),
-                            focusAction.customContent!,
-                          ],
-                        ],
-                      ),
+                        ),
                     ),
+                  ),
 
                     SizedBox(height: context.scale(24)),
                     _buildOrbTimeline(context, widget.actions),
@@ -201,26 +255,30 @@ class _AtmosphericPulseCardState extends State<AtmosphericPulseCard> with Ticker
       ),
     );
   }
-
   Widget _buildOrbTimeline(BuildContext context, List<PulseAction> actions) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
+    return SizedBox( // 🚀 Wrap in SizedBox to define a strict height
       height: context.scale(60),
       child: Stack(
-        alignment: Alignment.centerLeft,
-        children: [
-          Positioned(
-            left: context.scale(16), right: context.scale(16), top: context.scale(15),
-            child: Container(height: 2, color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: actions.asMap().entries.map((entry) {
+          alignment: Alignment.centerLeft,
+          children: [
+      // Background Line
+      Positioned(
+      left: context.scale(16),
+      right: context.scale(16),
+      top: context.scale(15),
+      child: Container(height: 2, color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
+    ),
+
+    SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    physics: const BouncingScrollPhysics(),
+    child: Row(
+    mainAxisSize: MainAxisSize.min, // 🚀 FIX: Prevents Row from demanding infinite space
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: actions.asMap().entries.map((entry) {
+
                 int index = entry.key;
                 PulseAction action = entry.value;
                 bool isSelected = index == _selectedIndex;
@@ -244,17 +302,21 @@ class _AtmosphericPulseCardState extends State<AtmosphericPulseCard> with Ticker
                                 width: context.scale(32), height: context.scale(32),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: isSelected ? Colors.white : (isDark ? Colors.black.withOpacity(0.4) : Colors.white.withOpacity(0.5)),
+                                  // 🚀 THE FIX: If selected, fill it completely with the action's specific color
+                                  color: isSelected ? action.color : (isDark ? Colors.black.withOpacity(0.4) : Colors.white.withOpacity(0.5)),
                                   border: Border.all(
-                                    color: isSelected ? Colors.white : (action.isElapsed ? action.color : (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05))),
+                                    // 🚀 THE FIX: Ensure border matches the new solid color
+                                    color: isSelected ? action.color : (action.isElapsed ? action.color : (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05))),
                                     width: isSelected || action.isElapsed ? 2 : 1,
                                   ),
-                                  boxShadow: action.isElapsed ? [BoxShadow(color: action.color.withOpacity(glowOpacity), blurRadius: 10, spreadRadius: 1)] : null,
+                                  // 🚀 THE FIX: Selected orbs get a permanent, beautiful colored shadow
+                                  boxShadow: (isSelected || action.isElapsed) ? [BoxShadow(color: action.color.withOpacity(isSelected ? 0.4 : glowOpacity), blurRadius: 10, spreadRadius: 1)] : null,
                                 ),
                                 child: Icon(
                                   action.icon,
                                   size: context.scale(14),
-                                  color: isSelected ? Colors.black : (action.isElapsed ? action.color : (isDark ? Colors.white54 : Colors.black54)),
+                                  // 🚀 THE FIX: If selected, icon is always crisp White for contrast
+                                  color: isSelected ? Colors.white : (action.isElapsed ? action.color : (isDark ? Colors.white54 : Colors.black54)),
                                 ),
                               );
                             }
@@ -264,7 +326,8 @@ class _AtmosphericPulseCardState extends State<AtmosphericPulseCard> with Ticker
                           _getShortLabel(action.state),
                           style: TextStyle(
                             fontFamily: 'Inter', fontSize: context.scale(9), fontWeight: FontWeight.w800, letterSpacing: 1.0,
-                            color: isSelected ? (isDark ? Colors.white : Colors.black87) : (isDark ? Colors.white30 : Colors.black38),
+                            // 🚀 THE FIX: Make the text label adopt the color of the selected action
+                            color: isSelected ? action.color : (isDark ? Colors.white30 : Colors.black38),
                           ),
                         ),
                       ],
@@ -278,7 +341,6 @@ class _AtmosphericPulseCardState extends State<AtmosphericPulseCard> with Ticker
       ),
     );
   }
-
   String _getShortLabel(PulseState state) {
     switch (state) {
       case PulseState.workout: return "WORKOUT";

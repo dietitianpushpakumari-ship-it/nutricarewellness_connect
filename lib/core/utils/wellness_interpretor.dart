@@ -97,34 +97,54 @@ class WellnessInterpreter {
     return insights;
   }
 
-  // 📊 CALCULATE SCORE (0-100)
-  static int calculateWellnessScore(List<ClientLogModel> records) {
-    if (records.isEmpty) return 0;
+  // ====================================================================
+  // 📊 CALCULATE SCORE (0-100) - ZERO-BASED EARNED MODEL
+  // ====================================================================
 
-    double totalScore = 0;
-    int days = 0;
+  static int _calculateDailyScore(ClientLogModel record) {
+    int score = 0; // 🚀 EVERYONE STARTS AT ZERO
 
-    for (var record in records) {
-      days++;
-      int daily = 50; // Base baseline
+    // --- 1. DIET COMPLIANCE (40 Points Max) ---
+    // Instead of penalizing, reward them for what they got right.
+    if (record.mealLogs.isNotEmpty) {
+      int totalMeals = record.mealLogs.length;
+      int followedMeals = record.mealLogs.values
+          .where((meal) => meal.status == LogStatus.followed)
+          .length;
 
-      // Metric Bonuses
-      if (record.stepCount > 6000) daily += 15;
-      if (record.totalSleepDurationHours > 6.5) daily += 10;
-      if (record.hydrationLiters > 2.0) daily += 10;
-      if (record.breathingMinutes > 5) daily += 10;
-
-      // 🎯 Meal Adherence Penalties/Bonuses from the Map
-      int deviations = record.mealLogs.values.where((m) => m.status == LogStatus.deviated).length;
-      daily -= (deviations * 5);
-
-      totalScore += daily.clamp(0, 100);
+      // Calculate percentage of perfect meals and award points
+      double dietPercentage = followedMeals / totalMeals;
+      score += (dietPercentage * 40).round();
     }
 
-    return days > 0 ? (totalScore / days).round() : 0;
+    // --- 2. LIFESTYLE BONUSES (60 Points Max) ---
+    // (Matched exactly to your ClientLogModel properties)
+
+    if (record.stepCount > 6000) score += 15;
+    if (record.totalSleepDurationHours > 6.5) score += 15;
+    if (record.hydrationLiters > 2.0) score += 15;
+    if (record.breathingMinutes > 5) score += 15;
+
+    // Safety cap
+    return score.clamp(0, 100);
   }
 
+  static int calculateWellnessScore(List<ClientLogModel> records) {
+    if (records.isEmpty) return 0; // Ghost client = 0 score
+
+    int totalScore = 0;
+
+    for (var record in records) {
+      totalScore += _calculateDailyScore(record);
+    }
+
+    // Average the score across the days they have logged
+    return (totalScore / records.length).round().clamp(0, 100);
+  }
+
+  // ====================================================================
   // 🎯 ATOMIC COMPLIANCE LOGIC
+  // ====================================================================
   static Map<String, int> getMealCompliance(List<ClientLogModel> records) {
     int followed = 0;
     int skipped = 0;

@@ -288,7 +288,7 @@ class _EliteMealCardState extends State<EliteMealCard> with SingleTickerProvider
                         children: [
                           Padding(padding: const EdgeInsets.only(top: 6), child: Icon(Icons.circle, size: 6, color: neonGreen.withOpacity(0.8))),
                           const SizedBox(width: 10),
-                          Expanded(child: Text("${item.foodItemName} (${item.quantity} ${item.unit})", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white))),
+                          Expanded(child: Text("${item.foodItemName} (${item.quantity} ${item.unit})", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white))),
                         ],
                       ),
                       if (bundleChildren.isNotEmpty)
@@ -300,7 +300,7 @@ class _EliteMealCardState extends State<EliteMealCard> with SingleTickerProvider
                               child: Row(
                                 children: [
                                   Text("- ", style: TextStyle(color: Colors.grey.shade600)),
-                                  Expanded(child: Text("${bc.foodItemName} (${bc.quantity} ${bc.unit})", style: TextStyle(fontSize: 13, color: Colors.grey.shade400))),
+                                  Expanded(child: Text("${bc.foodItemName} (${bc.quantity} ${bc.unit})", style: TextStyle(fontSize: 15, color: Colors.grey.shade400))),
                                 ],
                               ),
                             )).toList(),

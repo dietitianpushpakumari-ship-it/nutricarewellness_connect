@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -84,7 +85,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
-
+// 🚀 ADD THIS: Keeps track of the last time we updated the UI
+  DateTime _lastStepUiUpdate = DateTime.now();
   late AnimationController _waveController;
 
   // 🚀 PEDOMETER VARIABLES
@@ -171,10 +173,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
       calculated = 0;
     }
 
-    setState(() {
+    // 🚀 THE MISSING FIX: Throttle UI Updates to every 3 seconds
+    final now = DateTime.now();
+    if (now.difference(_lastStepUiUpdate).inSeconds >= 3) {
+      setState(() {
+        _displaySteps = calculated;
+      });
+      _lastStepUiUpdate = now;
+    } else {
+      // Just update the variable silently without rebuilding the screen
       _displaySteps = calculated;
-    });
+    }
 
+    // Disk save throttling (You already had this, which is good!)
     if (_diskSaveTimer?.isActive ?? false) {
       _diskSaveTimer!.cancel();
     }
@@ -433,12 +444,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     dailySequence.add(PulseAction(
       state: PulseState.feed,
       title: "Community Feed",
-      subtitle: "Discover new recipes and wellness transformations.",
+      subtitle: "", // 🚀 Shorter text gives more room to images
       actionText: "VIEW ALL",
       icon: Icons.photo_library_rounded,
-      color: const Color(0xFFFF4081), // Pink/Rose
+      color: const Color(0xFFFF4081),
       isElapsed: false,
-      customContent: _buildMiniGallery(isDark), // 🚀 Injects the beautiful overlapping images!
+      customContent: _buildLiveMiniGallery(isDark), // 🚀 Now completely live!
       onAction: () {
         HapticFeedback.lightImpact();
         showModalBottomSheet(
@@ -453,7 +464,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                   SizedBox(height: context.scale(12)),
                   Container(width: context.scale(40), height: context.scale(4), decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.2), borderRadius: BorderRadius.circular(2))),
                   SizedBox(height: context.scale(16)),
-                  const Expanded(child: DashboardFeedPreview()), // 🚀 Opens the full visual feed
+                  const Expanded(child: DashboardFeedPreview()),
                 ],
               ),
             )
@@ -464,10 +475,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
+          // 🌌 Fake Atmospheric Glow (Zero GPU Cost)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0.8, -0.6), // Top Right
+                  radius: 1.2,
+                  colors: [
+                    colorScheme.primary.withOpacity(isDark ? 0.08 : 0.15),
+                    theme.scaffoldBackgroundColor,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(-0.8, 0.8), // Bottom Left
+                  radius: 1.0,
+                  colors: [
+                    colorScheme.secondary.withOpacity(isDark ? 0.08 : 0.12),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
           // 🌌 Ambient Background Orbs
-          Positioned(top: -150, right: -100, child: Container(width: 400, height: 400, decoration: BoxDecoration(shape: BoxShape.circle, color: colorScheme.primary.withOpacity(isDark ? 0.15 : 0.3)))),
-          Positioned(bottom: 100, left: -150, child: Container(width: 350, height: 350, decoration: BoxDecoration(shape: BoxShape.circle, color: colorScheme.secondary.withOpacity(isDark ? 0.15 : 0.2)))),
-          Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80), child: Container(color: Colors.transparent))),
+       //   Positioned(top: -150, right: -100, child: Container(width: 400, height: 400, decoration: BoxDecoration(shape: BoxShape.circle, color: colorScheme.primary.withOpacity(isDark ? 0.15 : 0.3)))),
+         // Positioned(bottom: 100, left: -150, child: Container(width: 350, height: 350, decoration: BoxDecoration(shape: BoxShape.circle, color: colorScheme.secondary.withOpacity(isDark ? 0.15 : 0.2)))),
+         // Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80), child: Container(color: Colors.transparent))),
 
           NotificationListener<UserScrollNotification>(
             onNotification: (notification) {
@@ -493,24 +533,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                       children: [
                         // 1. Greeting
                         Expanded(
-                          child: TweenAnimationBuilder<double>(
-                            tween: Tween<double>(begin: 0.0, end: 1.0),
-                            duration: const Duration(milliseconds: 1000),
-                            curve: Curves.easeOutCubic,
-                            builder: (context, value, child) {
-                              final String rawName = widget.client.name?.split(' ').first ?? 'Friend';
-                              final String formattedName = rawName.isNotEmpty ? '${rawName[0].toUpperCase()}${rawName.substring(1).toLowerCase()}' : 'Friend';
-                              return Transform.translate(
-                                offset: Offset(0, 10 * (1 - value)),
-                                child: Opacity(
-                                  opacity: value,
-                                  child: PremiumShimmerText(
-                                    text: "Hi, $formattedName",
-                                    style: TextStyle(fontFamily: 'Inter', fontSize: context.scale(15), fontWeight: FontWeight.w600, color: colorScheme.onSurface.withOpacity(0.9), letterSpacing: -0.5),
+                          child: RepaintBoundary(
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween<double>(begin: 0.0, end: 1.0),
+                              duration: const Duration(milliseconds: 1000),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, value, child) {
+                                final String rawName = widget.client.name?.split(' ').first ?? 'Friend';
+                                final String formattedName = rawName.isNotEmpty ? '${rawName[0].toUpperCase()}${rawName.substring(1).toLowerCase()}' : 'Friend';
+                                return Transform.translate(
+                                  offset: Offset(0, 10 * (1 - value)),
+                                  child: Opacity(
+                                    opacity: value,
+                                    child: PremiumShimmerText(
+                                      text: "Hi, $formattedName",
+                                      style: TextStyle(fontFamily: 'Inter', fontSize: context.scale(15), fontWeight: FontWeight.w600, color: colorScheme.onSurface.withOpacity(0.9), letterSpacing: -0.5),
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
                         ),
 
@@ -583,7 +625,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                   sliver: SliverGrid.count(
                     crossAxisCount: 2, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 1.40,
                     children: [
-                      MiniHydrationCard(currentLiters: waterIntake, goalLiters: waterGoal, waveAnimation: _waveController, onTap: () { if(state.activePlan != null) showModalBottomSheet(isDismissible: false, context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => HydrationDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyRecord, currentIntake: waterIntake)); }, onQuickAdd: () => _quickAddWater(notifier, waterIntake)),
+                      RepaintBoundary(child: MiniHydrationCard(currentLiters: waterIntake, goalLiters: waterGoal, waveAnimation: _waveController, onTap: () { if(state.activePlan != null) showModalBottomSheet(isDismissible: false, context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => HydrationDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyRecord, currentIntake: waterIntake)); }, onQuickAdd: () => _quickAddWater(notifier, waterIntake))),
                       MiniStepCard(steps: savedSteps, goal: stepGoal, onTap: () { if(state.activePlan != null) showModalBottomSheet(isDismissible: false, context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MovementDetailSheet.withSteps(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyRecord, currentSteps: savedSteps)); }),
                       MiniSleepCard(hours: sleepHours, score: sleepScore, onTap: () { if(state.activePlan != null) showModalBottomSheet(isDismissible: false, context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => SleepDetailSheet(notifier: notifier, activePlan: state.activePlan!, dailyLog: dailyRecord)); }),
                       MiniBreathingCard(minutesLogged: breathMin, onTap: () => _showBreathingMenu(context, notifier, state.activePlan, dailyRecord, theme, colorScheme, isDark)),
@@ -659,6 +701,83 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     );
   }
 
+  // 🚀 THE FIX: Live Real-Time Gallery from CMS
+// 🚀 THE FIX: Compact, tighter gallery that doesn't break the layout height
+  Widget _buildLiveMiniGallery(bool isDark) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('cms_content')
+          .where('isLive', isEqualTo: true)
+          .orderBy('updated_at', descending: true)
+          .limit(3)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final docs = snapshot.data!.docs;
+
+        return SizedBox(
+          height: context.scale(55), // 🚀 REDUCED from 65px to 42px
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: List.generate(docs.length, (index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+              final String coverUrl = data['coverImageUrl'] ?? '';
+              final bool isNewest = index == 0;
+
+              return Positioned(
+                left: index * context.scale(35), // 🚀 Tighter overlap (was 45)
+                child: Container(
+                  width: context.scale(55), // 🚀 Scaled down image size
+                  height: context.scale(55),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                    borderRadius: BorderRadius.circular(context.scale(10)),
+                    border: Border.all(color: isDark ? Colors.black : Colors.white, width: 2), // Ring
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 4))
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(context.scale(8)),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        coverUrl.isNotEmpty
+                            ? CachedNetworkImage(imageUrl: coverUrl, fit: BoxFit.cover)
+                            : Container(color: Colors.grey.shade800, child: Icon(Icons.article, color: Colors.white54, size: context.scale(16))),
+
+                        if (isNewest) Container(color: Colors.black.withOpacity(0.1)),
+
+                        // 🚨 MINI "NEW" BADGE
+                        if (isNewest)
+                          Positioned(
+                            top: 0, right: 0,
+                            child: Container(
+                              padding: EdgeInsets.symmetric(horizontal: context.scale(4), vertical: context.scale(2)),
+                              decoration: const BoxDecoration(
+                                color: Colors.redAccent,
+                                borderRadius: BorderRadius.only(bottomLeft: Radius.circular(6)),
+                              ),
+                              child: Text(
+                                "NEW",
+                                style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: context.scale(6), fontWeight: FontWeight.w900),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).reversed.toList(),
+          ),
+        );
+      },
+    );
+  }
   void _showBreathingMenu(BuildContext context, DietPlanNotifier notifier, FlatClientDietPlanModel? activePlan, ClientLogModel? dailyRecord, ThemeData theme, ColorScheme colorScheme, bool isDark) {
     if (activePlan == null) return;
 

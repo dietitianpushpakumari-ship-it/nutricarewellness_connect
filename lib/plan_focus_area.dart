@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pure_shift/core/utils/client_model.dart';
+import 'package:pure_shift/layout_utils.dart';
 import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
 import 'package:pure_shift/new/flat_diet_plan_model.dart';
 import 'package:pure_shift/new/provider/diet_plan_provider.dart';
@@ -15,18 +16,30 @@ import 'package:pure_shift/new/dietplan/meal_detail_sheet.dart';
 const String kDisplayFont = 'Space Grotesk';
 const String kBodyFont = 'Inter';
 
+// 🚀 1. INDEPENDENT DATE STATE JUST FOR THIS SCREEN
+final planDateProvider = StateProvider.autoDispose<DateTime>((ref) => DateTime.now());
+
 class PlanTimelineScreen extends ConsumerWidget {
   final ClientModel client;
   const PlanTimelineScreen({super.key, required this.client});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 🚀 2. READ THE INDEPENDENT DATE
+    final localDate = ref.watch(planDateProvider);
+
     final state = ref.watch(dietPlanNotifierProvider(client.id));
     final notifier = ref.read(dietPlanNotifierProvider(client.id).notifier);
 
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    if (state.isLoading || !DateUtils.isSameDay(localDate, state.selectedDate)) {
+      return Scaffold(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          body: Center(child: CircularProgressIndicator(color: colorScheme.primary))
+      );
+    }
 
     final activePlan = state.activePlan;
     if (state.isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -36,10 +49,10 @@ class PlanTimelineScreen extends ConsumerWidget {
     final guidelines = vitals?.clinicalGuidelines ?? {};
 
     // =========================================================================
-    // 🚀 1. EXTRACT UNIQUE MEALS FOR THE DAY
+    // 🚀 3. EXTRACT UNIQUE MEALS (USING LOCAL DATE)
     // =========================================================================
-    final String dayName = DateFormat('EEEE').format(state.selectedDate).toLowerCase();
-    final String dayIndex = "day ${state.selectedDate.weekday}";
+    final String dayName = DateFormat('EEEE').format(localDate).toLowerCase();
+    final String dayIndex = "day ${localDate.weekday}";
     final dayItems = activePlan.allItems.where((i) => i.dayName.trim().toLowerCase() == dayName || i.dayName.trim().toLowerCase() == dayIndex).toList();
 
     if (dayItems.isEmpty && activePlan.allItems.isNotEmpty) {
@@ -52,7 +65,7 @@ class PlanTimelineScreen extends ConsumerWidget {
     final dailyRecord = state.dailyRecord;
 
     // =========================================================================
-    // 🚀 2. INBOX ZERO SORTING
+    // 🚀 4. INBOX ZERO SORTING
     // =========================================================================
     List<String> loggedIds = [];
     List<String> unloggedIds = [];
@@ -68,9 +81,11 @@ class PlanTimelineScreen extends ConsumerWidget {
       }
     }
 
+    // 🚀 5. DATE STRING (USING LOCAL DATE)
     final now = DateTime.now();
-    final isToday = DateUtils.isSameDay(state.selectedDate, now);
-    final dateString = isToday ? "TODAY" : (DateUtils.isSameDay(state.selectedDate, now.subtract(const Duration(days: 1))) ? "YESTERDAY" : DateFormat('MMM dd').format(state.selectedDate).toUpperCase());
+    final isToday = DateUtils.isSameDay(localDate, now);
+    final isYesterday = DateUtils.isSameDay(localDate, now.subtract(const Duration(days: 1)));
+    final dateString = isToday ? "TODAY" : (isYesterday ? "YESTERDAY" : DateFormat('MMM dd').format(localDate).toUpperCase());
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -82,36 +97,54 @@ class PlanTimelineScreen extends ConsumerWidget {
           // ===================================================================
           SliverToBoxAdapter(
             child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 50, 20, 16),
+              padding: EdgeInsets.fromLTRB(context.scale(20), context.scale(50), context.scale(20), context.scale(16)),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF121826) : theme.scaffoldBackgroundColor,
                 border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.black12, width: 1.0)),
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
               ),
-              child: Row(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                  // 🚀 TITLE PUSHED TO TOP
+                  Text(
+                  "LOGBOOK",
+                  style: TextStyle(
+                      fontFamily: kDisplayFont,
+                      fontSize: context.scale(14).clamp(12.0, 16.0),
+                      fontWeight: FontWeight.w800, // Slightly bolder
+                      letterSpacing: 2.5, // Increased tracking for a premium feel
+                      color: colorScheme.onSurface.withOpacity(0.6) // Slightly muted
+                  )
+              ),
+
+              SizedBox(height: context.scale(16)),Row(
                 children: [
-                  Text("LOGBOOK", style: TextStyle(fontFamily: kDisplayFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: colorScheme.onSurface)),
-                  const Spacer(),
+               //
 
-                  _buildProgressIndicator(uniqueMealIds.length, loggedIds.length, colorScheme),
-                  const SizedBox(width: 6),
+                  _buildProgressIndicator(context, uniqueMealIds.length, loggedIds.length, colorScheme),
+                  SizedBox(width: context.scale(6)),
 
-                  _buildHeaderTool(Icons.calendar_today_rounded, dateString, colorScheme, isDark, theme, () async {
+                  _buildHeaderTool(context, Icons.calendar_today_rounded, dateString, colorScheme, isDark, theme, () async {
                     HapticFeedback.selectionClick();
+
+                    // 🚀 6. CALCULATE 5-DAY GRACE PERIOD
+                    final firstAllowedDate = now.subtract(const Duration(days: 5));
+                    final safeInitialDate = localDate.isBefore(firstAllowedDate) ? firstAllowedDate : localDate;
 
                     final picked = await showDatePicker(
                       context: context,
-                      initialDate: state.selectedDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
+                      initialDate: safeInitialDate,
+                      firstDate: firstAllowedDate, // 🚀 Blocks past 5 days
+                      lastDate: now,               // 🚀 Blocks future dates
                       builder: (context, child) {
                         return Theme(
                           data: Theme.of(context).copyWith(
                             colorScheme: colorScheme.copyWith(
-                              primary: const Color(0xFF00E676),    // Selected date circle
-                              onPrimary: Colors.black,             // Text on selected date
-                              surface: isDark ? const Color(0xFF121826) : Colors.white, // Solid Dialog Bg
-                              onSurface: isDark ? Colors.white : Colors.black,          // Text color
+                              primary: const Color(0xFF00E676),
+                              onPrimary: Colors.black,
+                              surface: isDark ? const Color(0xFF121826) : Colors.white,
+                              onSurface: isDark ? Colors.white : Colors.black,
                             ),
                             dialogTheme: DialogThemeData(
                               backgroundColor: isDark ? const Color(0xFF121826) : Colors.white,
@@ -119,7 +152,6 @@ class PlanTimelineScreen extends ConsumerWidget {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                             ),
                           ),
-                          // 🚀 THE ULTIMATE FIX: Force a solid Material backing
                           child: Material(
                             type: MaterialType.canvas,
                             color: isDark ? const Color(0xFF121826) : Colors.white,
@@ -130,86 +162,92 @@ class PlanTimelineScreen extends ConsumerWidget {
                       },
                     );
 
-                    if (picked != null) notifier.selectDate(picked);
-                  }),     const SizedBox(width: 6),
+                    if (picked != null) {
+                      // 🚀 7. UPDATE LOCAL DATE & FETCH
+                      ref.read(planDateProvider.notifier).state = picked;
+                      notifier.selectDate(picked); // Make sure this fetches without altering Home!
+                    }
+                  }),
+                  SizedBox(width: context.scale(6)),
 
                   if (guidelines.isNotEmpty || activePlan.assignedHabits.isNotEmpty) ...[
                     GestureDetector(
                       onTap: () => _showProtocolSheet(context, guidelines, activePlan.assignedHabits, theme),
-                      child: Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: Colors.orangeAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.star_rounded, color: Colors.orangeAccent, size: 14)),
+                      child: Container(padding: EdgeInsets.all(context.scale(7)), decoration: BoxDecoration(color: Colors.orangeAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(6)), child: Icon(Icons.star_rounded, color: Colors.orangeAccent, size: context.scale(16).clamp(14.0, 18.0))),
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: context.scale(6)),
                   ],
 
                   GestureDetector(
                     onTap: () => showModalBottomSheet(
                         context: context,
-                        isScrollControlled: true, // Necessary for the 90% height container
-                        backgroundColor: Colors.transparent, // Background handled by the Container
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
                         builder: (context) => DietPlanViewerSheet(
                           plan: state.activePlan,
                           vitals: state.clinicalVitals,
                         )),
-                    child: Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFF9F1239), size: 14)),
+                    child: Container(padding: EdgeInsets.all(context.scale(7)), decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(6)), child: Icon(Icons.picture_as_pdf_rounded, color: const Color(0xFF9F1239), size: context.scale(16).clamp(14.0, 18.0))),
                   ),
                 ],
-              ),
+              ),]),
             ),
           ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          SliverToBoxAdapter(child: SizedBox(height: context.scale(16))),
 
           // ===================================================================
-          // 2. PENDING MEALS (Always at the Top for Instant Action)
+          // 2. PENDING MEALS
           // ===================================================================
           if (unloggedIds.isNotEmpty) ...[
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Text("PENDING MEALS", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: theme.hintColor)),
+                padding: EdgeInsets.fromLTRB(context.scale(20), 0, context.scale(20), context.scale(12)),
+                child: Text("PENDING MEALS", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(12).clamp(11.0, 14.0), fontWeight: FontWeight.w700, letterSpacing: 1.5, color: theme.hintColor)),
               ),
             ),
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.symmetric(horizontal: context.scale(20)),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
                       (context, index) {
                     final uId = unloggedIds[index];
-                    return _buildPendingCard(context, uId, dayItems, colorScheme, isDark, theme, notifier, activePlan, state.selectedDate);
+                    // 🚀 Pass localDate for overdue calculation
+                    return _buildPendingCard(context, uId, dayItems, colorScheme, isDark, theme, notifier, activePlan, localDate);
                   },
                   childCount: unloggedIds.length,
                 ),
               ),
             ),
           ] else if (uniqueMealIds.isNotEmpty)
-          // ALL DONE STATE (Shown at top if nothing is pending)
+          // ALL DONE STATE
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.only(top: 20, bottom: 40),
+                padding: EdgeInsets.only(top: context.scale(20), bottom: context.scale(40)),
                 child: Column(
                   children: [
-                    Icon(Icons.verified_rounded, size: 50, color: const Color(0xFF00E676).withOpacity(0.8)),
-                    const SizedBox(height: 16),
-                    Text("ALL CAUGHT UP", style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 2.0, color: colorScheme.onSurface)),
-                    const SizedBox(height: 4),
-                    Text("You have verified all meals for this day.", style: TextStyle(fontFamily: kBodyFont, fontSize: 12, color: theme.hintColor)),
+                    Icon(Icons.verified_rounded, size: context.scale(50).clamp(40.0, 60.0), color: const Color(0xFF00E676).withOpacity(0.8)),
+                    SizedBox(height: context.scale(16)),
+                    Text("ALL CAUGHT UP", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(14).clamp(12.0, 16.0), fontWeight: FontWeight.w700, letterSpacing: 2.0, color: colorScheme.onSurface)),
+                    SizedBox(height: context.scale(4)),
+                    Text("You have verified all meals for this day.", style: TextStyle(fontFamily: kBodyFont, fontSize: context.scale(14).clamp(12.0, 16.0), color: theme.hintColor)),
                   ],
                 ),
               ),
             ),
 
           // ===================================================================
-          // 3. THE VAULT / JOURNAL (Builds downwards as you log)
+          // 3. THE VAULT / JOURNAL
           // ===================================================================
           if (loggedIds.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.only(top: 24),
+                padding: EdgeInsets.only(top: context.scale(24)),
                 child: _buildLoggedVault(context, loggedIds, dayItems, dailyRecord, colorScheme, isDark, theme, notifier, activePlan),
               ),
             ),
 
-          const SliverPadding(padding: EdgeInsets.only(bottom: 120)),
+          SliverPadding(padding: EdgeInsets.only(bottom: context.scale(120))),
         ],
       ),
     );
@@ -225,37 +263,39 @@ class PlanTimelineScreen extends ConsumerWidget {
     final String formattedTime = _formatTimeAMPM(firstItem.mealTime);
     final bool isOverdue = _isMealOverdue(firstItem.mealTime, selectedDate);
 
+    // 🚀 PREMIUM OVERDUE COLOR (Terracotta/Warm Coral instead of harsh red)
+    final Color premiumOverdueColor = isDark ? const Color(0xFFE57373) : const Color(0xFFD97757);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: context.scale(10)),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF121826) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isOverdue ? Colors.redAccent.withOpacity(0.3) : (isDark ? Colors.white10 : Colors.black12)),
+        borderRadius: BorderRadius.circular(context.scale(12)),
+        // Subtle border instead of bright red
+        border: Border.all(color: isOverdue ? premiumOverdueColor.withOpacity(0.4) : (isDark ? Colors.white10 : Colors.black12)),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6)],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(context.scale(12)),
           onTap: () {
             HapticFeedback.selectionClick();
             _openLoggingSheet(context, firstItem.mealName, notifier, activePlan, mealItems, null);
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding: EdgeInsets.symmetric(vertical: context.scale(12), horizontal: context.scale(16)),
             child: Row(
               children: [
-                // Minimalist Icon (Pulses if overdue)
                 isOverdue
-                    ? const _PulsingOverdueIcon()
+                    ? _PulsingOverdueIcon(context: context, pulseColor: premiumOverdueColor) // Pass the color down
                     : Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(context.scale(8)),
                   decoration: BoxDecoration(color: color.primary.withOpacity(0.1), shape: BoxShape.circle),
-                  child: Icon(Icons.restaurant_rounded, size: 16, color: color.primary),
+                  child: Icon(Icons.restaurant_rounded, size: context.scale(16).clamp(14.0, 18.0), color: color.primary),
                 ),
-                const SizedBox(width: 14),
+                SizedBox(width: context.scale(14)),
 
-                // Meal Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,28 +306,28 @@ class PlanTimelineScreen extends ConsumerWidget {
                                 formattedTime,
                                 style: TextStyle(
                                     fontFamily: kDisplayFont,
-                                    fontSize: 9,
+                                    fontSize: context.scale(11).clamp(10.0, 12.0),
                                     fontWeight: FontWeight.w700,
-                                    // 🚀 Time fades to grey if overdue, otherwise stays primary
-                                    color: isOverdue ? Colors.grey.shade500 : color.primary,
+                                    color: isOverdue ? theme.hintColor.withOpacity(0.6) : color.primary,
                                     letterSpacing: 1.0
                                 )
                             ),
                             if (isOverdue) ...[
-                              const SizedBox(width: 6),
+                              SizedBox(width: context.scale(6)),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                padding: EdgeInsets.symmetric(horizontal: context.scale(6), vertical: context.scale(2)),
                                 decoration: BoxDecoration(
-                                    color: Colors.redAccent.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(4)
+                                    color: premiumOverdueColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(context.scale(4)),
+                                    border: Border.all(color: premiumOverdueColor.withOpacity(0.2)) // Added a tiny border for crispness
                                 ),
-                                child: const Text(
-                                    "OVERDUE",
+                                child: Text(
+                                    "PENDING", // Changed from "OVERDUE" to feel less aggressive
                                     style: TextStyle(
                                         fontFamily: kDisplayFont,
-                                        fontSize: 7,
-                                        fontWeight: FontWeight.w700, // Bumped to w700 for better contrast
-                                        color: Colors.redAccent,
+                                        fontSize: context.scale(9).clamp(8.0, 10.0),
+                                        fontWeight: FontWeight.w800,
+                                        color: premiumOverdueColor,
                                         letterSpacing: 0.5
                                     )
                                 ),
@@ -295,14 +335,16 @@ class PlanTimelineScreen extends ConsumerWidget {
                             ],
                           ]
                       ),
-                      const SizedBox(height: 2),
-                      Text(firstItem.mealName.toUpperCase(), style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, fontWeight: FontWeight.w500, color: color.onSurface, letterSpacing: -0.5)),
+                      SizedBox(height: context.scale(4)),
+                      Text(
+                          firstItem.mealName.toUpperCase(),
+                          style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(14).clamp(13.0, 16.0), fontWeight: FontWeight.w700, color: color.onSurface, letterSpacing: -0.5)
+                      ),
                     ],
                   ),
                 ),
 
-                // Subtle Capture Hint
-                Icon(Icons.add_a_photo_rounded, size: 18, color: color.primary.withOpacity(0.5)),
+                Icon(Icons.add_a_photo_rounded, size: context.scale(20).clamp(18.0, 24.0), color: color.primary.withOpacity(0.4)),
               ],
             ),
           ),
@@ -310,17 +352,16 @@ class PlanTimelineScreen extends ConsumerWidget {
       ),
     );
   }
-
   // ===========================================================================
-  // 🚀 WIDGET: THE LOGGED VAULT (Vertical Photo Journal)
+  // 🚀 WIDGET: THE LOGGED VAULT
   // ===========================================================================
   Widget _buildLoggedVault(BuildContext context, List<String> loggedIds, List<FlatDietPlanItem> dayItems, ClientLogModel? dailyRecord, ColorScheme color, bool isDark, ThemeData theme, DietPlanNotifier notifier, FlatClientDietPlanModel activePlan) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: Text("TODAY'S JOURNAL", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: const Color(0xFF00E676))),
+          padding: EdgeInsets.fromLTRB(context.scale(20), 0, context.scale(20), context.scale(16)),
+          child: Text("TODAY'S JOURNAL", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(12).clamp(11.0, 14.0), fontWeight: FontWeight.w700, letterSpacing: 1.5, color: const Color(0xFF00E676))),
         ),
 
         ...loggedIds.map((mId) {
@@ -334,7 +375,6 @@ class PlanTimelineScreen extends ConsumerWidget {
     );
   }
 
-
   // ===========================================================================
   // 📸 WIDGET: PREMIUM FULL-BLEED JOURNAL CARD
   // ===========================================================================
@@ -343,7 +383,6 @@ class PlanTimelineScreen extends ConsumerWidget {
     final List<String> photos = rawPhotos.map((e) => e.toString()).toList();
     final String? coverImage = photos.isNotEmpty ? photos.last : null;
 
-    // Determine Adherence Status
     final String statusStr = mealLog?.status.name ?? 'followed';
     final bool isSkipped = statusStr == 'skipped';
     final bool isDeviated = statusStr == 'deviated';
@@ -368,19 +407,18 @@ class PlanTimelineScreen extends ConsumerWidget {
         _openLoggingSheet(context, firstItem.mealName, notifier, activePlan, mealItems, mealLog);
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16, left: 20, right: 20),
-        height: 120, // Tighter height so it doesn't eat the whole screen
+        margin: EdgeInsets.only(bottom: context.scale(16), left: context.scale(20), right: context.scale(20)),
+        height: context.scale(130),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1A2232) : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(context.scale(16)),
           border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(context.scale(16)),
           child: Stack(
             children: [
-              // FULL BLEED PHOTO
               if (coverImage != null && !isSkipped)
                 SizedBox(
                   width: double.infinity,
@@ -388,67 +426,59 @@ class PlanTimelineScreen extends ConsumerWidget {
                   child: CachedNetworkImage(imageUrl: coverImage, fit: BoxFit.cover),
                 )
               else
-                Center(child: Icon(Icons.restaurant_rounded, size: 40, color: theme.dividerColor.withOpacity(0.5))),
+                Center(child: Icon(Icons.restaurant_rounded, size: context.scale(40).clamp(32.0, 48.0), color: theme.dividerColor.withOpacity(0.5))),
 
-              // DARK GRADIENT FOR READABILITY
               if (coverImage != null && !isSkipped)
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withOpacity(0.1),
-                        Colors.black.withOpacity(0.4),
-                        Colors.black.withOpacity(0.8),
-                      ],
+                      colors: [Colors.black.withOpacity(0.1), Colors.black.withOpacity(0.4), Colors.black.withOpacity(0.8)],
                     ),
                   ),
                 ),
 
-              // STATUS PILL (Top Left)
+              // STATUS PILL
               Positioned(
-                top: 12, left: 12,
+                top: context.scale(12), left: context.scale(12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  padding: EdgeInsets.symmetric(horizontal: context.scale(8), vertical: context.scale(4)),
+                  decoration: BoxDecoration(color: statusColor.withOpacity(0.9), borderRadius: BorderRadius.circular(context.scale(8))),
                   child: Row(
                     children: [
-                      Icon(statusIcon, size: 10, color: Colors.white),
-                      const SizedBox(width: 4),
-                      Text(statusText, style: const TextStyle(fontFamily: kDisplayFont, fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.5)),
+                      Icon(statusIcon, size: context.scale(12).clamp(10.0, 14.0), color: Colors.white),
+                      SizedBox(width: context.scale(4)),
+                      Text(statusText, style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(10).clamp(9.0, 11.0), fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.5)),
                     ],
                   ),
                 ),
               ),
 
-              // MULTI-PHOTO BADGE (Top Right)
+              // MULTI-PHOTO BADGE
               if (photos.length > 1)
                 Positioned(
-                  top: 12, right: 12,
+                  top: context.scale(12), right: context.scale(12),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: EdgeInsets.symmetric(horizontal: context.scale(8), vertical: context.scale(4)),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(context.scale(8)),
                       border: Border.all(color: Colors.white24),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.photo_library_rounded, size: 10, color: Colors.white),
-                        const SizedBox(width: 4),
-                        Text("+${photos.length - 1}", style: const TextStyle(fontFamily: kDisplayFont, fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white)),
+                        Icon(Icons.photo_library_rounded, size: context.scale(12).clamp(10.0, 14.0), color: Colors.white),
+                        SizedBox(width: context.scale(4)),
+                        Text("+${photos.length - 1}", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(10).clamp(9.0, 11.0), fontWeight: FontWeight.w700, color: Colors.white)),
                       ],
                     ),
                   ),
                 ),
 
-              // MEAL INFO (Bottom)
+              // MEAL INFO
               Positioned(
-                bottom: 12, left: 16, right: 16,
+                bottom: context.scale(12), left: context.scale(16), right: context.scale(16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -458,18 +488,18 @@ class PlanTimelineScreen extends ConsumerWidget {
                         children: [
                           Text(
                               _formatTimeAMPM(firstItem.mealTime),
-                              style: TextStyle(fontFamily: kDisplayFont, fontSize: 9, fontWeight: FontWeight.w700, color: coverImage != null ? Colors.white70 : color.primary, letterSpacing: 1.0)
+                              style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(11).clamp(10.0, 12.0), fontWeight: FontWeight.w700, color: coverImage != null ? Colors.white70 : color.primary, letterSpacing: 1.0)
                           ),
-                          const SizedBox(height: 2),
+                          SizedBox(height: context.scale(2)),
                           Text(
                             firstItem.mealName.toUpperCase(),
-                            style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, fontWeight: FontWeight.w700, color: coverImage != null ? Colors.white : color.onSurface, letterSpacing: -0.5),
+                            style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(14).clamp(13.0, 16.0), fontWeight: FontWeight.w700, color: coverImage != null ? Colors.white : color.onSurface, letterSpacing: -0.5),
                             maxLines: 1, overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    Icon(Icons.edit_rounded, size: 14, color: coverImage != null ? Colors.white54 : theme.hintColor),
+                    Icon(Icons.edit_rounded, size: context.scale(16).clamp(14.0, 18.0), color: coverImage != null ? Colors.white54 : theme.hintColor),
                   ],
                 ),
               ),
@@ -480,9 +510,6 @@ class PlanTimelineScreen extends ConsumerWidget {
     );
   }
 
-  // ===========================================================================
-  // 🚀 LOGIC: OPEN YOUR CUSTOM MEAL DETAIL SHEET
-  // ===========================================================================
   void _openLoggingSheet(BuildContext context, String mealName, DietPlanNotifier notifier, FlatClientDietPlanModel plan, List<FlatDietPlanItem> items, MealEntry? log) {
     showModalBottomSheet(
       context: context,
@@ -498,15 +525,10 @@ class PlanTimelineScreen extends ConsumerWidget {
     );
   }
 
-  // ===========================================================================
-  // 🚀 TIME & OVERDUE HELPERS
-  // ===========================================================================
   String _formatTimeAMPM(String? timeStr) {
     if (timeStr == null || timeStr.trim().isEmpty) return "--:--";
     try {
-      if (timeStr.toUpperCase().contains("AM") || timeStr.toUpperCase().contains("PM")) {
-        return timeStr.toUpperCase();
-      }
+      if (timeStr.toUpperCase().contains("AM") || timeStr.toUpperCase().contains("PM")) return timeStr.toUpperCase();
       final parts = timeStr.split(":");
       int h = int.parse(parts[0].trim());
       int m = parts.length > 1 ? int.parse(parts[1].trim()) : 0;
@@ -520,10 +542,7 @@ class PlanTimelineScreen extends ConsumerWidget {
   bool _isMealOverdue(String? timeStr, DateTime selectedDate) {
     if (timeStr == null || timeStr.isEmpty) return false;
     final now = DateTime.now();
-
-    if (selectedDate.year < now.year || (selectedDate.year == now.year && selectedDate.month < now.month) || (selectedDate.year == now.year && selectedDate.month == now.month && selectedDate.day < now.day)) {
-      return true;
-    }
+    if (selectedDate.year < now.year || (selectedDate.year == now.year && selectedDate.month < now.month) || (selectedDate.year == now.year && selectedDate.month == now.month && selectedDate.day < now.day)) return true;
     if (!DateUtils.isSameDay(selectedDate, now)) return false;
 
     try {
@@ -539,45 +558,40 @@ class PlanTimelineScreen extends ConsumerWidget {
 
       final mealTime = DateTime(now.year, now.month, now.day, hour, minute);
       return now.isAfter(mealTime.add(const Duration(minutes: 30)));
-    } catch (e) {
-      return false;
-    }
+    } catch (e) { return false; }
   }
 
-  // ===========================================================================
-  // 🚀 UI HELPERS
-  // ===========================================================================
-  Widget _buildHeaderTool(IconData icon, String label, ColorScheme color, bool isDark, ThemeData theme, VoidCallback onTap) {
+  Widget _buildHeaderTool(BuildContext context, IconData icon, String label, ColorScheme color, bool isDark, ThemeData theme, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.04), borderRadius: BorderRadius.circular(6)),
+        padding: EdgeInsets.symmetric(horizontal: context.scale(10), vertical: context.scale(6)),
+        decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.04), borderRadius: BorderRadius.circular(context.scale(6))),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 10, color: color.onSurface),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontFamily: kDisplayFont, fontSize: 9, fontWeight: FontWeight.w700, color: color.onSurface)),
+            Icon(icon, size: context.scale(12).clamp(10.0, 14.0), color: color.onSurface),
+            SizedBox(width: context.scale(6)),
+            Text(label, style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(11).clamp(10.0, 12.0), fontWeight: FontWeight.w700, color: color.onSurface)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildProgressIndicator(int total, int completed, ColorScheme color) {
+  Widget _buildProgressIndicator(BuildContext context, int total, int completed, ColorScheme color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: color.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+      padding: EdgeInsets.symmetric(horizontal: context.scale(10), vertical: context.scale(6)),
+      decoration: BoxDecoration(color: color.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(context.scale(6))),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-              width: 12, height: 12,
+              width: context.scale(14), height: context.scale(14),
               child: CircularProgressIndicator(value: total > 0 ? (completed / total) : 0, strokeWidth: 2, backgroundColor: color.primary.withOpacity(0.2), valueColor: AlwaysStoppedAnimation(color.primary))
           ),
-          const SizedBox(width: 8),
-          Text("$completed/$total", style: TextStyle(fontFamily: kDisplayFont, fontSize: 10, fontWeight: FontWeight.w700, color: color.primary)),
+          SizedBox(width: context.scale(8)),
+          Text("$completed/$total", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(12).clamp(11.0, 14.0), fontWeight: FontWeight.w700, color: color.primary)),
         ],
       ),
     );
@@ -599,121 +613,91 @@ class PlanTimelineScreen extends ConsumerWidget {
 
         return Container(
           constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0), // Removed bottom padding since we use SafeArea
+          padding: EdgeInsets.fromLTRB(context.scale(20), context.scale(12), context.scale(20), 0),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF121826) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(context.scale(24))),
           ),
           child: SafeArea(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 🛠️ DRAG HANDLE
-                Center(
-                  child: Container(
-                    width: 32,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white10 : Colors.black12,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
+                Center(child: Container(width: context.scale(32), height: context.scale(4), decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.black12, borderRadius: BorderRadius.circular(context.scale(2))))),
+                SizedBox(height: context.scale(20)),
 
-                // 🚀 COMPACT HEADER
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.verified_user_rounded, color: colorScheme.primary, size: 16),
+                      padding: EdgeInsets.all(context.scale(8)),
+                      decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.1), shape: BoxShape.circle),
+                      child: Icon(Icons.verified_user_rounded, color: colorScheme.primary, size: context.scale(20).clamp(18.0, 24.0)),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: context.scale(12)),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            "DAILY PROTOCOL",
-                            style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 1.5, color: colorScheme.onSurface),
-                          ),
-                          Text(
-                            "Core principles for success",
-                            style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: 10, fontWeight: FontWeight.w500),
-                          ),
+                          Text("DAILY PROTOCOL", style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, fontSize: context.scale(14).clamp(13.0, 16.0), letterSpacing: 1.5, color: colorScheme.onSurface)),
+                          Text("Core principles for success", style: TextStyle(fontFamily: kBodyFont, color: theme.hintColor, fontSize: context.scale(13).clamp(12.0, 14.0), fontWeight: FontWeight.w500)),
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: Icon(Icons.close_rounded, size: 20, color: theme.hintColor),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
+                    IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.close_rounded, size: context.scale(24).clamp(20.0, 28.0), color: theme.hintColor)),
                   ],
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: context.scale(24)),
 
-                // 📜 CONTENT AREA
                 Flexible(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
-                    // Increased bottom padding here so text doesn't touch the screen edge
-                    padding: const EdgeInsets.only(bottom: 40),
+                    padding: EdgeInsets.only(bottom: context.scale(40)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (habits.isNotEmpty) ...[
-                          _buildSectionLabel("CORE HABITS", theme),
-                          const SizedBox(height: 12),
+                          _buildSectionLabel(context, "CORE HABITS", theme),
+                          SizedBox(height: context.scale(12)),
                           Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: EdgeInsets.all(context.scale(16)),
                             decoration: BoxDecoration(
                               color: colorScheme.primary.withOpacity(0.03),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(context.scale(16)),
                               border: Border.all(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
                             ),
                             child: Column(
                               children: habits.map((habit) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12.0),
+                                padding: EdgeInsets.only(bottom: context.scale(12.0)),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Padding(padding: const EdgeInsets.only(top: 2.0), child: Icon(Icons.star_rounded, size: 14, color: colorScheme.primary)),
-                                    const SizedBox(width: 12),
+                                    Padding(padding: EdgeInsets.only(top: context.scale(2.0)), child: Icon(Icons.star_rounded, size: context.scale(16).clamp(14.0, 18.0), color: colorScheme.primary)),
+                                    SizedBox(width: context.scale(12)),
                                     Expanded(
-                                      child: Text(
-                                        habit,
-                                        style: TextStyle(fontFamily: kBodyFont, fontSize: 11, height: 1.4, color: colorScheme.onSurface, fontWeight: FontWeight.w600),
-                                      ),
+                                      child: Text(habit, style: TextStyle(fontFamily: kBodyFont, fontSize: context.scale(16).clamp(15.0, 18.0), height: 1.4, color: colorScheme.onSurface, fontWeight: FontWeight.w600)),
                                     ),
                                   ],
                                 ),
                               )).toList(),
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          SizedBox(height: context.scale(24)),
                         ],
 
                         if (guidelines.isNotEmpty) ...[
-                          _buildSectionLabel("CLINICAL GUIDELINES", theme),
-                          const SizedBox(height: 12),
+                          _buildSectionLabel(context, "CLINICAL GUIDELINES", theme),
+                          SizedBox(height: context.scale(12)),
                           ...guidelines.entries.map((e) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12.0),
+                            padding: EdgeInsets.only(bottom: context.scale(12.0)),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Padding(padding: const EdgeInsets.only(top: 2.0), child: Icon(Icons.medical_information_rounded, size: 14, color: Colors.blueAccent.shade200)),
-                                const SizedBox(width: 12),
+                                Padding(padding: EdgeInsets.only(top: context.scale(2.0)), child: Icon(Icons.medical_information_rounded, size: context.scale(16).clamp(14.0, 18.0), color: Colors.blueAccent.shade200)),
+                                SizedBox(width: context.scale(12)),
                                 Expanded(
                                   child: RichText(
                                     text: TextSpan(
-                                      style: TextStyle(fontFamily: kBodyFont, color: colorScheme.onSurface, height: 1.5, fontSize: 11),
+                                      style: TextStyle(fontFamily: kBodyFont, color: colorScheme.onSurface, height: 1.5, fontSize: context.scale(16).clamp(15.0, 18.0)),
                                       children: [
                                         TextSpan(text: "${e.key}: ", style: const TextStyle(fontWeight: FontWeight.w700)),
                                         TextSpan(text: e.value, style: TextStyle(color: colorScheme.onSurface.withOpacity(0.7), fontWeight: FontWeight.w500)),
@@ -736,26 +720,23 @@ class PlanTimelineScreen extends ConsumerWidget {
       },
     );
   }
-// Helper for labels to keep things tidy
-  Widget _buildSectionLabel(String text, ThemeData theme) {
+
+  Widget _buildSectionLabel(BuildContext context, String text, ThemeData theme) {
     return Text(
       text,
-      style: TextStyle(
-        fontFamily: kDisplayFont,
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        color: theme.hintColor.withOpacity(0.6),
-        letterSpacing: 1.2,
-      ),
+      style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(12).clamp(11.0, 14.0), fontWeight: FontWeight.w700, color: theme.hintColor.withOpacity(0.6), letterSpacing: 1.2),
     );
   }
 }
 
+
 // ===========================================================================
-// 🚀 SUBTLE BREATHING ANIMATION FOR OVERDUE MEALS
+// 🚀 SUBTLE BREATHING ANIMATION FOR PENDING MEALS
 // ===========================================================================
 class _PulsingOverdueIcon extends StatefulWidget {
-  const _PulsingOverdueIcon({Key? key}) : super(key: key);
+  final BuildContext context;
+  final Color pulseColor; // 🚀 Added to accept the premium color
+  const _PulsingOverdueIcon({Key? key, required this.context, required this.pulseColor}) : super(key: key);
 
   @override
   State<_PulsingOverdueIcon> createState() => _PulsingOverdueIconState();
@@ -768,8 +749,10 @@ class _PulsingOverdueIconState extends State<_PulsingOverdueIcon> with SingleTic
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.05, end: 0.25).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    // 🚀 Slowed down to 3 seconds for a luxurious, calm "breathing" effect
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat(reverse: true);
+    // 🚀 Narrowed the opacity range so it doesn't flash too bright
+    _animation = Tween<double>(begin: 0.05, end: 0.15).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -784,12 +767,13 @@ class _PulsingOverdueIconState extends State<_PulsingOverdueIcon> with SingleTic
       animation: _animation,
       builder: (context, child) {
         return Container(
-          padding: const EdgeInsets.all(8),
+          padding: EdgeInsets.all(widget.context.scale(8)),
           decoration: BoxDecoration(
-            color: Colors.redAccent.withOpacity(_animation.value),
+            color: widget.pulseColor.withOpacity(_animation.value),
             shape: BoxShape.circle,
+            border: Border.all(color: widget.pulseColor.withOpacity(0.2)), // Crisp subtle edge
           ),
-          child: const Icon(Icons.restaurant_rounded, size: 16, color: Colors.redAccent),
+          child: Icon(Icons.restaurant_rounded, size: widget.context.scale(16).clamp(14.0, 18.0), color: widget.pulseColor),
         );
       },
     );

@@ -4,8 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-
-
 import 'package:pure_shift/core/utils/pdf_viewer_screen.dart';
 import 'package:pure_shift/layout_utils.dart';
 import 'package:pure_shift/new/booking/client_booking_screen.dart';
@@ -19,7 +17,6 @@ import 'package:pure_shift/new/provider/diet_plan_provider.dart';
 import 'package:pure_shift/features/appointments/schedule_meeting_utils.dart';
 
 // 🚀 IMPORT THE PDF VIEWER WE BUILT EARLIER
-
 
 // 🎯 GLOBAL PREMIUM FONTS
 const String kDisplayFont = 'Space Grotesk';
@@ -40,6 +37,24 @@ class CoachTab extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+
+      // 🚀 ADDED: Floating Chat Button
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          // TODO: Route to your actual Chat Screen here
+          // Navigator.push(context, MaterialPageRoute(builder: (_) => ClientChatScreen(coachId: client.coachId)));
+        },
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
+        elevation: 4,
+        icon: const Icon(Icons.chat_bubble_rounded),
+        label: const Text(
+          "Message Coach",
+          style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+        ),
+      ),
+
       body: SafeArea(
         top: true,
         bottom: true,
@@ -120,7 +135,8 @@ class CoachTab extends ConsumerWidget {
               ),
             ),
 
-            SliverPadding(padding: EdgeInsets.only(bottom: context.scale(40))),
+            // 🚀 MODIFIED: Increased bottom padding to 80 so the FAB doesn't cover content
+            SliverPadding(padding: EdgeInsets.only(bottom: context.scale(80))),
           ],
         ),
       ),

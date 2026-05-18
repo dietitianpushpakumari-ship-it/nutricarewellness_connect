@@ -5,9 +5,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart'; // 🎯 Added for FCM
 import 'package:easy_localization/easy_localization.dart';
 import 'package:health/health.dart';
-import 'package:pure_shift/core/utils/splash_screen.dart';
+import 'package:pure_shift/core/utils/performance_utils.dart';
 import 'package:pure_shift/core/utils/sync_manager.dart';
 import 'package:pure_shift/core/services/tts_service.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'package:pure_shift/firebase_options.dart';
 import 'package:pure_shift/new/core/theme_provider.dart';
@@ -32,41 +33,44 @@ final TextToSpeechService ttsService = TextToSpeechService();
 // 1. BACKGROUND & FOREGROUND NOTIFICATION HANDLERS
 // ============================================================================
 
-@pragma('vm:entry-point') // Mandatory if using Flutter 3.1+
+@pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
-      // 1. Initialize Firebase in the background isolate
-      await Firebase.initializeApp();
+      if (task == "clinicalDataSync") {
+        if (Firebase.apps.isEmpty) {
+          await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+        }
 
-      // 2. Fetch the Patient ID (passed from UI when you registered the task)
-      final String patientId = inputData?['patientId'] ?? '';
-      if (patientId.isEmpty) return true;
+        final String patientId = inputData?['patientId'] ?? '';
+        if (patientId.isEmpty) return true;
 
-      // 3. Get Steps locally from Health Connect
-      final now = DateTime.now();
-      final midnight = DateTime(now.year, now.month, now.day);
-      int? offlineSteps = await Health().getTotalStepsInInterval(midnight, now);
+        // 🚀 READ YOUR CUSTOM CALCULATION
+        final prefs = await SharedPreferences.getInstance();
+        int? stepsToday = prefs.getInt('steps_today');
 
-      // 4. Batch push to Firestore (Only happens 4 times a day!)
-      if (offlineSteps != null && offlineSteps > 0) {
-        // Build the document ID pattern you use for daily logs
-        String docId = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+        // Only push if there is data to sync
+        if (stepsToday != null && stepsToday > 0) {
+          final now = DateTime.now();
+          String docId = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
-        await FirebaseFirestore.instance
-            .collection('clients')
-            .doc(patientId)
-            .collection('daily_logs')
-            .doc(docId)
-            .set({
-          'stepCount': offlineSteps,
-          'lastSyncTime': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true)); // Merge ensures we don't overwrite manual vitals
+          await FirebaseFirestore.instance
+              .collection('clients')
+              .doc(patientId)
+              .collection('daily_logs')
+              .doc(docId)
+              .set({
+            'stepCount': stepsToday, // Matches what the user sees on HomeScreen
+            'lastSyncTime': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          debugPrint("✅ Background Sync: Pushed $stepsToday calculated steps.");
+        }
       }
-      return true; // Task successful
+      return true;
     } catch (e) {
-      print("Background Sync Failed: $e");
-      return false; // Tells OS to retry later
+      debugPrint("❌ Background Sync Failed: $e");
+      return false;
     }
   });
 }
@@ -140,36 +144,31 @@ void _showClientInAppNotification(RemoteMessage message) {
 // ============================================================================
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize Localization Engine
+  // 1. Keep native splash active while engine starts
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  await PerformanceManager.checkDevicePower();
   await EasyLocalization.ensureInitialized();
   tz.initializeTimeZones();
-  Workmanager().initialize(
-    callbackDispatcher,
-    isInDebugMode: false, // Set to true to see print statements in console
-  );
 
-  // 🎯 FIXED FIREBASE INIT: Wait for this to finish before setting up FCM
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+
   try {
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     }
   } catch (e) {
     debugPrint("Firebase Init Warning: $e");
   }
 
-  // 🚀 INITIALIZE NOTIFICATION ROUTING
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // 🚀 HOOK UP FOREGROUND NOTIFICATIONS
+  FirebaseMessaging.onMessage.listen(_showClientInAppNotification);
+
   await NotificationService().setupNotificationRouting();
-
-  // 🚀 THE MISSING LINK: Hook up the Foreground Listener!
-  //FirebaseMessaging.onMessage.listen(_showClientInAppNotification);
-
-  await SyncManager().init();
-
+  Future.delayed(Duration.zero, () => SyncManager().init());
+  PaintingBinding.instance.imageCache.maximumSize = 100;
   runApp(
     ProviderScope(
       child: EasyLocalization(
@@ -205,17 +204,15 @@ class _NutriCareClientAppState extends ConsumerState<NutriCareClientApp> {
   }
 
   Future<void> _initializeApp() async {
-    final prefs = await SharedPreferences.getInstance();
-    final onboardingStatus = prefs.getBool('has_seen_onboarding') ?? false;
-
-    // Splash Screen Timer
-    await Future.delayed(const Duration(seconds: 5));
+    // Perform any critical async logic here
+    await Future.delayed(const Duration(seconds: 1));
 
     if (mounted) {
       setState(() {
-        _hasSeenOnboarding = onboardingStatus;
         _isInitDone = true;
       });
+      // 🚀 REMOVE NATIVE SPLASH to show your Luxury Flutter Splash
+      FlutterNativeSplash.remove();
     }
   }
 
@@ -241,16 +238,20 @@ class _NutriCareClientAppState extends ConsumerState<NutriCareClientApp> {
       home: Builder(
         builder: (context) {
           // 1. Still loading / initializing? Show Splash Screen.
-          if (!_isInitDone || !authState.initialCheckComplete) {
+          if (!_isInitDone) {
             return const LuxurySplashScreen();
           }
 
-          // 2. Logged in securely? Go to Dashboard.
+          // 2. Fallback: If for some reason splash is removed but auth isn't checked
+          if (!authState.initialCheckComplete) {
+            return const LuxurySplashScreen();
+          }
           if (authState.currentUser != null && authState.clientProfile != null) {
             return ClientDashboardScreen(client: authState.clientProfile!);
           }
+
           // 4. Fallback: Show Login/Auth Screen.
-          return const LuxurySplashScreen();
+          return const ClientAuthScreen();
         },
       ),
     );

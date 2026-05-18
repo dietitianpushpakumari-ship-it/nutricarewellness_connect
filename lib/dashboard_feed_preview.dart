@@ -3,108 +3,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:pure_shift/core/utils/feed_item_model.dart';
-import 'package:pure_shift/elite_nudge_hub.dart';
-import 'package:pure_shift/features/content/feed_provider.dart';
-import 'package:pure_shift/new/feed/feed_tab.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 
 const String kDisplayFont = 'Space Grotesk';
 const String kBodyFont = 'Inter';
 
 class DashboardFeedPreview extends ConsumerWidget {
-  const DashboardFeedPreview({super.key});
+  final String categoryFilter; // e.g., 'article' or 'testimonial'
 
-  String _parseTitle(dynamic title, String lang) {
-    if (title is Map) {
-      return title[lang] ?? title['en'] ?? "";
-    }
-    return title?.toString() ?? "";
-  }
+  const DashboardFeedPreview({super.key, this.categoryFilter = 'journal'});
 
-  String? _getYouTubeId(String? url) {
-    if (url == null || url.isEmpty) return null;
-    final RegExp regExp = RegExp(
-        r'^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*).*',
-        caseSensitive: false,
-        multiLine: false);
-    final match = regExp.firstMatch(url);
-    if (match != null && match.groupCount >= 2 && match.group(2)?.length == 11) {
-      return match.group(2);
-    }
-    return null;
-  }
-
-  // --- ROUTING HANDLERS ---
-  void _openInsightDeck(BuildContext context) {
-    HapticFeedback.heavyImpact();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const InsightCarouselDeck(),
-    );
-  }
-
-  Future<void> _launchUrl(String? url) async {
-    if (url == null || url.isEmpty) return;
-    try {
-      if (await canLaunchUrl(Uri.parse(url))) {
-        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      debugPrint("Error launching URL: $e");
-    }
-  }
-
-  void _openFullScreenImage(BuildContext context, String imageUrl) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(backgroundColor: Colors.transparent, iconTheme: const IconThemeData(color: Colors.white), elevation: 0),
-          extendBodyBehindAppBar: true,
-          body: Center(
-            child: InteractiveViewer(
-              panEnabled: true,
-              minScale: 0.5,
-              maxScale: 4.0,
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.contain,
-                placeholder: (context, url) => const CircularProgressIndicator(color: Colors.white),
-                errorWidget: (context, url, error) => const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 50),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _handleItemTap(BuildContext context, FeedItemModel item) {
+  // --- ACTIONS ---
+  Future<void> _handleContentTap(BuildContext context, Map<String, dynamic> data) async {
     HapticFeedback.lightImpact();
+    final String type = data['type'] ?? 'text';
+    final List<String> urls = List<String>.from(data['urls'] ?? []);
 
-    if (item.type == FeedContentType.socialPost) {
-      _openInsightDeck(context);
-      return;
-    }
-
-    final ytId = _getYouTubeId(item.actionUrl) ?? _getYouTubeId(item.mediaUrl);
-    if (ytId != null) {
-      _launchUrl('https://www.youtube.com/watch?v=$ytId');
-      return;
-    }
-
-    if (item.actionUrl != null && item.actionUrl!.isNotEmpty) {
-      _launchUrl(item.actionUrl);
-      return;
-    }
-
-    if (item.mediaUrl != null && item.mediaUrl!.isNotEmpty) {
-      _openFullScreenImage(context, item.mediaUrl!);
-      return;
+    // 📄 PDF Handling
+    if (type == 'document' && urls.isNotEmpty) {
+      final Uri url = Uri.parse(urls.first);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } else if (urls.isNotEmpty) {
+      // 🖼️ Image/Video Handling (Existing logic)
     }
   }
 
@@ -114,262 +38,143 @@ class DashboardFeedPreview extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    final feedState = ref.watch(feedProvider);
-    final String currentLang = 'en';
+    return StreamBuilder<QuerySnapshot>(
+      // 🚀 Listen to cms_content instead of local feedProvider
+      stream: FirebaseFirestore.instance
+          .collection('cms_content')
+          .where('isLive', isEqualTo: true)
+          .where('category', isEqualTo: categoryFilter)
+          .orderBy('updated_at', descending: true)
+          .limit(3) // Only show the latest 3 on dashboard
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox.shrink();
 
-    if (feedState.items.isEmpty) return const SizedBox.shrink();
+        final recentDocs = snapshot.data!.docs;
 
-    final recentItems = feedState.items.take(3).toList();
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(context, theme, colorScheme),
+              const SizedBox(height: 16),
+              ...recentDocs.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return _buildCmsBentoCard(context, data, theme, isDark);
+              }).toList(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, ThemeData theme, ColorScheme colorScheme) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          "DAILY BRIEFING",
+          style: TextStyle(
+            fontFamily: kDisplayFont,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2.0,
+            color: theme.hintColor.withOpacity(0.5),
+          ),
+        ),
+        GestureDetector(
+          onTap: () { /* Navigate to full list */ },
+          child: Text(
+            "View All",
+            style: TextStyle(fontFamily: kDisplayFont, fontSize: 11, fontWeight: FontWeight.w800, color: colorScheme.primary),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCmsBentoCard(BuildContext context, Map<String, dynamic> data, ThemeData theme, bool isDark) {
+    final String title = data['title_en'] ?? '';
+    final String coverUrl = data['coverImageUrl'] ?? '';
+    final String type = data['type'] ?? 'text';
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 🚀 1. LUXURY SECTION HEADER
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16, left: 4, right: 4),
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const FeedTab()));
-              },
-              child: Container(
-                color: Colors.transparent,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "DAILY BRIEFING",
-                      style: TextStyle(
-                        fontFamily: kDisplayFont,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2.0,
-                        color: theme.hintColor.withOpacity(0.5),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Text(
-                          "View All",
-                          style: TextStyle(
-                            fontFamily: kDisplayFont,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                            color: colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(Icons.arrow_forward_ios_rounded, size: 10, color: colorScheme.primary),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GestureDetector(
+        onTap: () => _handleContentTap(context, data),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isDark
+                  ? [theme.colorScheme.surface, theme.colorScheme.surface.withOpacity(0.8)]
+                  : [Colors.white, const Color(0xFFF8FAFC)],
             ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: theme.dividerColor.withOpacity(0.1), width: 0.5),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 8))],
           ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // 🖼️ CMS COVER IMAGE / THUMBNAIL
+                _buildThumbnail(coverUrl, type, theme),
+                const SizedBox(width: 16),
 
-          // 🚀 2. BENTO-STYLE FEED CARDS (Replacing the flat list)
-          Column(
-            children: recentItems.map((item) {
-              final bool isInsight = item.type == FeedContentType.socialPost;
-              final Color neonGreen = const Color(0xFF00E676);
-              final String displayTitle = _parseTitle(item.title, currentLang);
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: GestureDetector(
-                  onTap: () => _handleItemTap(context, item),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      // 🚀 LUXURY MOVE: Subtle gradient matching dashboard
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isDark
-                            ? [colorScheme.surface, colorScheme.surface.withOpacity(0.8)]
-                            : [Colors.white, const Color(0xFFF8FAFC)],
+                // 📝 CONTENT
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildCategoryBadge(type, theme),
+                      const SizedBox(height: 6),
+                      Text(
+                        title,
+                        maxLines: 2,
+                        style: TextStyle(fontFamily: kDisplayFont, fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface),
                       ),
-                      borderRadius: BorderRadius.circular(20),
-                      // 🚀 HAIRLINE BORDER: Extremely thin, slightly reflective
-                      border: Border.all(
-                        color: isInsight
-                            ? neonGreen.withOpacity(0.3)
-                            : (isDark ? Colors.white.withOpacity(0.08) : colorScheme.primary.withOpacity(0.05)),
-                        width: 0.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDark ? Colors.black.withOpacity(0.2) : colorScheme.primary.withOpacity(0.03),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Stack(
-                        children: [
-                          // Optional: Add a subtle glow for Insight cards
-                          if (isInsight)
-                            Positioned(
-                              top: -20,
-                              left: -20,
-                              child: Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: neonGreen.withOpacity(isDark ? 0.08 : 0.04),
-                                ),
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                                  child: Container(color: Colors.transparent),
-                                ),
-                              ),
-                            ),
-
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // 🚀 3. ENHANCED THUMBNAIL
-                                _buildPremiumThumbnail(item, isInsight, neonGreen, theme),
-                                const SizedBox(width: 16),
-
-                                // 📝 TEXT CONTENT
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      _buildPremiumBadge(item.type, theme),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        displayTitle,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontFamily: kDisplayFont, // Use Space Grotesk for titles
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: -0.3,
-                                          color: theme.colorScheme.onSurface,
-                                          height: 1.3,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
                 ),
-              );
-            }).toList(),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // --- PREMIUM UI COMPONENTS ---
-
-  Widget _buildPremiumThumbnail(FeedItemModel item, bool isInsight, Color neon, ThemeData theme) {
-    String? imgUrl = item.mediaUrl;
-    final ytId = _getYouTubeId(item.actionUrl) ?? _getYouTubeId(item.mediaUrl);
-    if (ytId != null) imgUrl = 'https://img.youtube.com/vi/$ytId/hqdefault.jpg';
-    final bool hasImage = imgUrl != null && imgUrl.isNotEmpty;
-
+  Widget _buildThumbnail(String url, String type, ThemeData theme) {
     return Container(
-      width: 64, // Larger, more luxurious thumbnail
-      height: 64,
+      width: 60, height: 60,
       decoration: BoxDecoration(
-        color: isInsight ? neon.withOpacity(0.1) : theme.colorScheme.primary.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16), // Softer corners
-        image: (!isInsight && hasImage)
-            ? DecorationImage(image: CachedNetworkImageProvider(imgUrl), fit: BoxFit.cover)
-            : null,
-        border: Border.all(
-          color: theme.dividerColor.withOpacity(0.05),
-          width: 1,
-        ),
+        color: theme.primaryColor.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: isInsight
-          ? Icon(Icons.memory_rounded, color: neon, size: 24)
-          : (!hasImage
-          ? Icon(_getFallbackIcon(item.type), color: theme.colorScheme.primary.withOpacity(0.5), size: 24)
-          : (ytId != null
-          ? Center(
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.6),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.2), width: 0.5)
-          ),
-          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 16),
-        ),
-      )
-          : null)
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: url.isNotEmpty
+            ? CachedNetworkImage(imageUrl: url, fit: BoxFit.cover)
+            : Icon(type == 'document' ? Icons.picture_as_pdf_rounded : Icons.article_rounded, color: theme.primaryColor.withOpacity(0.5)),
       ),
     );
   }
 
-  IconData _getFallbackIcon(FeedContentType type) {
-    switch (type) {
-      case FeedContentType.video: return Icons.play_circle_outline;
-      case FeedContentType.recipe: return Icons.restaurant_menu_rounded;
-      case FeedContentType.article:
-      case FeedContentType.articleLink: return Icons.menu_book_rounded;
-      case FeedContentType.advertisement: return Icons.star_outline_rounded;
-      default: return Icons.article_outlined;
-    }
-  }
-
-  Widget _buildPremiumBadge(FeedContentType type, ThemeData theme) {
-    String label;
-    Color color;
-
-    switch (type) {
-      case FeedContentType.socialPost:
-        label = "CLINICAL PEARL"; color = const Color(0xFF00E676); break;
-      case FeedContentType.video:
-        label = "VIDEO SESSION"; color = Colors.redAccent; break;
-      case FeedContentType.article:
-      case FeedContentType.articleLink:
-        label = "RESEARCH SUMMARY"; color = Colors.blueAccent; break;
-      case FeedContentType.recipe:
-        label = "DIETETIC RECIPE"; color = Colors.orangeAccent; break;
-      case FeedContentType.advertisement:
-        label = "RECOMMENDED"; color = theme.colorScheme.primary; break;
-      case FeedContentType.imagePost:
-        label = "VISUAL GUIDE"; color = Colors.teal; break;
-      default:
-        label = "CLINICAL PROTOCOL"; color = theme.colorScheme.primary;
-    }
-
+  Widget _buildCategoryBadge(String type, ThemeData theme) {
+    final bool isPdf = type == 'document';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(6)
+        color: (isPdf ? Colors.redAccent : theme.primaryColor).withOpacity(0.12),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        label,
-        style: TextStyle(
-            fontFamily: kDisplayFont,
-            color: color,
-            fontSize: 9,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.0
-        ),
+        isPdf ? "PDF REPORT" : "CLINICAL ARTICLE",
+        style: TextStyle(color: isPdf ? Colors.redAccent : theme.primaryColor, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1.0),
       ),
     );
   }
