@@ -197,8 +197,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
             _buildSectionLabel("CLINICAL IDENTITY", theme),
             _buildSettingsGroup(theme, [
-              _buildTextField("Full Name", _nameCtrl, Icons.person_outline_rounded, theme, cs, isDark, isLocked: !_isEditing),
-              _buildTextField("Gender", TextEditingController(text: user.gender), Icons.wc_rounded, theme, cs, isDark, isLocked: true),
+              _buildTextField("Full Name", _nameCtrl, FontAwesomeIcons.person, theme, cs, isDark, isLocked: !_isEditing),
+              _buildTextField("Gender", TextEditingController(text: user.gender), FontAwesomeIcons.genderless, theme, cs, isDark, isLocked: true),
               _buildDateDisplay("Date of Birth", user.dob, theme, cs),
             ]),
 
@@ -207,8 +207,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             _buildSectionLabel("CONTACT & LOCATION", theme),
             _buildSettingsGroup(theme, [
               _buildTextField("WhatsApp", _whatsappCtrl, FontAwesomeIcons.whatsapp, theme, cs, isDark, isLocked: !_isEditing),
-              _buildTextField("Email", _emailCtrl, Icons.alternate_email_rounded, theme, cs, isDark, isLocked: !_isEditing),
-              _buildTextField("Address", _addressCtrl, Icons.map_outlined, theme, cs, isDark, isLocked: !_isEditing),
+              _buildTextField("Email", _emailCtrl, FontAwesomeIcons.voicemail, theme, cs, isDark, isLocked: !_isEditing),
+              _buildTextField("Address", _addressCtrl, FontAwesomeIcons.addressBook, theme, cs, isDark, isLocked: !_isEditing),
               _buildGpsField(cs, theme, isDark),
             ]),
 
@@ -303,7 +303,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController ctrl, IconData icon, ThemeData theme, ColorScheme cs, bool isDark, {bool isLocked = false}) {
+  Widget _buildTextField(String label, TextEditingController ctrl, FaIconData icon, ThemeData theme, ColorScheme cs, bool isDark, {bool isLocked = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: TextField(
@@ -313,7 +313,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         decoration: InputDecoration(
           labelText: label.toUpperCase(),
           labelStyle: TextStyle(fontFamily: kDisplayFont, fontSize: 9, fontWeight: FontWeight.w700, color: theme.hintColor, letterSpacing: 1),
-          prefixIcon: Icon(icon, size: 18, color: isLocked ? theme.hintColor.withOpacity(0.3) : cs.primary.withOpacity(0.7)),
+          prefixIcon: FaIcon(icon, size: 18, color: isLocked ? theme.hintColor.withOpacity(0.3) : cs.primary.withOpacity(0.7)),
           border: InputBorder.none,
         ),
       ),

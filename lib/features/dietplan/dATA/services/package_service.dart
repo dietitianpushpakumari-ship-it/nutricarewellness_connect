@@ -23,9 +23,9 @@ class PackageService {
     print('📡 Fetching packages -> Client: "$clientId" | Tenant: "$tenantId"');
 
     return _packageCollection
-     //   .where('clientId', isEqualTo: clientId)
-      //  .where('tenantId', isEqualTo: tenantId)
-      //  .orderBy('startDate', descending: true)
+        .where('clientId', isEqualTo: clientId)
+      .where('tenantId', isEqualTo: tenantId)
+        .orderBy('startDate', descending: true)
         .snapshots()
         .handleError((error) {
       // 🚨 IF IT'S AN INDEX ISSUE, FIRESTORE WILL SPIT A URL HERE

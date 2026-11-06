@@ -180,11 +180,11 @@ class DietitianProfileDetailScreen extends ConsumerWidget {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
-                              _buildFloatingActionBtn(Icons.phone_rounded, "Call", Colors.blue, theme, isDark, () => _launch("tel:$displayPhone", context)),
-                              _buildFloatingActionBtn(Icons.chat_bubble_rounded, "Chat", Colors.green, theme, isDark, () {
+                              _buildFloatingActionBtn(FontAwesomeIcons.addressBook, "Call", Colors.blue, theme, isDark, () => _launch("tel:$displayPhone", context)),
+                              _buildFloatingActionBtn(FontAwesomeIcons.rocketchat, "Chat", Colors.green, theme, isDark, () {
                                 Navigator.push(context, MaterialPageRoute(builder: (_) => ClientChatScreen()));
                               }),
-                              _buildFloatingActionBtn(Icons.email_rounded, "Email", Colors.orange, theme, isDark, () => _launch("mailto:$displayEmail", context)),
+                              _buildFloatingActionBtn(FontAwesomeIcons.voicemail, "Email", Colors.orange, theme, isDark, () => _launch("mailto:$displayEmail", context)),
                             ],
                           ),
                         ),
@@ -213,7 +213,7 @@ class DietitianProfileDetailScreen extends ConsumerWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(FontAwesomeIcons.quoteLeft, size: 20, color: colorScheme.primary.withOpacity(0.5)),
+                                FaIcon(FontAwesomeIcons.quoteLeft, size: 20, color: colorScheme.primary.withOpacity(0.5)),
                                 const SizedBox(height: 12),
                                 Text(
                                     philosophy,
@@ -377,7 +377,7 @@ class DietitianProfileDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildFloatingActionBtn(IconData icon, String label, Color color, ThemeData theme, bool isDark, VoidCallback onTap) {
+  Widget _buildFloatingActionBtn(FaIconData icon, String label, Color color, ThemeData theme, bool isDark, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(

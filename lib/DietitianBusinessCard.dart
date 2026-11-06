@@ -145,7 +145,7 @@ class DietitianBusinessCard extends StatelessWidget {
     );
   }
 
-  Widget _contactBtn(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _contactBtn(FaIconData icon, String label, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Column(

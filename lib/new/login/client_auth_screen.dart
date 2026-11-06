@@ -146,7 +146,6 @@ class _ClientAuthScreenState extends ConsumerState<ClientAuthScreen> with Single
       if (mounted) {
         final profiles = await ref.read(authNotifierProvider.notifier).signIn(mobile, securePassword);
         ref.invalidate(clientProfileFutureProvider);
-
         if (profiles.isNotEmpty) {
           scheduleClinicalSync(profiles.first.id!);
           ref.read(globalUserProvider.notifier).setUser(profiles.first);
@@ -441,6 +440,13 @@ class _ClientAuthScreenState extends ConsumerState<ClientAuthScreen> with Single
           SizedBox(height: context.scale(16)),
           _buildModernTextField(controller: _regConfirmPinController, label: "CONFIRM PIN", icon: Icons.lock_outline_rounded, isPassword: true, keyboardType: TextInputType.number, maxLength: 4),
           SizedBox(height: context.scale(24)),
+
+          // 🚀 FIX: Added the missing button to finalize activation
+          _buildModernButton(
+              _isResetFlow ? "CONFIRM RESET" : "COMPLETE ACTIVATION",
+              _isProcessing,
+              _completeActivation
+          ),
         ],
       ),
     );
