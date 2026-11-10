@@ -237,7 +237,7 @@ class _LiveNudgeTickerState extends ConsumerState<LiveNudgeTicker> with SingleTi
             priority: "high",
             onTap: () {
               final notifier = ref.read(dietPlanNotifierProvider(widget.clientId).notifier);
-              showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MealDetailSheet(notifier: notifier, mealName: mealName, activePlan: plan, logToEdit: null, plannedItems: mealItems));
+             // showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MealDetailSheet(notifier: notifier, mealName: mealName, activePlan: plan, logToEdit: null, plannedItems: mealItems));
             },
           ));
         }

@@ -1,32 +1,26 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/services.dart';
 import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
 import 'package:pure_shift/new/provider/diet_plan_provider.dart';
 import 'package:pure_shift/features/dietplan/domain/entities/client_log_model.dart';
 import 'package:pure_shift/new/utils/image_compressor.dart';
-import '../flat_diet_plan_model.dart';
-
-// 🚀 Make sure you import your ImageCompressor utility here!
-// import 'package:your_app/utils/image_compressor.dart';
 
 class MealDetailSheet extends ConsumerStatefulWidget {
   final DietPlanNotifier notifier;
-  final String mealName;
+  final String dbKey;
   final FlatClientDietPlanModel activePlan;
   final MealEntry? logToEdit;
-  final List<FlatDietPlanItem> plannedItems;
 
   const MealDetailSheet({
     super.key,
     required this.notifier,
-    required this.mealName,
+    required this.dbKey,
     required this.activePlan,
     this.logToEdit,
-    this.plannedItems = const [],
   });
 
   @override
@@ -34,19 +28,26 @@ class MealDetailSheet extends ConsumerStatefulWidget {
 }
 
 class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
-  LogStatus _status = LogStatus.followed;
   final TextEditingController _notesController = TextEditingController();
   final List<XFile> _selectedPhotos = [];
   bool _isSaving = false;
-  List<String> _photosToDelete = [];
+  final List<String> _photosToDelete = [];
   bool _showNoteField = false;
+
+  late TimeOfDay _loggedTime;
 
   @override
   void initState() {
     super.initState();
-    _status = widget.logToEdit?.status ?? LogStatus.followed;
     _notesController.text = widget.logToEdit?.clientQuery ?? '';
     if (_notesController.text.isNotEmpty) _showNoteField = true;
+
+    final logDt = widget.logToEdit?.loggedAt;
+    if (logDt != null) {
+      _loggedTime = TimeOfDay.fromDateTime(logDt.toLocal());
+    } else {
+      _loggedTime = TimeOfDay.now();
+    }
   }
 
   @override
@@ -55,45 +56,48 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
     super.dispose();
   }
 
-  // 🚀 INTEGRATED SILENT COMPRESSION
-  Future<void> _pickPhoto(ImageSource source) async {
-    final picker = ImagePicker();
-    // We let the picker take the raw image first
-    final image = await picker.pickImage(source: source);
-
-    if (image != null) {
-      File originalFile = File(image.path);
-
-      // 🚀 Pass it through your WebP compressor silently
-      // NOTE: Ensure your ImageCompressor class is imported and available!
-      File? compressedFile = await ImageCompressor.compressAndGetFile(originalFile);
-
-      // Fallback to original if compression somehow fails
-      final finalFile = compressedFile ?? originalFile;
-
+  Future<void> _pickTime() async {
+    HapticFeedback.lightImpact();
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _loggedTime,
+    );
+    if (picked != null) {
       setState(() {
-        _selectedPhotos.add(XFile(finalFile.path));
-        if (_status == LogStatus.skipped) _status = LogStatus.followed;
+        _loggedTime = picked;
       });
     }
   }
 
-  Future<void> _saveLog({bool forceSkip = false}) async {
-    if (_isSaving) return;
+  Future<void> _pickPhoto(ImageSource source) async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: source,
+      preferredCameraDevice: CameraDevice.rear,
+    );
 
-    if (forceSkip) {
-      setState(() => _status = LogStatus.skipped);
+    if (image != null) {
+      File originalFile = File(image.path);
+      File? compressedFile = await ImageCompressor.compressAndGetFile(originalFile);
+      final finalFile = compressedFile ?? originalFile;
+
+      setState(() {
+        _selectedPhotos.add(XFile(finalFile.path));
+      });
     }
+  }
+
+  Future<void> _saveLog() async {
+    if (_isSaving) return;
 
     final List<String> remainingUrls = (widget.logToEdit?.mealPhotoUrls ?? [])
         .where((url) => !_photosToDelete.contains(url))
         .toList();
 
-    // MANDATORY PHOTO CHECK
-    if (_status != LogStatus.skipped && _selectedPhotos.isEmpty && remainingUrls.isEmpty) {
+    if (_selectedPhotos.isEmpty && remainingUrls.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("📸 Please snap a quick photo of your meal!", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.white)),
+            content: Text("Snap a quick photo of your meal!", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           )
@@ -104,32 +108,26 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
     setState(() => _isSaving = true);
 
     try {
-      List<String> foodList;
-      if (_status == LogStatus.skipped) {
-        foodList = ["Skipped"];
-      } else if (_status == LogStatus.followed) {
-        foodList = [];
-      } else {
-        foodList = ["Deviated from plan"];
-      }
+      final now = DateTime.now();
+      final finalLogDt = DateTime(now.year, now.month, now.day, _loggedTime.hour, _loggedTime.minute);
 
       final Map<String, dynamic> mealEntryMap = {
-        'status': _status.name,
-        'actualFoodEaten': foodList,
-        'mealPhotoUrls': forceSkip ? [] : remainingUrls,
+        'status': LogStatus.followed.name,
+        'actualFoodEaten': [],
+        'mealPhotoUrls': remainingUrls,
         'clientQuery': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-        'isDeviation': _status == LogStatus.deviated,
-        'loggedAt': DateTime.now().toIso8601String(),
+        'isDeviation': false,
+        'loggedAt': finalLogDt.toUtc().toIso8601String(),
       };
 
       await widget.notifier.updateDailyRecord(
         data: {
           'mealLogs': {
-            widget.mealName: mealEntryMap
+            widget.dbKey: mealEntryMap
           }
         },
-        newPhotos: forceSkip ? [] : _selectedPhotos,
-        mealNameForPhotos: widget.mealName,
+        newPhotos: _selectedPhotos,
+        mealNameForPhotos: widget.dbKey,
       );
 
       if (mounted) Navigator.pop(context);
@@ -140,7 +138,6 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
     }
   }
 
-  // 🚀 OPENS FULL SCREEN SWIPEABLE VIEWER
   void _openFullScreenViewer(List<dynamic> allPhotos, int initialIndex) {
     Navigator.push(
       context,
@@ -158,9 +155,7 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-
     final solidBgColor = isDark ? const Color(0xFF121212) : Colors.white;
-    final hasPhotos = _selectedPhotos.isNotEmpty || (widget.logToEdit?.mealPhotoUrls.isNotEmpty ?? false);
 
     return Container(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -181,8 +176,41 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(widget.mealName.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-                  IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 20), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("JOURNAL ENTRY", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 8),
+
+                        GestureDetector(
+                          onTap: _pickTime,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: colorScheme.primary.withOpacity(0.2)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.access_time_filled_rounded, size: 14, color: colorScheme.primary),
+                                const SizedBox(width: 6),
+                                Text(
+                                  "Logged at ${_loggedTime.format(context)}",
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: colorScheme.primary),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.edit_rounded, size: 14, color: colorScheme.primary),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 24), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
                 ],
               ),
             ),
@@ -195,52 +223,37 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildMassivePhotoZone(colorScheme),
-                    const SizedBox(height: 20),
-
-                    if (hasPhotos) ...[
-                      _buildDeviationToggle(colorScheme,theme),
-                      const SizedBox(height: 16),
-                    ],
-
-                    _buildNoteSection(colorScheme,theme),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
+                    _buildNoteSection(colorScheme, theme),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
 
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: SizedBox(
-                width: double.infinity, height: 48,
+                width: double.infinity, height: 52,
                 child: ElevatedButton(
-                  onPressed: _isSaving ? null : () => _saveLog(forceSkip: false),
+                  onPressed: _isSaving ? null : () => _saveLog(),
                   style: ElevatedButton.styleFrom(
                       backgroundColor: colorScheme.primary,
                       foregroundColor: colorScheme.onPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 0
                   ),
                   child: _isSaving
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text("SAVE MEAL LOG", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 1.0)),
+                      : const Text("SAVE TO JOURNAL", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1.5)),
                 ),
               ),
             ),
-
-            TextButton(
-              onPressed: _isSaving ? null : () => _saveLog(forceSkip: true),
-              style: TextButton.styleFrom(foregroundColor: Colors.grey, minimumSize: const Size(0, 36)),
-              child: const Text("I skipped this meal", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11)),
-            ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
-
-  // --- UI WIDGETS ---
 
   Widget _buildMassivePhotoZone(ColorScheme colorScheme) {
     final List<String> remotePhotos = (widget.logToEdit?.mealPhotoUrls ?? [])
@@ -253,7 +266,7 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
         onTap: () => _pickPhoto(ImageSource.camera),
         child: Container(
           width: double.infinity,
-          height: 120,
+          height: 140,
           decoration: BoxDecoration(
             color: colorScheme.primary.withOpacity(0.05),
             borderRadius: BorderRadius.circular(16),
@@ -262,16 +275,15 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.camera_alt_rounded, size: 36, color: colorScheme.primary.withOpacity(0.7)),
-              const SizedBox(height: 8),
-              Text("Tap to snap a photo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: colorScheme.primary)),
+              Icon(Icons.camera_alt_rounded, size: 42, color: colorScheme.primary.withOpacity(0.7)),
+              const SizedBox(height: 12),
+              Text("Tap to snap a photo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: colorScheme.primary)),
             ],
           ),
         ),
       );
     }
 
-    // Combine both remote and local photos for the swipe gallery
     final List<dynamic> combinedPhotos = [...remotePhotos, ..._selectedPhotos];
 
     return SizedBox(
@@ -303,14 +315,13 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
     );
   }
 
-  // 🚀 Updated to support tapping the image
   Widget _buildImagePreview({required Widget child, required VoidCallback onTap, required VoidCallback onDelete}) {
     return Padding(
       padding: const EdgeInsets.only(right: 12),
       child: Stack(
         children: [
           GestureDetector(
-            onTap: onTap, // Tap image to open full screen
+            onTap: onTap,
             child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox(width: 100, height: 100, child: child)),
           ),
           Positioned(
@@ -325,32 +336,6 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
     );
   }
 
-  Widget _buildDeviationToggle(ColorScheme colorScheme, ThemeData theme) {
-    final bool isDeviated = _status == LogStatus.deviated;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text("ADHERENCE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: theme.hintColor.withOpacity(0.6))),
-        ),
-        Container(
-          height: 40,
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: theme.brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : colorScheme.surfaceVariant.withOpacity(0.3), borderRadius: BorderRadius.circular(10)),
-          child: Row(
-            children: [
-              Expanded(child: _StatusSegment(label: "Followed", icon: Icons.check_circle_rounded, isSelected: !isDeviated, selectedColor: Colors.green.shade600, onTap: () => setState(() => _status = LogStatus.followed))),
-              const SizedBox(width: 4),
-              Expanded(child: _StatusSegment(label: "Deviated", icon: Icons.error_outline_rounded, isSelected: isDeviated, selectedColor: Colors.orange.shade800, onTap: () => setState(() => _status = LogStatus.deviated))),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildNoteSection(ColorScheme colorScheme, ThemeData theme) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
@@ -359,9 +344,9 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
         width: double.infinity,
         child: TextButton.icon(
           onPressed: () => setState(() => _showNoteField = true),
-          icon: Icon(Icons.edit_note_rounded, size: 16, color: colorScheme.primary),
-          label: Text("Add a note", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: colorScheme.primary)),
-          style: TextButton.styleFrom(alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          icon: Icon(Icons.edit_note_rounded, size: 18, color: colorScheme.primary),
+          label: Text("Add a quick note", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: colorScheme.primary)),
+          style: TextButton.styleFrom(alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), backgroundColor: colorScheme.primary.withOpacity(0.05), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
         ),
       )
           : Column(
@@ -372,20 +357,20 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
             children: [
               Icon(Icons.notes_rounded, size: 14, color: theme.hintColor),
               const SizedBox(width: 6),
-              Text("NOTES", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: theme.hintColor)),
+              Text("JOURNAL NOTES", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: theme.hintColor)),
               const Spacer(),
-              IconButton(icon: const Icon(Icons.close, size: 14), onPressed: () => setState(() { _showNoteField = false; _notesController.clear(); }), constraints: const BoxConstraints(), padding: EdgeInsets.zero)
+              IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () => setState(() { _showNoteField = false; _notesController.clear(); }), constraints: const BoxConstraints(), padding: EdgeInsets.zero)
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           TextField(
-            controller: _notesController, maxLines: 3, autofocus: true, style: const TextStyle(fontSize: 11),
+            controller: _notesController, maxLines: 3, autofocus: true, style: const TextStyle(fontSize: 12),
             decoration: InputDecoration(
-              hintText: "E.g. Extra portion of protein...", hintStyle: TextStyle(fontSize: 10, color: theme.hintColor.withOpacity(0.5)),
+              hintText: "E.g. Extra portion of protein, felt a bit hungry...", hintStyle: TextStyle(fontSize: 12, color: theme.hintColor.withOpacity(0.5)),
               filled: true, fillColor: theme.brightness == Brightness.dark ? Colors.white.withOpacity(0.03) : Colors.grey.shade50,
-              contentPadding: const EdgeInsets.all(12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.1))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.1))),
+              contentPadding: const EdgeInsets.all(16),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.1))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.1))),
             ),
           ),
         ],
@@ -394,43 +379,17 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
   }
 }
 
-class _StatusSegment extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final Color selectedColor;
-  final VoidCallback onTap;
+// 🚀 CRITICAL: Fully closed the state class before opening the new one.
 
-  const _StatusSegment({required this.label, required this.icon, required this.isSelected, required this.selectedColor, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(color: isSelected ? selectedColor : Colors.transparent, borderRadius: BorderRadius.circular(8)),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 14, color: isSelected ? Colors.white : Colors.grey),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: isSelected ? Colors.white : Colors.grey)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ===========================================================================
-// 🚀 FULL SCREEN MULTI-PHOTO SLIDER
-// ===========================================================================
 class FullScreenImageViewer extends StatefulWidget {
-  final List<dynamic> images; // Can be String (URL) or XFile (Local)
+  final List<dynamic> images;
   final int initialIndex;
 
-  const FullScreenImageViewer({Key? key, required this.images, required this.initialIndex}) : super(key: key);
+  const FullScreenImageViewer({
+    super.key,
+    required this.images,
+    required this.initialIndex,
+  });
 
   @override
   State<FullScreenImageViewer> createState() => _FullScreenImageViewerState();
@@ -475,7 +434,6 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
         },
         itemBuilder: (context, index) {
           final image = widget.images[index];
-          // InteractiveViewer gives you "pinch to zoom" for free!
           return InteractiveViewer(
             child: Center(
               child: image is String

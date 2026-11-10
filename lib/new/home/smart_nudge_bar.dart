@@ -560,7 +560,7 @@ class _SmartNudgeBarState extends ConsumerState<SmartNudgeBar> with SingleTicker
   // 🚀 THE FIX: Passed Flat Elements
   void _launchMealLogger(BuildContext context, String mealName, List<FlatDietPlanItem> mealItems, FlatClientDietPlanModel plan) {
     final notifier = ref.read(dietPlanNotifierProvider(widget.clientId).notifier);
-    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MealDetailSheet(notifier: notifier, mealName: mealName, activePlan: plan, logToEdit: null, plannedItems: mealItems));
+  //  showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MealDetailSheet(notifier: notifier, mealName: mealName, activePlan: plan, logToEdit: null, plannedItems: mealItems));
   }
 
   void _launchHydrationSheet(BuildContext context, DietPlanState state, ClientLogModel? dailyRecord, double current) {

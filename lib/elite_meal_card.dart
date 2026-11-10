@@ -165,18 +165,18 @@ class _EliteMealCardState extends State<EliteMealCard> with SingleTickerProvider
             onPressed: () {
               if (isLogged) {
                 // OPEN EDIT SHEET
-                showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => MealDetailSheet(
-                        notifier: widget.notifier,
-                        mealName: widget.mealName,
-                        activePlan: widget.activePlan,
-                        logToEdit: widget.mealLog,
-                        plannedItems: widget.mealItems
-                    )
-                );
+        //        showModalBottomSheet(
+          //          context: context,
+            //        isScrollControlled: true,
+              //      backgroundColor: Colors.transparent,
+                //    builder: (_) => MealDetailSheet(
+                  //      notifier: widget.notifier,
+                    //    mealName: widget.mealName,
+                      //  activePlan: widget.activePlan,
+                        //logToEdit: widget.mealLog,
+                        //plannedItems: widget.mealItems
+                   // )
+               // );
               } else {
                 // TRIGGER FAST CAMERA/GALLERY
                 HapticFeedback.lightImpact();

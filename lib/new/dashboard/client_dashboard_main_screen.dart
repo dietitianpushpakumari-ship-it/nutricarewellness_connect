@@ -18,6 +18,7 @@ import 'package:pure_shift/features/auth/auth_provider.dart';
 
 import 'package:pure_shift/new/dashboard/modern_bottom_bar.dart';
 import 'package:pure_shift/core/utils/sync_manager.dart';
+import 'package:pure_shift/new/service/notification_service.dart';
 import 'package:pure_shift/new/wellnesshub/wellness_hub_screen.dart';
 import 'package:pure_shift/new/activityhub/activity_tracker_screen.dart' hide vitalsHistoryProvider;
 import 'package:pure_shift/new/dashboard/home_screen.dart';
@@ -65,6 +66,15 @@ class ClientDashboardScreenState extends ConsumerState<ClientDashboardScreen> {
   @override
   void initState() {
     super.initState();
+
+    NotificationService().syncTokenToFirestore(
+      userId: widget.client.id, // Ensure this matches your client ID variable
+      collectionName: 'clients',
+      forceUpdate: true,
+    );
+
+    // 🚀 2. ENSURE THE ROUTER LISTENER IS ACTIVE
+    NotificationService().setupNotificationRouting();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
 

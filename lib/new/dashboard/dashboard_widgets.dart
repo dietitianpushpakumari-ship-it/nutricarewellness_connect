@@ -18,7 +18,8 @@ class LuxuryBentoBackground extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
   final bool clipContent;
-  final bool isOverdue; // 🚀 ADDED: Triggers the alert state
+  final bool isOverdue;
+  final bool expandContent; // 🚀 ADDED: Controls whether the content fills the box or shrinks
 
   const LuxuryBentoBackground({
     super.key,
@@ -27,6 +28,7 @@ class LuxuryBentoBackground extends StatefulWidget {
     required this.onTap,
     this.clipContent = true,
     this.isOverdue = false,
+    this.expandContent = true, // 🚀 DEFAULT TO TRUE: So your Grid cards (Water, Steps) fill perfectly!
   });
 
   @override
@@ -39,7 +41,6 @@ class _LuxuryBentoBackgroundState extends State<LuxuryBentoBackground> with Sing
   @override
   void initState() {
     super.initState();
-    // 🚀 A slow, calm heartbeat for overdue items (2 seconds)
     _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
   }
 
@@ -53,8 +54,6 @@ class _LuxuryBentoBackgroundState extends State<LuxuryBentoBackground> with Sing
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
-    // 🚀 THE COLOR SHIFT: Overdue items glow with a warm Coral/Amber
     final Color activeGlowColor = widget.isOverdue ? const Color(0xFFFF6E40) : widget.baseGlowColor;
 
     return GestureDetector(
@@ -77,60 +76,41 @@ class _LuxuryBentoBackgroundState extends State<LuxuryBentoBackground> with Sing
           clipBehavior: widget.clipContent ? Clip.antiAlias : Clip.none,
           child: Stack(
             children: [
-              // 🌌 LAYER 1: Deep Base Color
-              Positioned.fill(
-                child: Container(color: isDark ? const Color(0xFF0B0F19) : Colors.white),
-              ),
-
-              // 🌊 LAYER 2: Soft Corner Glow (Animated if Overdue)
+              Positioned.fill(child: Container(color: isDark ? const Color(0xFF0B0F19) : Colors.white)),
               Positioned(
                 bottom: -30, right: -30,
                 child: AnimatedBuilder(
                     animation: _pulseController,
                     builder: (context, child) {
-                      // If overdue, the opacity pulses between 0.2 and 0.6
-                      final double opacity = widget.isOverdue
-                          ? (0.2 + (_pulseController.value * 0.4))
-                          : (isDark ? 0.4 : 0.2);
-
+                      final double opacity = widget.isOverdue ? (0.2 + (_pulseController.value * 0.4)) : (isDark ? 0.4 : 0.2);
                       return AnimatedContainer(
-                        duration: const Duration(milliseconds: 500), // Smooth color transition
+                        duration: const Duration(milliseconds: 500),
                         width: context.scale(120), height: context.scale(120),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: activeGlowColor.withOpacity(opacity),
-                        ),
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: activeGlowColor.withOpacity(opacity)),
                       );
                     }
                 ),
               ),
-
-              // 🌫️ LAYER 3: Mesh Blur
               Positioned.fill(
                 child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.transparent)),
               ),
-
-              // 🪟 LAYER 4: Glass Border & Content Overlay
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
                     color: isDark ? Colors.black.withOpacity(0.2) : Colors.white.withOpacity(0.4),
                     borderRadius: BorderRadius.circular(context.scale(kCardRadius)),
                     border: Border.all(
-                      // The border itself catches a tiny bit of the amber glow if overdue
-                      color: widget.isOverdue
-                          ? activeGlowColor.withOpacity(0.3)
-                          : (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04)),
+                      color: widget.isOverdue ? activeGlowColor.withOpacity(0.3) : (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04)),
                       width: 1.0,
                     ),
                   ),
                 ),
               ),
-
-              // ✨ LAYER 5: The Actual Card Content
-              Positioned.fill(
-                child: widget.child, // 🚀 Changed from just 'child' to 'Positioned.fill'
-              ),
+              // ✨ LAYER 5: THE MAGIC SWITCH
+              // If it's a Grid item (Water), it expands. If it's the Social Bar, it wraps!
+              widget.expandContent
+                  ? Positioned.fill(child: widget.child)
+                  : widget.child,
             ],
           ),
         ),
