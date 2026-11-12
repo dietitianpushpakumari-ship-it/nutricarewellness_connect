@@ -76,12 +76,8 @@ class WellnessHubScreen extends ConsumerWidget {
       case 'balance': _launchSheet(context, const BalanceLockSheet()); break;
       case 'spine_decompression': _launchSheet(context, const SpineDecompressionSheet()); break;
       case 'breathing':
-        if (state.activePlan != null) {
           _showBreathingMenu(context, notifier, state.activePlan!, dailyRecord, Theme.of(context));
-        } else {
-          _showNoPlanSnippet(context);
-        }
-        break;
+          break;
       case 'focus': _launchSheet(context, const FocusGridSheet()); break;
       case 'eye': _launchSheet(context, const EyeYogaSheet()); break;
       case 'worry': _launchSheet(context, const WorryShredderSheet()); break;
@@ -106,11 +102,6 @@ class WellnessHubScreen extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text("Refining this protocol..."), backgroundColor: Theme.of(context).colorScheme.primary));
     }
   }
-
-  void _showNoPlanSnippet(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please activate a diet plan to use this feature.")));
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);

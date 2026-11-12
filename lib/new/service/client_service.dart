@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -244,36 +245,57 @@ class ClientService {
     return results.whereType<String>().toList();
   }
 
+
   Future<String?> _uploadFile(XFile? file, String folderName) async {
     if (file == null) return null;
+    final cloudinaryService = _ref.read(cloudinaryServiceProvider);
+
     try {
-      // 1. Create a temporary path for the compressed file
-      final Directory tempDir = await getTemporaryDirectory();
-      final String targetPath = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}.webp';
+      // 🚀 THE WEB FIX: Extract raw bytes, compress them, and upload via API directly
+      if (kIsWeb) {
+        final Uint8List rawBytes = await file.readAsBytes();
 
-      // 2. 🎯 COMPRESS & CONVERT TO WEBP
-      final XFile? compressedXFile = await FlutterImageCompress.compressAndGetFile(
-        file.path,
-        targetPath,
-        minHeight: 1080,
-        minWidth: 1080,
-        quality: 75,
-        format: CompressFormat.webp,
-      );
+        // 🌐 Web compression must use the memory byte array
+        final Uint8List compressedBytes = await FlutterImageCompress.compressWithList(
+          rawBytes,
+          minHeight: 1080,
+          minWidth: 1080,
+          quality: 75,
+          format: CompressFormat.webp,
+        );
 
-      if (compressedXFile == null) return null;
+        // Upload directly using CloudinaryService's web byte uploader
+        return await cloudinaryService.uploadWebFile(
+          bytes: compressedBytes,
+          fileName: 'meal_${DateTime.now().millisecondsSinceEpoch}.webp',
+          folderName: folderName,
+        );
+      }
 
-      // 3. 🚀 UPLOAD TO CLOUDINARY
-      final cloudinaryService = _ref.read(cloudinaryServiceProvider);
-      final String? secureUrl = await cloudinaryService.uploadFile(
-        file: File(compressedXFile.path),
-        folderName: folderName,
-      );
+      // 📱 NATIVE (iOS/Android): Use the standard path/file compression
+      else {
+        final Directory tempDir = await getTemporaryDirectory();
+        final String targetPath = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}.webp';
 
-      // 4. Cleanup temporary file to save device storage
-      File(compressedXFile.path).delete().ignore();
+        final XFile? compressedXFile = await FlutterImageCompress.compressAndGetFile(
+          file.path,
+          targetPath,
+          minHeight: 1080,
+          minWidth: 1080,
+          quality: 75,
+          format: CompressFormat.webp,
+        );
 
-      return secureUrl;
+        if (compressedXFile == null) return null;
+
+        final String? secureUrl = await cloudinaryService.uploadFile(
+          file: File(compressedXFile.path),
+          folderName: folderName,
+        );
+
+        File(compressedXFile.path).delete().ignore();
+        return secureUrl;
+      }
     } catch (e) {
       debugPrint("Cloudinary Upload/Compression failed: $e");
       return null;
@@ -281,37 +303,7 @@ class ClientService {
   }
 
   Future<String?> uploadMealPhoto(XFile? file, String folderName) async {
-    if (file == null) return null;
-
-    try {
-      final Directory tempDir = await getTemporaryDirectory();
-      final String targetPath = '${tempDir.path}/meal_${DateTime.now().millisecondsSinceEpoch}.webp';
-
-      // 🎯 COMPRESS & CONVERT TO WEBP
-      final XFile? compressedXFile = await FlutterImageCompress.compressAndGetFile(
-        file.path,
-        targetPath,
-        minHeight: 1080,
-        minWidth: 1080,
-        quality: 80,
-        format: CompressFormat.webp,
-      );
-
-      if (compressedXFile == null) return null;
-
-      // 🚀 UPLOAD TO CLOUDINARY
-      final String? secureUrl = await _ref.read(cloudinaryServiceProvider).uploadFile(
-        file: File(compressedXFile.path),
-        folderName: folderName,
-      );
-
-      // Cleanup
-      File(compressedXFile.path).delete().ignore();
-
-      return secureUrl;
-    } catch (e) {
-      debugPrint("Error uploading meal photo to Cloudinary: $e");
-      return null;
-    }
+    // 🚀 We can reuse the robust cross-platform _uploadFile function we just fixed
+    return await _uploadFile(file, folderName);
   }
 }

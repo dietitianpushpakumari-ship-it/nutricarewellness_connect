@@ -655,7 +655,7 @@ class _ActivityTrackerScreenState extends ConsumerState<ActivityTrackerScreen> w
                 context: context,
                 isScrollControlled: true,
                 backgroundColor: Colors.transparent,
-                builder: (context) => LogVitalsSheet(notifier: notifier, activePlan: state.activePlan, dailyLog: state.dailyRecord),
+                builder: (context) => LogVitalsSheet(notifier: notifier, dailyLog: state.dailyRecord),
               );
             },
             theme,

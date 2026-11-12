@@ -15,7 +15,7 @@ VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
 TAG="v$VERSION"
 
 # Paths
-ORIGINAL_APK="build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk"
+ORIGINAL_APK="build/app/outputs/flutter-apk/app-release.apk"
 RENAMED_APK="build/app/outputs/flutter-apk/Nutricare_client.apk"
 
 echo "🚀 Starting Local Build for $APP_NAME ($TAG)..."
@@ -25,7 +25,7 @@ echo "🚀 Starting Local Build for $APP_NAME ($TAG)..."
 # ==========================================
 flutter clean
 flutter pub get
-flutter build apk --release --split-per-abi
+flutter build apk --release
 
 if [ ! -f "$ORIGINAL_APK" ]; then
   echo "❌ Build Failed! APK not found at $ORIGINAL_APK"

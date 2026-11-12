@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:pure_shift/core/utils/clinical_services_sheet.dart';
 
 import 'package:pure_shift/core/utils/pdf_viewer_screen.dart';
 import 'package:pure_shift/layout_utils.dart';
 import 'package:pure_shift/new/booking/client_booking_screen.dart';
 import 'package:pure_shift/new/booking/client_wallet_screen.dart';
+import 'package:pure_shift/new/chat/client_chat_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:pure_shift/core/utils/client_model.dart';
@@ -15,8 +17,6 @@ import 'package:pure_shift/core/utils/package_payment_status_card.dart';
 import 'package:pure_shift/core/utils/dietitian_business_card.dart';
 import 'package:pure_shift/new/provider/diet_plan_provider.dart';
 import 'package:pure_shift/features/appointments/schedule_meeting_utils.dart';
-
-// 🚀 IMPORT THE PDF VIEWER WE BUILT EARLIER
 
 // 🎯 GLOBAL PREMIUM FONTS
 const String kDisplayFont = 'Space Grotesk';
@@ -35,117 +35,179 @@ class CoachTab extends ConsumerWidget {
     final dietitianAsync = ref.watch(dietitianProfileProvider(client.coachId ?? ''));
     final meetingsAsync = ref.watch(upcomingMeetingsProvider(client.id));
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-
-      // 🚀 ADDED: Floating Chat Button
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          HapticFeedback.mediumImpact();
-          // TODO: Route to your actual Chat Screen here
-          // Navigator.push(context, MaterialPageRoute(builder: (_) => ClientChatScreen(coachId: client.coachId)));
-        },
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
-        elevation: 4,
-        icon: const Icon(Icons.chat_bubble_rounded),
-        label: const Text(
-          "Message Coach",
-          style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, letterSpacing: 0.5),
-        ),
-      ),
-
-      body: SafeArea(
-        top: true,
-        bottom: true,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            // 1. 🛰️ PREMIUM HEADER
-            SliverToBoxAdapter(
-              child: _buildTopHeader(context, theme, colorScheme, isDark),
-            ),
-
-            // 2. 🪪 DIGITAL BUSINESS CARD
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: context.scale(20), vertical: context.scale(8)),
-                child: dietitianAsync.when(
-                  loading: () => Padding(
-                    padding: EdgeInsets.all(context.scale(20)),
-                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                  ),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (profile) => profile == null
-                      ? const SizedBox.shrink()
-                      : DietitianBusinessCard(profile: profile),
+    // 🚀 We use a Stack to manually position the FAB exactly where we want it,
+    // immune to any bottom navigation bar interference.
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          body: SafeArea(
+            top: true,
+            bottom: true,
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // 1. 🛰️ PREMIUM HEADER
+                SliverToBoxAdapter(
+                  child: _buildTopHeader(context, theme, colorScheme, isDark),
                 ),
-              ),
-            ),
 
-            // 3. 📅 UPCOMING SESSIONS BANNER
-            SliverToBoxAdapter(
-              child: meetingsAsync.maybeWhen(
-                data: (meetings) => meetings.isEmpty
-                    ? const SizedBox.shrink()
-                    : Padding(
-                  padding: EdgeInsets.fromLTRB(context.scale(20), context.scale(16), context.scale(20), context.scale(24)),
-                  child: _buildUpcomingSessionAlert(context, meetings.first, theme, colorScheme, isDark),
-                ),
-                orElse: () => const SizedBox.shrink(),
-              ),
-            ),
-
-            SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: context.scale(8)),
-                  _buildSectionLabel(context, "BOOKINGS & WALLET", theme),
-                  _buildBookingWalletRow(context, theme, colorScheme, isDark),
-                  SizedBox(height: context.scale(24)),
-                ],
-              ),
-            ),
-
-            // 4. 🛡️ MEMBERSHIP HUB
-            SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (meetingsAsync.value == null || meetingsAsync.value!.isEmpty)
-                    SizedBox(height: context.scale(16)),
-
-                  _buildSectionLabel(context, "ACTIVE MEMBERSHIP", theme),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: context.scale(20)),
-                    child: PackagePaymentStatusCard(clientId: client.id),
+                // 2. 🪪 DIGITAL BUSINESS CARD
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: context.scale(20), vertical: context.scale(8)),
+                    child: dietitianAsync.when(
+                      loading: () => Padding(
+                        padding: EdgeInsets.all(context.scale(20)),
+                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                      error: (_, __) => const SizedBox.shrink(),
+                      data: (profile) => profile == null
+                          ? const SizedBox.shrink()
+                          : DietitianBusinessCard(profile: profile),
+                    ),
                   ),
-                ],
-              ),
-            ),
+                ),
 
-            // 5. 📄 IN-APP PDF VIEWER BUTTON
-            SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  SizedBox(height: context.scale(32)),
-                  _buildMiniExploreBar(context, theme, colorScheme, isDark),
-                ],
-              ),
-            ),
+                // 3. 📅 UPCOMING SESSIONS BANNER
+                SliverToBoxAdapter(
+                  child: meetingsAsync.maybeWhen(
+                    data: (meetings) => meetings.isEmpty
+                        ? const SizedBox.shrink()
+                        : Padding(
+                      padding: EdgeInsets.fromLTRB(context.scale(20), context.scale(16), context.scale(20), context.scale(24)),
+                      child: _buildUpcomingSessionAlert(context, meetings.first, theme, colorScheme, isDark),
+                    ),
+                    orElse: () => const SizedBox.shrink(),
+                  ),
+                ),
 
-            // 🚀 MODIFIED: Increased bottom padding to 80 so the FAB doesn't cover content
-            SliverPadding(padding: EdgeInsets.only(bottom: context.scale(80))),
-          ],
+                // 4. 💼 BOOKINGS & WALLET
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: context.scale(8)),
+                      _buildSectionLabel(context, "BOOKINGS & WALLET", theme),
+                      _buildBookingWalletRow(context, theme, colorScheme, isDark),
+                      SizedBox(height: context.scale(24)),
+                    ],
+                  ),
+                ),
+
+                // 5. 🛡️ MEMBERSHIP HUB
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (meetingsAsync.value == null || meetingsAsync.value!.isEmpty)
+                        SizedBox(height: context.scale(16)),
+
+                      _buildSectionLabel(context, "ACTIVE MEMBERSHIP", theme),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: context.scale(20)),
+                        child: PackagePaymentStatusCard(clientId: client.id),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 6. 🏥 PREMIUM SERVICES TRIGGER
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: context.scale(32)),
+                      _buildSectionLabel(context, "CLINICAL PROGRAMS", theme),
+                      _buildPremiumServicesLink(context, theme, colorScheme, isDark),
+                    ],
+                  ),
+                ),
+
+                // 7. 📄 IN-APP PDF VIEWER BUTTON
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      SizedBox(height: context.scale(16)),
+                      _buildMiniExploreBar(context, theme, colorScheme, isDark),
+                    ],
+                  ),
+                ),
+
+                // Extra padding so the user can scroll past the floating button
+                SliverPadding(padding: EdgeInsets.only(bottom: context.scale(120))),
+              ],
+            ),
+          ),
         ),
-      ),
+
+        // 🚀 THE PERMANENTLY FIXED FLOATING ACTION BUTTON
+        Positioned(
+          right: 16,
+          // This mathematically calculates the perfect distance above the physical screen bottom
+          // 80 is the height of your custom bottom nav bar. MediaQuery handles the hardware bezel.
+          bottom: MediaQuery.paddingOf(context).bottom + 80,
+          child: FloatingActionButton.extended(
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ClientChatScreen()),
+              );
+            },
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+            elevation: 8, // Slightly higher elevation so it floats clearly above content
+            icon: const Icon(Icons.chat_bubble_rounded),
+            label: const Text(
+              "Message Coach",
+              style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   // =========================================================================
   // 🛠️ MODERN CLINICAL UI COMPONENTS
   // =========================================================================
+
+  Widget _buildQuoteBanner(BuildContext context, ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return Container(
+      margin: EdgeInsets.fromLTRB(context.scale(20), 0, context.scale(20), context.scale(20)),
+      padding: EdgeInsets.all(context.scale(16)),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.primary.withOpacity(0.05) : colorScheme.primary.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(context.scale(16)),
+        border: Border.all(color: colorScheme.primary.withOpacity(0.1)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.format_quote_rounded, color: colorScheme.primary.withOpacity(0.5), size: context.scale(24)),
+          SizedBox(width: context.scale(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Let food be thy medicine, and medicine be thy food.",
+                  style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(12), fontStyle: FontStyle.italic, fontWeight: FontWeight.w700, color: colorScheme.onSurface),
+                ),
+                SizedBox(height: context.scale(4)),
+                Text(
+                  "— Hippocrates (Food is a Treatment)",
+                  style: TextStyle(fontFamily: kBodyFont, fontSize: context.scale(10), color: theme.hintColor, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBookingWalletRow(BuildContext context, ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: context.scale(20)),
@@ -163,7 +225,7 @@ class CoachTab extends ConsumerWidget {
               onTap: () {
                 HapticFeedback.mediumImpact();
                 Navigator.push(context, MaterialPageRoute(builder: (_) => ClientBookingScreen(
-                  tenantId: client.tenantId ?? 'nutricare', // Fallback if missing
+                  tenantId: client.tenantId ?? 'nutricare',
                   initialCoachId: client.coachId,
                 )));
               },
@@ -220,6 +282,7 @@ class CoachTab extends ConsumerWidget {
       ),
     );
   }
+
   Widget _buildTopHeader(BuildContext context, ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return Padding(
       padding: EdgeInsets.fromLTRB(context.scale(24), context.scale(20), context.scale(24), context.scale(16)),
@@ -288,10 +351,10 @@ class CoachTab extends ConsumerWidget {
     );
   }
 
+
   // =========================================================================
   // 🚀 IN-APP PDF LAUNCHER WITH BROWSER FALLBACK
   // =========================================================================
-
   Widget _buildMiniExploreBar(BuildContext context, ThemeData theme, ColorScheme colorScheme, bool isDark) {
     return GestureDetector(
       onTap: () => _openPricingPdf(context),
@@ -307,7 +370,7 @@ class CoachTab extends ConsumerWidget {
           children: [
             Icon(Icons.picture_as_pdf_rounded, size: context.scale(16), color: colorScheme.primary),
             SizedBox(width: context.scale(10)),
-            Text("VIEW PRICING CHART",
+            Text("VIEW PRICING CHART PDF",
                 style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(10), fontWeight: FontWeight.w700, letterSpacing: context.scale(1.0), color: colorScheme.primary)),
             const Spacer(),
             Icon(Icons.arrow_forward_ios_rounded, size: context.scale(10), color: theme.hintColor.withOpacity(0.4)),
@@ -320,7 +383,6 @@ class CoachTab extends ConsumerWidget {
   void _openPricingPdf(BuildContext context) {
     HapticFeedback.lightImpact();
 
-    // 🛑 REPLACE WITH YOUR ACTUAL PDF URL
     const String pdfUrl = "https://nutricarewellness.com/assets/nutricare_price_chart.pdf";
 
     try {
@@ -335,11 +397,61 @@ class CoachTab extends ConsumerWidget {
       );
     } catch (e) {
       debugPrint("Failed to launch PDF viewer, falling back to browser: $e");
-      // 🛡️ FALLBACK: If the PDF screen fails to route, open the website instead
       _launchExternalUrl(context, 'https://nutricarewellness.com/price-model');
     }
   }
-
+  Widget _buildPremiumServicesLink(BuildContext context, ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (ctx) => const ClinicalServicesSheet(),
+        );
+      },
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: context.scale(20)),
+        padding: EdgeInsets.all(context.scale(20)),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [colorScheme.primary.withOpacity(0.15), Colors.black26]
+                : [colorScheme.primary.withOpacity(0.08), Colors.white],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(context.scale(20)),
+          border: Border.all(color: colorScheme.primary.withOpacity(0.2)),
+          boxShadow: [
+            BoxShadow(color: colorScheme.primary.withOpacity(isDark ? 0.1 : 0.05), blurRadius: 20, offset: const Offset(0, 8))
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(context.scale(12)),
+              decoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
+              child: Icon(Icons.medical_services_rounded, color: colorScheme.onPrimary, size: context.scale(24)),
+            ),
+            SizedBox(width: context.scale(16)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Explore Clinical Services", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(14), fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
+                  SizedBox(height: context.scale(4)),
+                  Text("View all 14 specialized therapeutic programs.", style: TextStyle(fontFamily: kBodyFont, fontSize: context.scale(11), color: theme.hintColor, fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded, color: colorScheme.primary, size: context.scale(14)),
+          ],
+        ),
+      ),
+    );
+  }
   Future<void> _launchExternalUrl(BuildContext context, String url) async {
     final Uri uri = Uri.parse(url);
     try {

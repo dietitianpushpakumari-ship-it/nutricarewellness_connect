@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pure_shift/core/utils/wellness_audio_service.dart';
-import 'package:pure_shift/features/dietplan/PRESENTATION/providers/tts_service.dart';
+
 import 'package:pure_shift/main.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../../core/utils/spiritual_mantra_model.dart';

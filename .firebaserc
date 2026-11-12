@@ -1,5 +1,22 @@
 {
   "projects": {
     "default": "nwgoaltracker"
-  }
+  },
+  "targets": {
+    "nwgoaltracker": {
+      "hosting": {
+        "main_site": [
+          "pureshift"
+        ]
+      }
+    },
+    "nutricarewellness-live": {
+      "hosting": {
+        "main_site": [
+          "pureshift"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

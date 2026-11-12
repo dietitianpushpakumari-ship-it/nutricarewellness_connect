@@ -1,13 +1,23 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:pure_shift/core/VitalsNudgeBanner.dart';
+import 'package:pure_shift/core/utils/nudge_manager.dart';
+import 'package:pure_shift/features/dietplan/PRESENTATION/screens/log_vitals_screen.dart';
+import 'package:pure_shift/new/daily_insight_alert.dart';
+import 'package:pure_shift/new/healthcontent/health_content.dart';
+import 'package:pure_shift/new/screening/clinical_assessment_flow.dart';
+import 'package:pure_shift/new/screening/clinical_assessment_trigger.dart';
+import 'package:pure_shift/new/smart_insight_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -59,7 +69,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   DateTime _lastStepUiUpdate = DateTime.now();
   late AnimationController _waveController;
-
+  int? _daysSinceVitals;
   // PEDOMETER VARIABLES
   StreamSubscription<StepCount>? _stepSubscription;
   int _lastKnownHardware = 0;
@@ -77,9 +87,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     WidgetsBinding.instance.addObserver(this);
     _waveController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
     _initializeStorageAndPedometer();
+    _loadNudgeStatus();
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkAndSwitchDate());
   }
-
+// 🚀 ADD THIS FUNCTION
+  Future<void> _loadNudgeStatus() async {
+    final status = await NudgeManager.getNudgeStatus();
+    if (mounted) setState(() => _daysSinceVitals = status);
+  }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -98,14 +113,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     setState(() => _displaySteps = _prefs!.getInt('steps_today') ?? 0);
     await _tryStartPedometer();
   }
-
   Future<void> _tryStartPedometer() async {
     if (!mounted) return;
-    var status = await Permission.activityRecognition.status;
-    if (!mounted) return;
-    if (status.isGranted) {
-      if (_stepSubscription != null) return;
-      _stepSubscription = Pedometer.stepCountStream.listen(_onStepTick, cancelOnError: false);
+
+    // 🚀 1. Absolute Web Guard: Never let the web platform touch permission_handler sensors
+    if (kIsWeb) return;
+
+    try {
+      // 2. Wrap safely for native platforms only
+      var status = await Permission.activityRecognition.status;
+      if (!mounted) return;
+
+      if (status.isGranted) {
+        if (_stepSubscription != null) return;
+        _stepSubscription = Pedometer.stepCountStream.listen(_onStepTick, cancelOnError: false);
+      }
+    } catch (e) {
+      debugPrint("Pedometer not supported or blocked on this device: $e");
     }
   }
 
@@ -171,15 +195,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('+250ml Added!'), duration: const Duration(milliseconds: 800), backgroundColor: Theme.of(context).colorScheme.primary));
     } catch (e) {
       debugPrint("Failed to add water: $e");
-    }
-  }
-
-  Future<void> _launchYouTubeVideo(String videoUrl) async {
-    if (videoUrl.isEmpty) return;
-    HapticFeedback.mediumImpact();
-    final Uri url = Uri.parse(videoUrl);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -299,6 +314,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                               ),
                             ),
                             SizedBox(width: context.scale(8)),
+                            SmartInsightButton(
+                              onOpenInsight: () => _openTodayInsight(context),
+                            ),
+                            SizedBox(width: context.scale(8)),
                             IconButton(
                               padding: EdgeInsets.all(context.scale(6)), constraints: const BoxConstraints(),
                               icon: Icon(Icons.palette_outlined, color: colorScheme.primary, size: context.scale(22)),
@@ -319,12 +338,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                     ),
                   ),
                 ),
+                // 🚀 1.5 THE VITALS NUDGE BANNER
+                // 🚀 1.5 THE VITALS NUDGE BANNER
+                // Only show this Sliver if NudgeManager returned a number
+                if (_daysSinceVitals != null)
+                  SliverToBoxAdapter(
+                    child: VitalsNudgeBanner(
+                      // You can optionally pass `_daysSinceVitals` into your banner
+                      // widget here if you want to display "It's been X days..."
+                      onOpenVitals: () async {
 
-                // 🚀 2. PREMIUM SOCIAL PLATFORM HUB (STATIC LINKS)
-                // 🚀 2. UNIFIED PREMIUM SOCIAL HUB (SINGLE CARD)
-                // 🚀 2. ULTRA-COMPACT SOCIAL BAR
-                // 🚀 2. ULTRA-COMPACT SOCIAL BAR (Using LuxuryBentoBackground)
-                // 🚀 2. HIERARCHICAL SOCIAL BAR (YouTube Priority)
+                        // 1. Await the bottom sheet until it completely closes
+                        await showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => LogVitalsSheet(
+                            notifier: notifier,
+                            dailyLog: dailyRecord,
+                          ),
+                        );
+
+                        // 2. 🚀 The sheet just closed. Refresh the UI instantly!
+                        // If they saved vitals, this will return null and hide the banner!
+                        _loadNudgeStatus();
+                      },
+                    ),
+                  ),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(context.scale(16), context.scale(12), context.scale(16), context.scale(20)),
@@ -371,7 +411,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                                     context: context,
                                     icon: Icons.camera_alt_rounded,
                                     brandColor: const Color(0xFFE1306C),
-                                    url: 'https://www.instagram.com'
+                                    url: 'https://www.instagram.com/dt_pushpa.k/'
                                 ),
                                 SizedBox(width: context.scale(12)),
 
@@ -380,7 +420,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                                     context: context,
                                     icon: Icons.facebook_rounded,
                                     brandColor: const Color(0xFF1877F2),
-                                    url: 'https://www.facebook.com'
+                                    url: 'https://www.facebook.com/pushpa.kumari.9822'
                                 ),
                               ],
                             )
@@ -390,6 +430,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                     ),
                   ),
                 ),
+
+
 
                 // 3. DAILY TRACKING BENTO BOXES (Water, Steps, Sleep, Breath)
                 SliverPadding(
@@ -404,7 +446,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                     ],
                   ),
                 ),
-
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(context.scale(16), context.scale(16), context.scale(16), 0),
+                    child: ClinicalAssessmentTrigger(
+                      onTap: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => ClinicalAssessmentFlow(
+                                  clientId: widget.client.id ?? '',
+                                  clientName: widget.client.name ?? 'Guest',
+                                  clientGender: widget.client.gender ?? 'Female',
+                                  clientAge: widget.client.age?.toDouble() ?? 30.0,
+                                )
+                            )
+                        );
+                      },
+                    ),
+                  ),
+                ),
                 // Ensure bottom isn't blocked by the chat bar
                 SliverPadding(padding: EdgeInsets.only(bottom: context.scale(130))),
               ],
@@ -652,7 +713,73 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
       ),
     );
   }
+// 🚀 RECALL TODAY'S EXACT INSIGHT
+  void _openTodayInsight(BuildContext context) {
+    HapticFeedback.mediumImpact();
+    // Use the exact same mathematical seed to guarantee it's the same tip
+    final random = math.Random(DateTime.now().day);
+    final shuffled = List<HealthTip>.from(masterHealthTips)..shuffle(random);
+    final todayTip = shuffled.first;
 
+    // Open the bottom sheet (ensure showHealthTipDetail is accessible/imported)
+    _showHealthTipDetailShared(context, todayTip);
+  }
+
+  Future<void> _showHealthTipDetailShared(BuildContext context, HealthTip tip) async {
+    String currentLang = 'en';
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+
+        return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setStateSheet) {
+              final titleText = tip.title[currentLang] ?? tip.title['en'] ?? "";
+              final bodyText = tip.body[currentLang] ?? tip.body['en'] ?? "";
+
+              return Container(
+                padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.paddingOf(context).bottom + 32),
+                decoration: BoxDecoration(color: isDark ? const Color(0xFF121826) : Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(32)), border: Border.all(color: isDark ? Colors.white10 : Colors.black12)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: theme.dividerColor.withOpacity(0.3), borderRadius: BorderRadius.circular(2)))),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text(tip.category.toUpperCase(), style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.0, color: colorScheme.primary))),
+                        Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100, borderRadius: BorderRadius.circular(24), border: Border.all(color: isDark ? Colors.white10 : Colors.black12)),
+                          child: Row(
+                            children: ['en', 'hi', 'or'].map((lang) {
+                              bool isSelected = currentLang == lang;
+                              return GestureDetector(
+                                onTap: () { HapticFeedback.selectionClick(); setStateSheet(() => currentLang = lang); },
+                                child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: isSelected ? colorScheme.primary : Colors.transparent, borderRadius: BorderRadius.circular(20)), child: Text(lang.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600, color: isSelected ? Colors.white : theme.hintColor))),
+                              );
+                            }).toList(),
+                          ),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(titleText, style: TextStyle(fontFamily: 'Space Grotesk', fontSize: 22, fontWeight: FontWeight.w900, height: 1.2, color: colorScheme.onSurface)),
+                    const SizedBox(height: 16),
+                    ConstrainedBox(constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.45), child: SingleChildScrollView(physics: const BouncingScrollPhysics(), child: Text(bodyText, style: TextStyle(fontFamily: 'Inter', fontSize: 15, height: 1.6, fontWeight: FontWeight.w500, color: theme.hintColor)))),
+                  ],
+                ),
+              );
+            }
+        );
+      },
+    );
+  }
   void _launchBreathingSheet(BuildContext context, DietPlanNotifier notifier, FlatClientDietPlanModel plan, ClientLogModel? dailyRecord, BreathingConfig config) {
     Navigator.pop(context);
     showModalBottomSheet(isDismissible: false, context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => BreathingDetailSheet(notifier: notifier, activePlan: plan, dailyLog: dailyRecord, config: config));

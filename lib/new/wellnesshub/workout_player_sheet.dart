@@ -87,20 +87,28 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
   }
 
   // 🎯 NEW: Video Initialization Logic
+// 🎯 SAFE WEB-COMPATIBLE VIDEO LOADER
   void _loadVideoForStep(ExerciseType type) {
     final oldController = _videoController;
 
-    _videoController = VideoPlayerController.asset(type.videoAssetPath)
-      ..initialize().then((_) {
-        _videoController!.setLooping(true);
-        if (!_isPaused && !_isPreparing) {
-          _videoController!.play();
-        }
-        setState(() {}); // Trigger rebuild to show video
-        oldController?.dispose(); // Dispose old video *after* new one loads
-      }).catchError((error) {
-        debugPrint("Error loading video: $error");
-      });
+    try {
+      _videoController = VideoPlayerController.asset(type.videoAssetPath)
+        ..initialize().then((_) {
+          if (!mounted) return;
+          _videoController!.setLooping(true);
+          if (!_isPaused && !_isPreparing) {
+            _videoController!.play();
+          }
+          setState(() {});
+          oldController?.dispose();
+        }).catchError((error) {
+          debugPrint("Video asset missing or unsupported on Web codec: $error");
+          setState(() => _videoController = null); // Fallback to icon/animation
+        });
+    } catch (e) {
+      debugPrint("Failed to instantiate video player: $e");
+      _videoController = null;
+    }
   }
 
   void _beginWorkout() {
@@ -518,6 +526,7 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
               children: [
 
                 // 🚀 THE NEW VIDEO CONTAINER
+                // 🚀 THE SAFE VIDEO CONTAINER (Web & Native Fallback)
                 Container(
                   height: videoHeight,
                   width: double.infinity,
@@ -535,7 +544,7 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        // The Video
+                        // The Video or Animated Fallback for Web
                         if (_videoController != null && _videoController!.value.isInitialized)
                           SizedBox.expand(
                             child: FittedBox(
@@ -548,11 +557,21 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
                             ),
                           )
                         else
-                          CircularProgressIndicator(color: themeColor), // Loading state
+                        // 🌟 Web Fallback: Gorgeous pulsing icon if video asset doesn't load in browser
+                          Container(
+                            color: themeColor.withOpacity(0.05),
+                            child: Center(
+                              child: Icon(
+                                step.icon,
+                                size: 64,
+                                color: themeColor.withOpacity(0.6),
+                              ),
+                            ),
+                          ),
 
                         // Overlay for "Rest" or "Prep" to dim the video slightly and show the timer
                         if (_isPreparing || isRest)
-                          Container(color: Colors.black.withOpacity(0.6)), // Dimmer
+                          Container(color: Colors.black.withOpacity(0.6)),
 
                         if (_isPreparing || isRest)
                           ValueListenableBuilder<int>(
@@ -563,7 +582,6 @@ class _WorkoutPlayerSheetState extends ConsumerState<WorkoutPlayerSheet> with Ti
                               )
                           ),
 
-                        // Overlay for "Rep Based" exercises so users know it's not timed
                         if (step.isRepBased && !_isPreparing)
                           Positioned(
                             bottom: 16, right: 16,

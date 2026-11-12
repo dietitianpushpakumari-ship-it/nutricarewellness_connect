@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:pure_shift/core/utils/nudge_manager.dart';
 
 
 
@@ -9,17 +10,16 @@ import 'package:pure_shift/layout_utils.dart';
 import 'package:pure_shift/new/FlatClientDietPlanModel.dart';
 import 'package:pure_shift/new/provider/diet_plan_provider.dart';
 
-import '../../../../elite_nudge_hub.dart';
+import '../../../../core/dietitian_profile_detail_screen.dart';
+
 
 class LogVitalsSheet extends StatefulWidget {
   final DietPlanNotifier notifier;
-  final FlatClientDietPlanModel activePlan;
   final ClientLogModel? dailyLog;
 
   const LogVitalsSheet({
     super.key,
     required this.notifier,
-    required this.activePlan,
     required this.dailyLog,
   });
 
@@ -77,6 +77,7 @@ class _LogVitalsSheetState extends State<LogVitalsSheet> {
       };
 
       await widget.notifier.updateDailyRecord(data: vitalsData);
+      await NudgeManager.recordVitalsLogged();
       if (mounted) Navigator.pop(context);
     } finally {
       if (mounted) setState(() => _isSaving = false);

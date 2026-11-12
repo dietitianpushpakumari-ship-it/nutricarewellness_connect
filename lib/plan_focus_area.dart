@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -220,6 +222,7 @@ class PlanTimelineScreen extends ConsumerWidget {
               right: 0,
               child: Center(
                 child: FloatingActionButton.extended(
+                  heroTag: 'timeline_snap_meal_btn',
                   elevation: 8,
                   backgroundColor: colorScheme.primary,
                   foregroundColor: isDark ? Colors.black : Colors.white,
@@ -460,9 +463,33 @@ class PlanTimelineScreen extends ConsumerWidget {
                         fit: StackFit.expand,
                         children: [
 
-                          // Image or Placeholder
+                          // 🚨 Make sure you add these imports at the top of your file:
+// import 'dart:io';
+// import 'package:flutter/foundation.dart';
+
+// Image or Placeholder
                           if (coverImage != null)
-                            CachedNetworkImage(imageUrl: coverImage, fit: BoxFit.cover)
+                          // 1. If it's a real Firebase URL, use CachedNetworkImage
+                            if (coverImage.startsWith('http') && !coverImage.startsWith('blob:'))
+                              CachedNetworkImage(
+                                imageUrl: coverImage,
+                                fit: BoxFit.cover,
+                                errorWidget: (context, url, error) => const Icon(Icons.broken_image),
+                              )
+                            // 2. If it's a Web Blob URL, use Image.network
+                            else if (kIsWeb)
+                              Image.network(
+                                coverImage,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
+                              )
+                            // 3. If it's a native mobile file path, use Image.file
+                            else
+                              Image.file(
+                                File(coverImage),
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
+                              )
                           else
                             Container(
                               color: isDark ? Colors.white.withOpacity(0.02) : Colors.black.withOpacity(0.02),
@@ -594,176 +621,6 @@ class PlanTimelineScreen extends ConsumerWidget {
     );
   }
   // 🚀 LUXURY SWIPE-TO-DELETE CONFIRMATION
-  Future<bool?> _confirmSwipeDelete(BuildContext context, String mealName, DietPlanNotifier notifier) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1A2232) : Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(context.scale(24)),
-          side: BorderSide(color: theme.dividerColor.withOpacity(0.1)), // ✅ FIX: Use 'side' with BorderSide
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(context.scale(8)),
-              decoration: BoxDecoration(color: const Color(0xFFE53935).withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(Icons.warning_amber_rounded, color: const Color(0xFFE53935), size: context.scale(20)),
-            ),
-            SizedBox(width: context.scale(12)),
-            Text("Delete Log?", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(18), fontWeight: FontWeight.w800, color: theme.colorScheme.onSurface)),
-          ],
-        ),
-        content: Text(
-          "Are you sure you want to remove this meal from your journal? This cannot be undone.",
-          style: TextStyle(fontFamily: kBodyFont, fontSize: context.scale(13), color: theme.hintColor, height: 1.4),
-        ),
-        actionsPadding: EdgeInsets.fromLTRB(context.scale(16), 0, context.scale(16), context.scale(16)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false), // 🚀 Returns false, snapping the card back
-            child: Text("CANCEL", style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w700, color: theme.hintColor, letterSpacing: 1.0)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE53935),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(context.scale(12))),
-              padding: EdgeInsets.symmetric(horizontal: context.scale(16), vertical: context.scale(10)),
-            ),
-            onPressed: () {
-              // 🚀 FIREBASE MAP DELETION LOGIC
-              notifier.updateDailyRecord(data: {
-                'mealLogs.$mealName': FieldValue.delete(),
-              });
-
-              HapticFeedback.lightImpact();
-              Navigator.pop(ctx, true); // 🚀 Returns true, completing the swipe animation
-            },
-            child: Text("DELETE", style: TextStyle(fontFamily: kDisplayFont, fontWeight: FontWeight.w800, letterSpacing: 1.0, fontSize: context.scale(12))),
-          ),
-        ],
-      ),
-    );
-  }
-  Widget _buildJournalCard(BuildContext context, String mealName, MealEntry mealLog, ColorScheme color, bool isDark, ThemeData theme, DietPlanNotifier notifier, FlatClientDietPlanModel activePlan) {
-    final List<dynamic> rawPhotos = mealLog.mealPhotoUrls;
-    final List<String> photos = rawPhotos.map((e) => e.toString()).toList();
-    final String? coverImage = photos.isNotEmpty ? photos.last : null;
-
-    // Extract the exact time they logged it
-    DateTime logTime = mealLog.loggedAt?.toLocal() ?? DateTime.now();
-    final String timeString = DateFormat('hh:mm a').format(logTime);
-
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        _openLoggingSheet(context, mealName, notifier, activePlan, mealLog);
-      },
-      child: Container(
-        margin: EdgeInsets.only(bottom: context.scale(16), left: context.scale(20), right: context.scale(20)),
-        height: context.scale(130),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A2232) : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(context.scale(16)),
-          border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(context.scale(16)),
-          child: Stack(
-            children: [
-              if (coverImage != null)
-                SizedBox(
-                  width: double.infinity,
-                  height: double.infinity,
-                  child: CachedNetworkImage(imageUrl: coverImage, fit: BoxFit.cover),
-                )
-              else
-                Center(child: Icon(Icons.restaurant_rounded, size: context.scale(40).clamp(32.0, 48.0), color: theme.dividerColor.withOpacity(0.5))),
-
-              if (coverImage != null)
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.black.withOpacity(0.1), Colors.black.withOpacity(0.4), Colors.black.withOpacity(0.8)],
-                    ),
-                  ),
-                ),
-
-              Positioned(
-                top: context.scale(12), left: context.scale(12),
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: context.scale(8), vertical: context.scale(4)),
-                  decoration: BoxDecoration(color: const Color(0xFF00E676).withOpacity(0.9), borderRadius: BorderRadius.circular(context.scale(8))),
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle_rounded, size: context.scale(12).clamp(10.0, 14.0), color: Colors.white),
-                      SizedBox(width: context.scale(4)),
-                      Text("LOGGED", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(10).clamp(9.0, 11.0), fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.5)),
-                    ],
-                  ),
-                ),
-              ),
-
-              if (photos.length > 1)
-                Positioned(
-                  top: context.scale(12), right: context.scale(12),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: context.scale(8), vertical: context.scale(4)),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(context.scale(8)),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.photo_library_rounded, size: context.scale(12).clamp(10.0, 14.0), color: Colors.white),
-                        SizedBox(width: context.scale(4)),
-                        Text("+${photos.length - 1}", style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(10).clamp(9.0, 11.0), fontWeight: FontWeight.w700, color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                ),
-
-              Positioned(
-                bottom: context.scale(12), left: context.scale(16), right: context.scale(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                              timeString,
-                              style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(11).clamp(10.0, 12.0), fontWeight: FontWeight.w700, color: coverImage != null ? Colors.white70 : color.primary, letterSpacing: 1.0)
-                          ),
-                          SizedBox(height: context.scale(2)),
-                          Text(
-                            "MEAL LOG", // 🚀 Generic label
-                            style: TextStyle(fontFamily: kDisplayFont, fontSize: context.scale(14).clamp(13.0, 16.0), fontWeight: FontWeight.w700, color: coverImage != null ? Colors.white : color.onSurface, letterSpacing: -0.5),
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(Icons.edit_rounded, size: context.scale(16).clamp(14.0, 18.0), color: coverImage != null ? Colors.white54 : theme.hintColor),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   void _openLoggingSheet(BuildContext context, String mealName, DietPlanNotifier notifier, FlatClientDietPlanModel plan, MealEntry? log) {
     showModalBottomSheet(

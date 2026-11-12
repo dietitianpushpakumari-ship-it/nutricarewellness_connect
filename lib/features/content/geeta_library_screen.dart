@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pure_shift/main.dart';
 import 'package:pure_shift/new/provider/diet_plan_provider.dart';
-import 'package:pure_shift/features/dietplan/PRESENTATION/providers/tts_service.dart';
 import 'package:pure_shift/core/utils/geeta_shloka_model.dart';
 import 'dart:ui';
 import 'dart:math' as math;

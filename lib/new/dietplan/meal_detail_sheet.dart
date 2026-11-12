@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -71,22 +72,33 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
 
   Future<void> _pickPhoto(ImageSource source) async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(
-      source: source,
-      preferredCameraDevice: CameraDevice.rear,
-    );
+    try {
+      // 🚀 THE FIX: Use gallery on web to trigger the native iOS menu!
+      final XFile? image = await picker.pickImage(
+        source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
+        imageQuality: 70, // Keeps the upload fast
+      );
 
-    if (image != null) {
-      File originalFile = File(image.path);
-      File? compressedFile = await ImageCompressor.compressAndGetFile(originalFile);
-      final finalFile = compressedFile ?? originalFile;
+      if (image != null) {
+        XFile finalFile = image;
 
-      setState(() {
-        _selectedPhotos.add(XFile(finalFile.path));
-      });
+        // 🚀 THE WEB FIX: Only use the native compressor on Mobile/Desktop!
+        if (!kIsWeb) {
+          File originalFile = File(image.path);
+          File? compressedFile = await ImageCompressor.compressAndGetFile(originalFile);
+          if (compressedFile != null) {
+            finalFile = XFile(compressedFile.path);
+          }
+        }
+
+        setState(() {
+          _selectedPhotos.add(finalFile); // Store the safe XFile
+        });
+      }
+    } catch (e) {
+      debugPrint("Camera Error: $e");
     }
   }
-
   Future<void> _saveLog() async {
     if (_isSaving) return;
 
@@ -297,8 +309,13 @@ class _MealDetailSheetState extends ConsumerState<MealDetailSheet> {
             onTap: () => _openFullScreenViewer(combinedPhotos, entry.key),
             onDelete: () => setState(() => _photosToDelete.add(entry.value)),
           )),
+
           ..._selectedPhotos.asMap().entries.map((entry) => _buildImagePreview(
-            child: Image.file(File(entry.value.path), fit: BoxFit.cover),
+            // 🚀 THE WEB FIX: Dynamically switch based on the platform
+            child: kIsWeb
+                ? Image.network(entry.value.path, fit: BoxFit.cover)
+                : Image.file(File(entry.value.path), fit: BoxFit.cover),
+
             onTap: () => _openFullScreenViewer(combinedPhotos, remotePhotos.length + entry.key),
             onDelete: () => setState(() => _selectedPhotos.remove(entry.value)),
           )),
@@ -442,10 +459,17 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
                 fit: BoxFit.contain,
                 placeholder: (context, url) => const CircularProgressIndicator(color: Colors.white),
               )
+                  : (kIsWeb
+              // 🌐 WEB FIX: Read the XFile path directly as a network blob
+                  ? Image.network(
+                (image as XFile).path,
+                fit: BoxFit.contain,
+              )
+              // 📱 NATIVE: Read from the local filesystem
                   : Image.file(
                 File((image as XFile).path),
                 fit: BoxFit.contain,
-              ),
+              )),
             ),
           );
         },

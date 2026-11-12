@@ -1,9 +1,12 @@
 // lib/config/health_content.dart
 
+
+// lib/features/knowledge_hub/models/health_content.dart
+
 class HealthTip {
   final String category;
   final Map<String, String> title; // en, hi, or
-  final Map<String, String> body;  // en, hi, or
+  final Map<String, String> body;  // en, hi, or   // Optional route for conversion
 
   const HealthTip({
     required this.category,
@@ -11,7 +14,6 @@ class HealthTip {
     required this.body,
   });
 }
-
 // --- MASTER LIBRARY (CONVERSION FOCUSED) ---
 const List<HealthTip> healthTipsPart1 = [
   // ==========================================

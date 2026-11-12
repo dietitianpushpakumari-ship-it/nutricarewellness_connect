@@ -1,6 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:workmanager/workmanager.dart';
 
 void scheduleClinicalSync(String patientId) {
+
+  if (kIsWeb) {
+    debugPrint("Background sync skipped on Web platform.");
+    return;
+  }
   Workmanager().registerPeriodicTask(
     "pure_shift_step_sync_1", // A unique name for this task
     "clinicalDataSync",

@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart'; // 🎯 Added for FCM
@@ -22,6 +24,7 @@ import 'package:workmanager/workmanager.dart';
 
 import 'animated_luxury_splash.dart';
 import 'global_keys.dart';
+import 'layout_utils.dart';
 import 'new/chat/client_chat_screen.dart';
 import 'new/login/client_auth_screen.dart';
 import 'new/service/notification_service.dart';
@@ -94,50 +97,127 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 void _showClientInAppNotification(RemoteMessage message) {
-  debugPrint("🚨 FCM TRIGGERED: Attempting to show foreground notification...");
+  debugPrint("🚨 CLIENT FCM FOREGROUND TRIGGERED");
+
+  if (ClientChatScreen.isOpen) {
+    debugPrint("✅ Client is already in Chat. Suppressing SnackBar.");
+    return;
+  }
 
   final title = message.notification?.title ?? message.data['title'] ?? "New Message";
   final body = message.notification?.body ?? message.data['body'] ?? "Tap to view";
 
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (GlobalKeys.snackbarKey.currentState != null) {
-      debugPrint("✅ SnackbarKey is valid. Painting SnackBar...");
+  Future.delayed(const Duration(milliseconds: 100), () {
+    final snackbarState = GlobalKeys.snackbarKey.currentState;
+    final context = GlobalKeys.navigatorKey.currentContext; // 🚀 Grab context to enable scaling!
 
-      GlobalKeys.snackbarKey.currentState!.hideCurrentSnackBar();
-      GlobalKeys.snackbarKey.currentState!.showSnackBar(
+    if (snackbarState != null && context != null) {
+      snackbarState.hideCurrentSnackBar();
+      snackbarState.showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.only(top: 50, left: 16, right: 16),
-          backgroundColor: Colors.grey.shade900,
-          elevation: 10,
-          duration: const Duration(seconds: 4),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-              Text(body, maxLines: 1, style: const TextStyle(color: Colors.white70)),
-            ],
+          // 🚀 Positioned perfectly below the safe area
+          margin: EdgeInsets.only(
+              top: MediaQuery.paddingOf(context).top + context.scale(10),
+              left: context.scale(16),
+              right: context.scale(16)
           ),
-          action: SnackBarAction(
-            label: "Reply",
-            textColor: Colors.blueAccent,
-            onPressed: () {
-              final context = GlobalKeys.navigatorKey.currentContext;
-              if (context != null) {
-                // 🚀 FIXED: Routes directly to the chat screen
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientChatScreen()));
-              }
+          padding: EdgeInsets.zero, // 🚀 Remove default padding to allow full custom shape
+          backgroundColor: Colors.transparent, // 🚀 Transparent so our custom container draws the glass
+          elevation: 0,
+          duration: const Duration(seconds: 4),
+          content: GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              snackbarState.hideCurrentSnackBar();
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientChatScreen()));
             },
+            child: Container(
+              // 🚀 Reduced vertical padding to make the banner physically thinner
+              padding: EdgeInsets.symmetric(horizontal: context.scale(12), vertical: context.scale(10)),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B0F19).withOpacity(0.95),
+                borderRadius: BorderRadius.circular(context.scale(16)),
+                border: Border.all(color: Colors.white.withOpacity(0.12), width: 1),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 8))
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Glowing Chat Icon (Slightly smaller)
+                  Container(
+                    padding: EdgeInsets.all(context.scale(6)),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00E676).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.chat_bubble_rounded, color: const Color(0xFF00E676), size: context.scale(14)),
+                  ),
+                  SizedBox(width: context.scale(12)),
+
+                  // 🚀 SINGLE LINE TYPOGRAPHY
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // 1. The Title (Bold, Smaller)
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontFamily: 'Space Grotesk',
+                            fontWeight: FontWeight.w700,
+                            // 🚀 Dropped size significantly
+                            fontSize: context.scale(12).clamp(11.0, 13.0),
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                          maxLines: 1,
+                        ),
+
+                        // 2. The Premium Dot Separator
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: context.scale(6)),
+                          child: CircleAvatar(radius: context.scale(2), backgroundColor: Colors.white.withOpacity(0.3)),
+                        ),
+
+                        // 3. The Body (Faded, Truncates if too long)
+                        Expanded(
+                          child: Text(
+                            body,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Colors.white.withOpacity(0.6),
+                              // 🚀 Dropped size
+                              fontSize: context.scale(11).clamp(10.0, 12.0),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(width: context.scale(8)),
+
+                  // Sleek "View" Arrow
+                  Icon(Icons.arrow_forward_ios_rounded, color: Colors.white.withOpacity(0.3), size: context.scale(10)),
+                ],
+              ),
+            ),
           ),
         ),
       );
     } else {
-      debugPrint("❌ SnackbarKey was NULL. Cannot show notification.");
+      debugPrint("❌ SnackbarKey or Context was NULL. Cannot show notification.");
     }
   });
 }
+// ============================================================================
+// 2. MAIN INITIALIZATION
+// ============================================================================
 
 // ============================================================================
 // 2. MAIN INITIALIZATION
@@ -146,12 +226,24 @@ void _showClientInAppNotification(RemoteMessage message) {
 void main() async {
   // 1. Keep native splash active while engine starts
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
+  // FlutterNativeSplash is not fully supported on Web, so wrap it safely
+  if (!kIsWeb) {
+    FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  }
+
   await PerformanceManager.checkDevicePower();
   await EasyLocalization.ensureInitialized();
   tz.initializeTimeZones();
 
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+  // 🚀 THE FIX: Workmanager DOES NOT support the web. Wrap it!
+  if (!kIsWeb) {
+    try {
+      Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+    } catch (e) {
+      debugPrint("Workmanager Init Warning: $e");
+    }
+  }
 
   try {
     if (Firebase.apps.isEmpty) {
@@ -161,14 +253,25 @@ void main() async {
     debugPrint("Firebase Init Warning: $e");
   }
 
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  // 🚀 Background Messaging is tricky on the web. Only register if not web.
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
 
-  // 🚀 HOOK UP FOREGROUND NOTIFICATIONS
+  // 🚀 HOOK UP FOREGROUND NOTIFICATIONS (This works on Web PWA and Native)
   FirebaseMessaging.onMessage.listen(_showClientInAppNotification);
 
   await NotificationService().setupNotificationRouting();
-  Future.delayed(Duration.zero, () => SyncManager().init());
+
+  Future.delayed(Duration.zero, () {
+    // 🚀 Only run native sync manager on native devices
+    if (!kIsWeb) {
+      SyncManager().init();
+    }
+  });
+
   PaintingBinding.instance.imageCache.maximumSize = 100;
+
   runApp(
     ProviderScope(
       child: EasyLocalization(

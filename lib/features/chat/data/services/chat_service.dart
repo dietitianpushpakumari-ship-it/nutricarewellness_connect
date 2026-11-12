@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:camera/camera.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -63,11 +64,10 @@ class ChatService {
   // =================================================================
   // 🎯 2. SEND MESSAGE (WITH CLOUDINARY)
   // =================================================================
-
   Future<void> sendClientMessage({
     required String text,
     required MessageType type,
-    File? attachmentFile,
+    XFile? attachmentFile, // 🚀 2. CHANGE TO XFile HERE
     String? attachmentName,
     String? replyToMessageId,
     String? replyToMessageText,
@@ -77,18 +77,31 @@ class ChatService {
     final tenantId = _tenantId;
     String? attachmentUrl;
 
-    // 🚀 CLOUDINARY UPLOAD LOGIC
+    // 🚀 CLOUDINARY UPLOAD LOGIC (WEB-SAFE)
     if (attachmentFile != null) {
-      final secureUrl = await _ref.read(cloudinaryServiceProvider).uploadFile(
-        file: attachmentFile,
-        // Match Admin structure: Organize cleanly by Tenant ID
-        folderName: 'tenants/$tenantId/clients/$clientId/chat_images',
-      );
+      final cloudinaryService = _ref.read(cloudinaryServiceProvider);
+      final folderPath = 'tenants/$tenantId/clients/$clientId/chat_images';
 
-      if (secureUrl == null || secureUrl.isEmpty) {
+      if (kIsWeb) {
+        // 🌐 WEB UPLOAD: Extract raw memory bytes directly from the XFile
+        final bytes = await attachmentFile.readAsBytes();
+        attachmentUrl = await cloudinaryService.uploadWebFile(
+          bytes: bytes,
+          fileName: attachmentName ?? 'file_${DateTime.now().millisecondsSinceEpoch}',
+          folderName: folderPath,
+        );
+      }
+      else {
+        // 📱 NATIVE UPLOAD: Convert XFile back to dart:io File
+        attachmentUrl = await cloudinaryService.uploadFile(
+          file: File(attachmentFile.path),
+          folderName: folderPath,
+        );
+      }
+
+      if (attachmentUrl == null || attachmentUrl.isEmpty) {
         throw Exception("Failed to upload attachment to Cloudinary.");
       }
-      attachmentUrl = secureUrl;
     }
 
     final messageDocRef = _firestore
@@ -97,11 +110,10 @@ class ChatService {
         .collection('chat')
         .doc();
 
-    // Build the raw map directly to handle FieldValue.serverTimestamp() cleanly
     final Map<String, dynamic> messageData = {
       'id': messageDocRef.id,
       'senderId': clientId,
-      'isSenderClient': true, // Crucial for UI alignment (Admin vs Client)
+      'isSenderClient': true,
       'text': text,
       'type': type.name,
       'timestamp': FieldValue.serverTimestamp(),
@@ -114,12 +126,9 @@ class ChatService {
       'tenantId': tenantId,
     };
 
-    // 🚀 BATCH WRITE: Update Chat AND Parent Document simultaneously
     final batch = _firestore.batch();
-
     batch.set(messageDocRef, messageData);
 
-    // Update the parent client document so the Admin Inbox jumps to the top
     batch.set(_firestore.collection('clients').doc(clientId), {
       'lastMessage': type == MessageType.text ? text : "📎 Sent an attachment",
       'lastMessageTime': FieldValue.serverTimestamp(),

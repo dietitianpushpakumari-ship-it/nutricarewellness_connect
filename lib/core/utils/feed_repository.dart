@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pure_shift/core/utils/feed_item_model.dart';
-// 🚀 IMPORT THE LIBRARY
-import 'package:pure_shift/health_content.dart';
+import 'package:pure_shift/new/healthcontent/health_content.dart';
 
 class FeedRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

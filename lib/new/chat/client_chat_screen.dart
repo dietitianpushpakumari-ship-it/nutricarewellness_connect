@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:pure_shift/core/utils/pdf_viewer_screen.dart';
 import 'package:pure_shift/features/auth/auth_provider.dart';
 import 'package:pure_shift/layout_utils.dart';
@@ -28,6 +30,7 @@ const String kDisplayFont = 'Space Grotesk';
 const String kBodyFont = 'Inter';
 
 class ClientChatScreen extends ConsumerStatefulWidget {
+  static bool isOpen = false;
   const ClientChatScreen({super.key});
   @override
   ConsumerState<ClientChatScreen> createState() => _ClientChatScreenState();
@@ -45,20 +48,22 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
   ChatMessageModel? _editMessage;
   final Map<String, GlobalKey> _messageKeys = {};
 
-  final AudioRecorder _audioRecorder = AudioRecorder();
+  AudioRecorder _audioRecorder = AudioRecorder();
   bool _isRecording = false;
   DateTime? _recordingStartTime;
   Timer? _recordingTimer;
   String _recordingDuration = "00:00";
 
   // 🚀 UPGRADED: Multi-Image Attachment Support
-  final List<File> _pendingAttachments = [];
+  // 🚀 1. CHANGE THIS FROM File TO XFile
+  final List<XFile> _pendingAttachments = [];
   MessageType? _pendingAttachmentType;
   String? _pendingAttachmentName;
 
   @override
   void initState() {
     super.initState();
+    ClientChatScreen.isOpen = true;
     _textController.addListener(() {
       setState(() => _isTyping = _textController.text.trim().isNotEmpty);
     });
@@ -83,6 +88,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
     _scrollController.dispose();
     _audioRecorder.dispose();
     _recordingTimer?.cancel();
+    ClientChatScreen.isOpen = false;
     super.dispose();
   }
 
@@ -124,7 +130,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
 
       // 1. Capture the exact state of what the user wants to send
       final capturedText = text;
-      final capturedAttachments = List<File>.from(_pendingAttachments);
+      final capturedAttachments = List<XFile>.from(_pendingAttachments);
       final capturedType = _pendingAttachmentType;
       final capturedName = _pendingAttachmentName;
       final capturedReply = _replyMessage;
@@ -146,33 +152,31 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
       );
     }
   }
-
   Future<void> _processAndUploadInBackground(
       ChatService service,
       String text,
-      List<File> attachments,
+      List<XFile> attachments, // 🚀 Changed to XFile
       MessageType? type,
       String? name,
       ChatMessageModel? replyTo,
       ) async {
-    setState(() => _isUploading = true); // Shows the thin loading bar above the input
+    setState(() => _isUploading = true);
 
     try {
       if (attachments.isNotEmpty && type != null) {
         for (var file in attachments) {
-          File finalFile = file;
+          XFile finalFile = file;
 
-          // Compress in background
-          if (type == MessageType.image) {
-            final compressed = await ImageCompressor.compressAndGetFile(file);
-            if (compressed != null) finalFile = compressed;
+          // 🚀 Safely compress ONLY on native mobile
+          if (type == MessageType.image && !kIsWeb) {
+            final compressed = await ImageCompressor.compressAndGetFile(File(file.path));
+            if (compressed != null) finalFile = XFile(compressed.path);
           }
 
-          // Upload to Firebase
           await service.sendClientMessage(
-            text: text, // Caption
+            text: text,
             type: type,
-            attachmentFile: finalFile,
+            attachmentFile: finalFile, // Passes the safe XFile
             attachmentName: name ?? "IMG_${DateTime.now().millisecondsSinceEpoch}.webp",
             replyToMessageId: replyTo?.id,
             replyToMessageText: replyTo?.text ?? "Attachment",
@@ -187,7 +191,23 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
         );
       }
 
-      _triggerPushNotification(text.isNotEmpty ? text : "Sent an attachment 📎");
+      // 🚀 THE FIX: Smart Push Notification Body
+      String notificationBody = "Sent a message";
+
+      if (text.isNotEmpty) {
+        notificationBody = text; // Just send the text if it exists
+      } else if (type == MessageType.image) {
+        notificationBody = "Sent a photo 📷";
+      } else if (type == MessageType.audio) {
+        notificationBody = "Sent a voice note 🎙️";
+      } else if (type == MessageType.document) {
+        notificationBody = "Sent a document 📄";
+      } else if (attachments.isNotEmpty) {
+        notificationBody = "Sent an attachment 📎";
+      }
+
+      _triggerPushNotification(notificationBody);
+
     } catch (e) {
       debugPrint("Upload failed: $e");
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to send message.")));
@@ -239,12 +259,36 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
   Future<void> _startRecording() async {
     if (_editMessage != null) return;
     HapticFeedback.mediumImpact();
-    try {
-      if (await _audioRecorder.hasPermission()) {
-        final directory = await getTemporaryDirectory();
-        final path = '${directory.path}/client_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-        await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+    try {
+      // 🚀 THE FIX: Use permission_handler to guarantee microphone access globally
+      // This forces the browser to keep the hardware stream alive across instances.
+      PermissionStatus status = await Permission.microphone.status;
+      if (!status.isGranted) {
+        status = await Permission.microphone.request();
+      }
+
+      // If the user denied it, stop here.
+      if (!status.isGranted) {
+        debugPrint("Microphone permission denied");
+        return;
+      }
+
+      // Now that we know we have hardware permission, the recorder will always work.
+      if (await _audioRecorder.hasPermission()) {
+        String path = '';
+
+        // 📱 Native requires a physical temp path
+        if (!kIsWeb) {
+          final directory = await getTemporaryDirectory();
+          path = '${directory.path}/client_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        }
+
+        // 🌐 On web, this automatically falls back to an in-memory WebM stream
+        await _audioRecorder.start(
+          const RecordConfig(encoder: AudioEncoder.aacLc),
+          path: path,
+        );
 
         setState(() {
           _isRecording = true;
@@ -265,34 +309,36 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
       debugPrint("Recording Error: $e");
     }
   }
-
   Future<void> _stopRecordingAndSend(ChatService service) async {
     _recordingTimer?.cancel();
     final path = await _audioRecorder.stop();
+
+    // 🌐 WEB FIX: Destroy the dead browser stream and prep a fresh one
+    _audioRecorder.dispose();
+    _audioRecorder = AudioRecorder();
+
     setState(() => _isRecording = false);
 
-    if (path != null) {
+    if (path != null && path.isNotEmpty) {
       HapticFeedback.heavyImpact();
-      final file = File(path);
+      final file = XFile(path);
 
-      // Use the background uploader for audio too!
-      _processAndUploadInBackground(
-        service,
-        "",
-        [file],
-        MessageType.audio,
-        "Voice_Note_${DateTime.now().millisecondsSinceEpoch}.m4a",
-        _replyMessage,
-      );
+      final audioExt = kIsWeb ? "webm" : "m4a";
+      final fileName = "Voice_Note_${DateTime.now().millisecondsSinceEpoch}.$audioExt";
 
+      _processAndUploadInBackground(service, "", [file], MessageType.audio, fileName, _replyMessage);
       _cancelReplyOrEdit();
     }
   }
-
   Future<void> _cancelRecording() async {
     HapticFeedback.lightImpact();
     _recordingTimer?.cancel();
     await _audioRecorder.stop();
+
+    // 🌐 WEB FIX: Destroy the dead browser stream and prep a fresh one
+    _audioRecorder.dispose();
+    _audioRecorder = AudioRecorder();
+
     setState(() {
       _isRecording = false;
       _recordingDuration = "00:00";
@@ -362,12 +408,11 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
   Future<void> _handleImageSelection(ChatService service, {required bool isCamera}) async {
     try {
       final picker = ImagePicker();
-
       if (isCamera) {
-        final pickedFile = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+        final pickedFile = await picker.pickImage(source: kIsWeb ? ImageSource.gallery : ImageSource.camera, imageQuality: 80);
         if (pickedFile != null) {
           setState(() {
-            _pendingAttachments.add(File(pickedFile.path));
+            _pendingAttachments.add(pickedFile); // 🚀 Just add the XFile directly!
             _pendingAttachmentType = MessageType.image;
           });
         }
@@ -375,7 +420,7 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
         final pickedFiles = await picker.pickMultiImage(imageQuality: 80);
         if (pickedFiles.isNotEmpty) {
           setState(() {
-            _pendingAttachments.addAll(pickedFiles.map((x) => File(x.path)));
+            _pendingAttachments.addAll(pickedFiles); // 🚀 Just add the XFiles directly!
             _pendingAttachmentType = MessageType.image;
           });
         }
@@ -384,14 +429,13 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to attach image(s): $e")));
     }
   }
-
   Future<void> _handleDocumentSelection(ChatService service) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'doc', 'docx']);
 
     if (result != null && result.files.single.path != null) {
       setState(() {
         _pendingAttachments.clear();
-        _pendingAttachments.add(File(result.files.single.path!));
+        _pendingAttachments.add(XFile(result.files.single.path!));
         _pendingAttachmentType = MessageType.document;
         _pendingAttachmentName = result.files.single.name;
       });
@@ -779,13 +823,26 @@ class _ClientChatScreenState extends ConsumerState<ClientChatScreen> {
                           color: theme.cardColor,
                           borderRadius: BorderRadius.circular(context.scale(12)),
                           border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
-                          image: _pendingAttachmentType == MessageType.image
-                              ? DecorationImage(image: FileImage(_pendingAttachments[index]), fit: BoxFit.cover)
-                              : null,
                         ),
-                        child: _pendingAttachmentType != MessageType.image
-                            ? Center(child: Icon(Icons.picture_as_pdf_rounded, color: Colors.redAccent, size: context.scale(20)))
-                            : null,
+                        // 🚀 THE WEB FIX: Use a ClipRRect with Image widgets instead of DecorationImage
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(context.scale(11)),
+                          child: _pendingAttachmentType == MessageType.image
+                              ? (kIsWeb
+                          // 🌐 Web handles XFile paths flawlessly
+                              ? Image.network(
+                            _pendingAttachments[index].path,
+                            fit: BoxFit.cover,
+                          )
+                          // 📱 Native: Convert XFile path back to a dart:io File for the UI
+                              : Image.file(
+                            File(_pendingAttachments[index].path),
+                            fit: BoxFit.cover,
+                          ))
+                              : Center(
+                            child: Icon(Icons.picture_as_pdf_rounded, color: Colors.redAccent, size: context.scale(20)),
+                          ),
+                        ),
                       ),
                       Positioned(
                         top: context.scale(2), right: context.scale(10),

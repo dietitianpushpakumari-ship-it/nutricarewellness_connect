@@ -1,8 +1,8 @@
-import 'dart:io';
-import 'package:flutter/material.dart'; // 🎯 Required for MaterialPageRoute
+import 'dart:io' show Platform; // 🚀 BEST PRACTICE: Only import Platform to keep it lightweight
+import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'; // 🚀 Required for kIsWeb
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:pure_shift/global_keys.dart';
 import 'package:pure_shift/new/chat/client_chat_screen.dart';
@@ -59,12 +59,19 @@ class NotificationService {
 
           // 4. Update ONLY if it's missing, different, or forced
           if (forceUpdate || storedToken != currentToken) {
+
+            // 🚀 THE FIX: Check if it's the web BEFORE touching Platform.isAndroid
+            String platformType = 'web';
+            if (!kIsWeb) {
+              platformType = Platform.isAndroid ? 'android' : 'ios';
+            }
+
             await _db.collection(collectionName).doc(userId).update({
               'fcmToken': currentToken,
               'lastTokenSync': FieldValue.serverTimestamp(),
-              'devicePlatform': Platform.isAndroid ? 'android' : 'ios',
+              'devicePlatform': platformType, // Saves 'web', 'android', or 'ios' cleanly
             });
-            debugPrint("🚀 FCM Token synced for $collectionName: $userId");
+            debugPrint("🚀 FCM Token synced for $collectionName: $userId ($platformType)");
           }
         }
       } else {
@@ -98,7 +105,8 @@ class NotificationService {
   /// Call this ONCE in your main.dart or after successful login
   Future<void> setupNotificationRouting() async {
     // 🎯 2. INITIALIZE THE ANDROID CHANNEL (Fixes the silent background issue)
-    if (Platform.isAndroid) {
+    // 🚀 THE FIX: Only attempt this if we are NOT on the web!
+    if (!kIsWeb && Platform.isAndroid) {
       await _localNotifications
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(_channel);

@@ -1,6 +1,4 @@
-
-import 'dart:io';
-
+import 'package:flutter/foundation.dart'; // 🎯 FIX: Use foundation instead of dart:io
 import 'package:flutter_tts/flutter_tts.dart';
 
 class TextToSpeechService {
@@ -18,7 +16,8 @@ class TextToSpeechService {
       if (onComplete != null) onComplete!();
     });
 
-    if (Platform.isIOS) {
+    // 🎯 FIX: Safely check for iOS without crashing the Web browser
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
       _tts.setIosAudioCategory(IosTextToSpeechAudioCategory.playback, [
         IosTextToSpeechAudioCategoryOptions.defaultToSpeaker,
         IosTextToSpeechAudioCategoryOptions.mixWithOthers,
@@ -47,7 +46,6 @@ class TextToSpeechService {
     await _tts.setVoice(voice);
   }
 
-  // 🎯 FIX: Accept 'voice' parameter and set it AFTER language
   Future<void> speak({
     required String text,
     required String languageCode,

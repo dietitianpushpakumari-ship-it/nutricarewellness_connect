@@ -1,0 +1,74 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "nutricarewellness-live",
+          "appId": "1:867334529574:android:9b0a800b555af4fa913ce7",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "nutricarewellness-live",
+          "appId": "1:867334529574:ios:240ffbf991e715a7913ce7",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "nutricarewellness-live",
+          "appId": "1:867334529574:ios:240ffbf991e715a7913ce7",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "nutricarewellness-live",
+          "configurations": {
+            "android": "1:867334529574:android:9b0a800b555af4fa913ce7",
+            "ios": "1:867334529574:ios:240ffbf991e715a7913ce7",
+            "macos": "1:867334529574:ios:240ffbf991e715a7913ce7",
+            "web": "1:867334529574:web:a241d36654227226913ce7",
+            "windows": "1:867334529574:web:289a5d5aad18d357913ce7"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint"
+      ]
+    }
+  ],
+  "hosting": [
+    {
+      "target": "main_site",
+      "public": "build/web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    }
+  ]
+}
